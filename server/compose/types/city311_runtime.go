@@ -114,6 +114,8 @@ type (
 	City311AuditEvent struct {
 		ID            uint64                      `json:"id,string"`
 		RequestID     uint64                      `json:"requestID,string"`
+		EntityType    string                      `json:"entityType"`
+		EntityID      string                      `json:"entityID"`
 		EventType     string                      `json:"eventType"`
 		ActorType     city311Types.AuditActorType `json:"actorType"`
 		ActorID       uint64                      `json:"actorID,string"`
@@ -123,9 +125,11 @@ type (
 		CreatedAt     time.Time                   `json:"createdAt"`
 	}
 	City311AuditEventFilter struct {
-		RequestID uint64
-		EventType string
-		Check     func(*City311AuditEvent) (bool, error)
+		RequestID  uint64
+		EntityType string
+		EntityID   string
+		EventType  string
+		Check      func(*City311AuditEvent) (bool, error)
 		filter.Sorting
 		filter.Paging
 	}
@@ -178,6 +182,79 @@ type (
 		filter.Paging
 	}
 	City311ActorProfileSet []*City311ActorProfile
+
+	City311LocalAccount struct {
+		ID                uint64    `json:"userID,string"`
+		LoginIdentifier   string    `json:"loginIdentifier"`
+		VerifiedEmail     string    `json:"verifiedEmail"`
+		PreferredLanguage string    `json:"preferredLanguage"`
+		CreatedAt         time.Time `json:"createdAt"`
+		UpdatedAt         time.Time `json:"updatedAt"`
+	}
+	City311LocalAccountFilter struct {
+		LoginIdentifier string
+		VerifiedEmail   string
+		Check           func(*City311LocalAccount) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311LocalAccountSet []*City311LocalAccount
+
+	City311IdentitySession struct {
+		ID                uint64    `json:"sessionID,string"`
+		TokenHash         string    `json:"-"`
+		UserID            uint64    `json:"userID,string"`
+		IssuedAt          time.Time `json:"issuedAt"`
+		LastSeenAt        time.Time `json:"lastSeenAt"`
+		ExpiresAt         time.Time `json:"expiresAt"`
+		AbsoluteExpiresAt time.Time `json:"absoluteExpiresAt"`
+	}
+	City311IdentitySessionFilter struct {
+		TokenHash string
+		UserID    uint64
+		Check     func(*City311IdentitySession) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311IdentitySessionSet []*City311IdentitySession
+
+	City311PasswordResetToken struct {
+		ID        uint64     `json:"tokenID,string"`
+		TokenHash string     `json:"-"`
+		UserID    uint64     `json:"userID,string"`
+		CreatedAt time.Time  `json:"createdAt"`
+		ExpiresAt time.Time  `json:"expiresAt"`
+		UsedAt    *time.Time `json:"usedAt,omitempty"`
+	}
+	City311PasswordResetTokenFilter struct {
+		UserID uint64
+		Check  func(*City311PasswordResetToken) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311PasswordResetTokenSet []*City311PasswordResetToken
+
+	City311IdentityNotification struct {
+		ID          uint64      `json:"notificationID,string"`
+		UserID      uint64      `json:"userID,string"`
+		Kind        string      `json:"kind"`
+		Recipient   string      `json:"recipient"`
+		DeliveryKey string      `json:"deliveryKey"`
+		Payload     City311JSON `json:"payload"`
+		Status      string      `json:"status"`
+		Attempts    int         `json:"attempts"`
+		LastError   string      `json:"lastError,omitempty"`
+		CreatedAt   time.Time   `json:"createdAt"`
+		UpdatedAt   time.Time   `json:"updatedAt"`
+	}
+	City311IdentityNotificationFilter struct {
+		UserID uint64
+		Status string
+		Check  func(*City311IdentityNotification) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311IdentityNotificationSet []*City311IdentityNotification
 )
 
 func scanCity311JSON(src, dst any) error {

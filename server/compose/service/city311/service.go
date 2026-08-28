@@ -109,6 +109,8 @@ func New(s store.Storer) *Service {
 	return &Service{store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next}
 }
 
+func (svc *Service) Store() store.Storer { return svc.store }
+
 func Initialize(ctx context.Context, s store.Storer) error {
 	Default = New(s)
 	benchmarkNow := Default.now()
@@ -120,7 +122,17 @@ func Initialize(ctx context.Context, s store.Storer) error {
 		benchmarkNow = parsed.UTC()
 		Default.now = func() time.Time { return benchmarkNow }
 	}
-	return Default.Seed(ctx, benchmarkNow)
+	var err error
+	DefaultIdentity, err = NewDefaultIdentity(s, Default.now)
+	if err != nil {
+		DefaultIdentity = NewIdentity(s, IdentityOptions{
+			Now: Default.now, ConfigurationError: err,
+		})
+	}
+	if err = Default.Seed(ctx, benchmarkNow); err != nil {
+		return err
+	}
+	return nil
 }
 
 func validationError(fields ...contract.FieldError) *ServiceError {
@@ -508,6 +520,7 @@ func (svc *Service) persistSubmissionAttachments(ctx context.Context, tx store.S
 func (svc *Service) persistSubmissionEvents(ctx context.Context, tx store.Storer, request *composeTypes.City311ServiceRequest, options SubmissionOptions, now time.Time) error {
 	audit := &composeTypes.City311AuditEvent{
 		ID: svc.nextID(), RequestID: request.ID, EventType: "SERVICE_REQUEST_SUBMITTED",
+		EntityType: "service_request", EntityID: strconv.FormatUint(request.ID, 10),
 		ActorType: options.ActorType, ActorID: options.ActorID, SourceChannel: options.SourceChannel,
 		Before: map[string]any{}, After: requestSnapshot(request), CreatedAt: now,
 	}
@@ -630,6 +643,7 @@ func authorizeTransition(actor contract.Actor, request *composeTypes.City311Serv
 func (svc *Service) persistTransitionEvents(ctx context.Context, tx store.Storer, actorID uint64, request *composeTypes.City311ServiceRequest, before map[string]any) error {
 	if err := store.CreateCity311AuditEvent(ctx, tx, &composeTypes.City311AuditEvent{
 		ID: svc.nextID(), RequestID: request.ID, EventType: "SERVICE_REQUEST_TRANSITIONED",
+		EntityType: "service_request", EntityID: strconv.FormatUint(request.ID, 10),
 		ActorType: contract.AuditActorStaff, ActorID: actorID, SourceChannel: contract.SourceChannelStaffInPerson,
 		Before: before, After: requestSnapshot(request), CreatedAt: request.UpdatedAt,
 	}); err != nil {

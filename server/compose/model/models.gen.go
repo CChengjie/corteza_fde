@@ -314,6 +314,18 @@ var City311AuditEvent = &dal.Model{
 		},
 
 		&dal.Attribute{
+			Ident: "EntityType", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "entity_type"},
+		},
+
+		&dal.Attribute{
+			Ident: "EntityID", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "entity_id"},
+		},
+
+		&dal.Attribute{
 			Ident: "EventType", Sortable: true,
 			Type:  &dal.TypeText{Length: 96},
 			Store: &dal.CodecAlias{Ident: "event_type"},
@@ -363,6 +375,25 @@ var City311AuditEvent = &dal.Model{
 	},
 
 	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "compose_city311_audit_event_entity",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "EntityType",
+				},
+
+				{
+					AttributeIdent: "EntityID",
+				},
+
+				{
+					AttributeIdent: "CreatedAt",
+				},
+			},
+		},
+
 		&dal.Index{
 			Ident: "PRIMARY",
 			Type:  "BTREE",
@@ -585,6 +616,390 @@ var City311IdempotencyRecord = &dal.Model{
 
 				{
 					AttributeIdent: "KeyHash",
+				},
+			},
+		},
+	},
+}
+
+var City311IdentityNotification = &dal.Model{
+	Ident:        "compose_city311_identity_notification",
+	ResourceType: types.City311IdentityNotificationResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "UserID", Sortable: true,
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "user_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "Kind", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "kind"},
+		},
+
+		&dal.Attribute{
+			Ident: "Recipient",
+			Type:  &dal.TypeText{Length: 254},
+			Store: &dal.CodecAlias{Ident: "recipient"},
+		},
+
+		&dal.Attribute{
+			Ident: "DeliveryKey",
+			Type:  &dal.TypeText{Length: 128},
+			Store: &dal.CodecAlias{Ident: "delivery_key"},
+		},
+
+		&dal.Attribute{
+			Ident: "Payload",
+			Type: &dal.TypeJSON{
+				DefaultValue: "{}",
+			},
+			Store: &dal.CodecAlias{Ident: "payload"},
+		},
+
+		&dal.Attribute{
+			Ident: "Status", Sortable: true,
+			Type:  &dal.TypeText{Length: 16},
+			Store: &dal.CodecAlias{Ident: "status"},
+		},
+
+		&dal.Attribute{
+			Ident: "Attempts",
+			Type: &dal.TypeNumber{HasDefault: true,
+				DefaultValue: 0,
+				Precision:    -1, Scale: -1, Meta: map[string]interface{}{"rdbms:type": "integer"},
+			},
+			Store: &dal.CodecAlias{Ident: "attempts"},
+		},
+
+		&dal.Attribute{
+			Ident: "LastError",
+			Type:  &dal.TypeText{},
+			Store: &dal.CodecAlias{Ident: "last_error"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "UpdatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "updated_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_identity_notification_uniqueDeliveryKey",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "DeliveryKey",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_identity_notification_userStatus",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "UserID",
+				},
+
+				{
+					AttributeIdent: "Status",
+				},
+			},
+		},
+	},
+}
+
+var City311IdentitySession = &dal.Model{
+	Ident:        "compose_city311_identity_session",
+	ResourceType: types.City311IdentitySessionResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "TokenHash",
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "token_hash"},
+		},
+
+		&dal.Attribute{
+			Ident: "UserID", Sortable: true,
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "user_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "IssuedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "issued_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "LastSeenAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "last_seen_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "ExpiresAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "expires_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "AbsoluteExpiresAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "absolute_expires_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_identity_session_uniqueTokenHash",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "TokenHash",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_identity_session_userExpiry",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "UserID",
+				},
+
+				{
+					AttributeIdent: "ExpiresAt",
+				},
+			},
+		},
+	},
+}
+
+var City311LocalAccount = &dal.Model{
+	Ident:        "compose_city311_local_account",
+	ResourceType: types.City311LocalAccountResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "LoginIdentifier", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "login_identifier"},
+		},
+
+		&dal.Attribute{
+			Ident: "VerifiedEmail", Sortable: true,
+			Type:  &dal.TypeText{Length: 254},
+			Store: &dal.CodecAlias{Ident: "verified_email"},
+		},
+
+		&dal.Attribute{
+			Ident: "PreferredLanguage",
+			Type:  &dal.TypeText{Length: 2},
+			Store: &dal.CodecAlias{Ident: "preferred_language"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "UpdatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "updated_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_local_account_uniqueLoginIdentifier",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "LoginIdentifier",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_local_account_uniqueVerifiedEmail",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "VerifiedEmail",
+				},
+			},
+		},
+	},
+}
+
+var City311PasswordResetToken = &dal.Model{
+	Ident:        "compose_city311_password_reset_token",
+	ResourceType: types.City311PasswordResetTokenResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "TokenHash",
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "token_hash"},
+		},
+
+		&dal.Attribute{
+			Ident: "UserID", Sortable: true,
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "user_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "ExpiresAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "expires_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "UsedAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Nullable: true, Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "used_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_password_reset_token_uniqueTokenHash",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "TokenHash",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_password_reset_token_userExpiry",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "UserID",
+				},
+
+				{
+					AttributeIdent: "ExpiresAt",
 				},
 			},
 		},
@@ -1920,6 +2335,10 @@ func init() {
 		City311AuditEvent,
 		City311Constituent,
 		City311IdempotencyRecord,
+		City311IdentityNotification,
+		City311IdentitySession,
+		City311LocalAccount,
+		City311PasswordResetToken,
 		City311PublicHistoryItem,
 		City311RequestAttachment,
 		City311RequestSequence,

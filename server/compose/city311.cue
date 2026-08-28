@@ -156,6 +156,8 @@ auditEvent: {
 		attributes: {
 			id: schema.IdField
 			request_id: {ident: "requestID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			entity_type: {goType: "string", sortable: true, dal: {type: "Text", length: 64, default: ""}}
+			entity_id: {ident: "entityID", goType: "string", sortable: true, dal: {type: "Text", length: 64, default: ""}}
 			event_type: {goType: "string", sortable: true, dal: {type: "Text", length: 96}}
 			actor_type: {goType: "types.AuditActorType", dal: {type: "Text", length: 32}}
 			actor_id: {ident: "actorID", goType: "uint64", dal: {type: "ID"}}
@@ -164,11 +166,20 @@ auditEvent: {
 			after: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
 			created_at: schema.SortableTimestampNowField
 		}
-		indexes: {primary: {attribute: "id"}, request: {attributes: ["request_id", "created_at"]}}
+		indexes: {
+			primary: {attribute: "id"}
+			request: {attributes: ["request_id", "created_at"]}
+			entity: {attributes: ["entity_type", "entity_id", "created_at"]}
+		}
 	}
 	filter: {
-		struct: {request_id: {ident: "requestID", goType: "uint64"}, event_type: {goType: "string"}}
-		byValue: ["request_id", "event_type"]
+		struct: {
+			request_id: {ident: "requestID", goType: "uint64"}
+			entity_type: {goType: "string"}
+			entity_id: {ident: "entityID", goType: "string"}
+			event_type: {goType: "string"}
+		}
+		byValue: ["request_id", "entity_type", "entity_id", "event_type"]
 	}
 	features: {labels: false, flags: false}
 	envoy: {omit: true}
@@ -239,4 +250,146 @@ actorProfile: {
 	features: {labels: false, flags: false}
 	envoy: {omit: true}
 	store: {ident: "city311ActorProfile", api: lookups: [{fields: ["id"]}]}
+}
+
+localAccount: {
+	model: {
+		ident:            "compose_city311_local_account"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			login_identifier: {goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			verified_email: {goType: "string", sortable: true, dal: {type: "Text", length: 254}}
+			preferred_language: {goType: "string", dal: {type: "Text", length: 2}}
+			created_at: schema.SortableTimestampNowField
+			updated_at: schema.SortableTimestampNowField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_login_identifier: {attribute: "login_identifier"}
+			unique_verified_email: {attribute: "verified_email"}
+		}
+	}
+	filter: {
+		struct: {
+			login_identifier: {goType: "string"}
+			verified_email: {goType: "string"}
+		}
+		byValue: ["login_identifier", "verified_email"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {
+		ident: "city311LocalAccount"
+		api: lookups: [
+			{fields: ["id"]},
+			{fields: ["login_identifier"], constraintCheck: true},
+			{fields: ["verified_email"], constraintCheck:   true},
+		]
+	}
+}
+
+identitySession: {
+	model: {
+		ident:            "compose_city311_identity_session"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			token_hash: {goType: "string", dal: {type: "Text", length: 64}}
+			user_id: {ident: "userID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			issued_at:           schema.SortableTimestampNowField
+			last_seen_at:        schema.SortableTimestampNowField
+			expires_at:          schema.SortableTimestampField
+			absolute_expires_at: schema.SortableTimestampField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_token_hash: {attribute: "token_hash"}
+			user_expiry: {attributes: ["user_id", "expires_at"]}
+		}
+	}
+	filter: {
+		struct: {
+			token_hash: {goType: "string"}
+			user_id: {ident: "userID", goType: "uint64"}
+		}
+		byValue: ["token_hash", "user_id"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {
+		ident: "city311IdentitySession"
+		api: lookups: [
+			{fields: ["id"]},
+			{fields: ["token_hash"], constraintCheck: true},
+		]
+	}
+}
+
+passwordResetToken: {
+	model: {
+		ident:            "compose_city311_password_reset_token"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			token_hash: {goType: "string", dal: {type: "Text", length: 64}}
+			user_id: {ident: "userID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			created_at: schema.SortableTimestampNowField
+			expires_at: schema.SortableTimestampField
+			used_at:    schema.SortableTimestampNilField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_token_hash: {attribute: "token_hash"}
+			user_expiry: {attributes: ["user_id", "expires_at"]}
+		}
+	}
+	filter: {
+		struct: {user_id: {ident: "userID", goType: "uint64"}}
+		byValue: ["user_id"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {
+		ident: "city311PasswordResetToken"
+		api: lookups: [
+			{fields: ["id"]},
+			{fields: ["token_hash"], constraintCheck: true},
+		]
+	}
+}
+
+identityNotification: {
+	model: {
+		ident:            "compose_city311_identity_notification"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			user_id: {ident: "userID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			kind: {goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			recipient: {goType: "string", dal: {type: "Text", length: 254}}
+			delivery_key: {goType: "string", dal: {type: "Text", length: 128}}
+			payload: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			status: {goType: "string", sortable: true, dal: {type: "Text", length: 16}}
+			attempts: {goType: "int", dal: {type: "Number", meta: {"rdbms:type": "integer"}, default: 0}}
+			last_error: {goType: "string", dal: {type: "Text", default: ""}}
+			created_at: schema.SortableTimestampNowField
+			updated_at: schema.SortableTimestampNowField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_delivery_key: {attribute: "delivery_key"}
+			user_status: {attributes: ["user_id", "status"]}
+		}
+	}
+	filter: {
+		struct: {
+			user_id: {ident: "userID", goType: "uint64"}
+			status: {goType: "string"}
+		}
+		byValue: ["user_id", "status"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {ident: "city311IdentityNotification", api: lookups: [{fields: ["id"]}]}
 }

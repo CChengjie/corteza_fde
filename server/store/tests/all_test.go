@@ -62,6 +62,18 @@ func testAllGenerated(t *testing.T, s store.Storer) {
 	t.Run("city311IdempotencyRecord", func(t *testing.T) {
 		testCity311IdempotencyRecords(t, s)
 	})
+	t.Run("city311IdentityNotification", func(t *testing.T) {
+		testCity311IdentityNotifications(t, s)
+	})
+	t.Run("city311IdentitySession", func(t *testing.T) {
+		testCity311IdentitySessions(t, s)
+	})
+	t.Run("city311LocalAccount", func(t *testing.T) {
+		testCity311LocalAccounts(t, s)
+	})
+	t.Run("city311PasswordResetToken", func(t *testing.T) {
+		testCity311PasswordResetTokens(t, s)
+	})
 	t.Run("city311PublicHistoryItem", func(t *testing.T) {
 		testCity311PublicHistoryItems(t, s)
 	})

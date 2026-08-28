@@ -3,6 +3,7 @@ package city311
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/cortezaproject/corteza/server/pkg/errors"
 	"github.com/cortezaproject/corteza/server/store"
 	systemTypes "github.com/cortezaproject/corteza/server/system/types"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var seedStatuses = []contract.ServiceRequestStatus{
@@ -25,17 +27,18 @@ var seedStatuses = []contract.ServiceRequestStatus{
 }
 
 type seedActor struct {
-	Handle     string
-	Name       string
-	Email      string
-	Role       contract.ApplicationRole
-	Department contract.DepartmentCode
-	Districts  []contract.DistrictCode
+	Handle      string
+	Name        string
+	Email       string
+	Role        contract.ApplicationRole
+	Department  contract.DepartmentCode
+	Districts   []contract.DistrictCode
+	PasswordEnv string
 }
 
 var seedActors = []seedActor{
-	{Handle: "city311-constituent", Name: "City 311 Constituent", Email: "constituent1@city311.example.invalid", Role: contract.ApplicationRoleConstituent},
-	{Handle: "city311-constituent-two", Name: "City 311 Constituent Two", Email: "constituent2@city311.example.invalid", Role: contract.ApplicationRoleConstituent},
+	{Handle: "city311-constituent", Name: "City 311 Constituent", Email: "constituent1@city311.example.invalid", Role: contract.ApplicationRoleConstituent, PasswordEnv: seedConstituentPasswordEnv},
+	{Handle: "city311-constituent-two", Name: "City 311 Constituent Two", Email: "constituent2@city311.example.invalid", Role: contract.ApplicationRoleConstituent, PasswordEnv: seedConstituentTwoPasswordEnv},
 	{Handle: "city311-service-agent", Name: "City 311 Service Agent", Email: "service-agent@city311.example.invalid", Role: contract.ApplicationRoleServiceAgent, Department: contract.DepartmentStreets, Districts: []contract.DistrictCode{contract.DistrictNorth}},
 	{Handle: "city311-supervisor", Name: "City 311 Supervisor", Email: "supervisor@city311.example.invalid", Role: contract.ApplicationRoleSupervisor, Department: contract.DepartmentStreets, Districts: []contract.DistrictCode{contract.DistrictNorth, contract.DistrictCentral}},
 	{Handle: "city311-department-manager", Name: "City 311 Department Manager", Email: "department-manager@city311.example.invalid", Role: contract.ApplicationRoleDepartmentManager, Department: contract.DepartmentStreets, Districts: []contract.DistrictCode{contract.DistrictNorth, contract.DistrictCentral, contract.DistrictSouth}},
@@ -93,7 +96,18 @@ func (svc *Service) seedActorRecord(ctx context.Context, tx store.Storer, item s
 	if err = ensureSeedRoleMembership(ctx, tx, item.Handle, role.ID, user.ID); err != nil {
 		return err
 	}
-	return svc.ensureSeedActorProfile(ctx, tx, item, user.ID, createdAt)
+	if err = svc.ensureSeedActorProfile(ctx, tx, item, user.ID, createdAt); err != nil {
+		return err
+	}
+	if err = svc.ensureSeedLocalAccount(ctx, tx, item, user.ID, createdAt); err != nil {
+		return err
+	}
+	if item.Role == contract.ApplicationRoleConstituent {
+		if err = svc.ensureSeedAccountConstituent(ctx, tx, item, user, createdAt); err != nil {
+			return err
+		}
+	}
+	return svc.ensureSeedPasswordCredential(ctx, tx, item, user.ID, createdAt)
 }
 
 func (svc *Service) findOrCreateSeedRole(ctx context.Context, tx store.Storer, item seedActor, createdAt time.Time) (*systemTypes.Role, error) {
@@ -160,6 +174,71 @@ func (svc *Service) ensureSeedActorProfile(ctx context.Context, tx store.Storer,
 	return nil
 }
 
+func (svc *Service) ensureSeedLocalAccount(ctx context.Context, tx store.Storer, item seedActor, userID uint64, createdAt time.Time) error {
+	_, err := store.LookupCity311LocalAccountByID(ctx, tx, userID)
+	if err == nil {
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		return fmt.Errorf("lookup local account for %s: %w", item.Handle, err)
+	}
+	if err = store.CreateCity311LocalAccount(ctx, tx, &composeTypes.City311LocalAccount{
+		ID: userID, LoginIdentifier: item.Handle, VerifiedEmail: item.Email,
+		PreferredLanguage: string(contract.LanguageEN), CreatedAt: createdAt, UpdatedAt: createdAt,
+	}); err != nil {
+		return fmt.Errorf("create local account for %s: %w", item.Handle, err)
+	}
+	return nil
+}
+
+func (svc *Service) ensureSeedAccountConstituent(ctx context.Context, tx store.Storer, item seedActor, user *systemTypes.User, createdAt time.Time) error {
+	constituentID := "C-" + strconv.FormatUint(user.ID, 10)
+	if _, err := store.LookupCity311ConstituentByConstituentID(ctx, tx, constituentID); err == nil {
+		return nil
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("lookup constituent profile for %s: %w", item.Handle, err)
+	}
+	return store.CreateCity311Constituent(ctx, tx, &composeTypes.City311Constituent{
+		ID: svc.nextID(), ConstituentID: constituentID,
+		Profile: composeTypes.City311JSON{
+			"constituent_id": constituentID, "display_name": user.Name,
+			"login_identifier": item.Handle, "emails": []string{item.Email},
+			"phone_numbers": []any{}, "addresses": []any{}, "primary_category": string(contract.ContactCategoryResident),
+			"preferred_language": string(contract.LanguageEN), "email_opt_out": false,
+		},
+		CreatedAt: createdAt, UpdatedAt: createdAt,
+	})
+}
+
+func (svc *Service) ensureSeedPasswordCredential(ctx context.Context, tx store.Storer, item seedActor, userID uint64, createdAt time.Time) error {
+	if item.PasswordEnv == "" {
+		return nil
+	}
+	password := os.Getenv(item.PasswordEnv)
+	if password == "" || len(validatePassword(password, "/"+item.PasswordEnv)) > 0 {
+		// Runtime readiness reports the missing or malformed credential. Keeping
+		// seed idempotent here allows the public health surface to remain available.
+		return nil
+	}
+	credentials, _, err := store.SearchCredentials(ctx, tx, systemTypes.CredentialFilter{OwnerID: userID, Kind: passwordCredentialKind})
+	if err != nil {
+		return err
+	}
+	for _, credential := range credentials {
+		if credential.Valid() {
+			return nil
+		}
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return store.CreateCredential(ctx, tx, &systemTypes.Credential{
+		ID: svc.nextID(), OwnerID: userID, Kind: passwordCredentialKind,
+		Credentials: string(hash), CreatedAt: createdAt,
+	})
+}
+
 func (svc *Service) seedRequests(ctx context.Context, tx store.Storer, benchmarkNow time.Time) error {
 	latitude, longitude := 42.8865, -78.8784
 	for index, status := range seedStatuses {
@@ -218,6 +297,7 @@ func (svc *Service) ensureSeedAudit(ctx context.Context, tx store.Storer, reques
 	}
 	return store.CreateCity311AuditEvent(ctx, tx, &composeTypes.City311AuditEvent{
 		ID: svc.nextID(), RequestID: request.ID, EventType: "SEED_CREATED", ActorType: contract.AuditActorSystem,
+		EntityType: "service_request", EntityID: strconv.FormatUint(request.ID, 10),
 		SourceChannel: contract.SourceChannelStaffInPerson, Before: map[string]any{}, After: requestSnapshot(request), CreatedAt: request.CreatedAt,
 	})
 }

@@ -15,7 +15,8 @@ var (
 	// should return when traversing.
 	needyResources = map[string]bool{
 
-		"corteza::compose:chart":        true,
+		"corteza::compose:chart": true,
+
 		"corteza::compose:module":       true,
 		"corteza::compose:module-field": true,
 

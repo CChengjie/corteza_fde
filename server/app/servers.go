@@ -93,7 +93,10 @@ func (app *CortezaApp) mountHttpRoutes(r chi.Router) {
 			r.Route("/system", systemRest.MountRoutes())
 			r.Route("/automation", automationRest.MountRoutes())
 			r.Route("/compose", composeRest.MountRoutes())
-			r.Route("/v1", city311Rest.MountRoutes())
+			r.Route("/v1", func(r chi.Router) {
+				city311Rest.MountRoutes()(r)
+				city311Rest.MountMappingRoutes()(r)
+			})
 			r.Route("/websocket", app.WsServer.MountRoutes)
 
 			if app.Opt.Discovery.Enabled {
@@ -183,6 +186,17 @@ func (app *CortezaApp) healthz(w http.ResponseWriter, request *http.Request) {
 		_ = json.NewEncoder(w).Encode(city311Contract.APIError{
 			Error:   city311Contract.ErrorTemporarilyUnavailable,
 			Message: "A required City 311 identity configuration is unavailable.", Retryable: true,
+		})
+		return
+	}
+	if err := city311Service.ValidateMappingEnvironment(); err != nil {
+		if app.Log != nil {
+			app.Log.Error("City 311 mapping configuration is unavailable", zap.Error(err))
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(city311Contract.APIError{
+			Error:   city311Contract.ErrorTemporarilyUnavailable,
+			Message: "A required City 311 mapping configuration is unavailable.", Retryable: true,
 		})
 		return
 	}

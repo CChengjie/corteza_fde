@@ -75,6 +75,161 @@ func validPortalBody() map[string]any {
 	}
 }
 
+type routerIdentityNotifier struct {
+	resetTokens []string
+	notices     int
+}
+
+func (notifier *routerIdentityNotifier) PasswordReset(_ context.Context, _ string, token, _ string) error {
+	notifier.resetTokens = append(notifier.resetTokens, token)
+	return nil
+}
+
+func (notifier *routerIdentityNotifier) SecurityNotice(_ context.Context, _, _, _, _ string) error {
+	notifier.notices++
+	return nil
+}
+
+func testIdentityRouter(t *testing.T) (http.Handler, store.Storer, *routerIdentityNotifier, *city311Service.IdentityService) {
+	t.Helper()
+	ctx := context.Background()
+	dsn := fmt.Sprintf("sqlite3://file:%s-identity?mode=memory&cache=shared", t.Name())
+	st, err := sqlite.Connect(ctx, dsn)
+	require.NoError(t, err)
+	require.NoError(t, store.Upgrade(ctx, zap.NewNop(), st))
+	svc := city311Service.New(st)
+	require.NoError(t, svc.Seed(ctx, time.Date(2026, 2, 3, 15, 4, 5, 0, time.UTC)))
+	notifier := &routerIdentityNotifier{}
+	next := uint64(920_000_000_000_000_000)
+	identity := city311Service.NewIdentity(st, city311Service.IdentityOptions{
+		Secret: []byte("router-test-session-secret"), Notifier: notifier,
+		Now:    func() time.Time { return time.Date(2026, 2, 3, 15, 4, 5, 0, time.UTC) },
+		NextID: func() uint64 { next++; return next },
+	})
+	router := chi.NewRouter()
+	router.Route("/api/v1", MountRoutesWithServices(svc, identity))
+	return router, st, notifier, identity
+}
+
+func identityRegistrationBody(identifier, email string) map[string]any {
+	return map[string]any{
+		"display_name": "Alex Resident", "email": email, "login_identifier": identifier,
+		"password": "StrongPassword1!", "preferred_language": "EN",
+	}
+}
+
+func TestIdentityHTTPContractAndSecureCookieLifecycle(t *testing.T) {
+	router, st, notifier, identity := testIdentityRouter(t)
+	registration := identityRegistrationBody("alex.http", "alex-http@example.invalid")
+	created := executeJSON(t, router, http.MethodPost, "/api/v1/accounts", registration, nil, 0)
+	require.Equal(t, http.StatusAccepted, created.Code, created.Body.String())
+	require.JSONEq(t, `{"accepted":true}`, created.Body.String())
+
+	// Duplicate registration publishes the same privacy-preserving response.
+	duplicate := identityRegistrationBody("alex.http", "different@example.invalid")
+	duplicateResponse := executeJSON(t, router, http.MethodPost, "/api/v1/accounts", duplicate, nil, 0)
+	require.Equal(t, created.Code, duplicateResponse.Code)
+	require.JSONEq(t, created.Body.String(), duplicateResponse.Body.String())
+
+	wrong := executeJSON(t, router, http.MethodPost, "/api/v1/session", map[string]any{
+		"login_identifier": "alex.http", "password": "wrong",
+	}, nil, 0)
+	require.Equal(t, http.StatusUnauthorized, wrong.Code)
+	require.Contains(t, wrong.Body.String(), string(contract.ErrorUnauthenticated))
+
+	signedIn := executeJSON(t, router, http.MethodPost, "/api/v1/session", map[string]any{
+		"login_identifier": "alex-http@example.invalid", "password": "StrongPassword1!",
+	}, nil, 0)
+	require.Equal(t, http.StatusOK, signedIn.Code, signedIn.Body.String())
+	require.Contains(t, signedIn.Body.String(), `"authenticated":true`)
+	cookies := signedIn.Result().Cookies()
+	require.Len(t, cookies, 1)
+	sessionCookie := cookies[0]
+	require.Equal(t, city311Service.IdentitySessionCookie, sessionCookie.Name)
+	require.Equal(t, "/", sessionCookie.Path)
+	require.True(t, sessionCookie.HttpOnly)
+	require.True(t, sessionCookie.Secure)
+	require.Equal(t, http.SameSiteLaxMode, sessionCookie.SameSite)
+	require.True(t, sessionCookie.Expires.IsZero())
+
+	headers := map[string]string{"Cookie": sessionCookie.Name + "=" + sessionCookie.Value}
+	current := executeJSON(t, router, http.MethodGet, "/api/v1/session", nil, headers, 0)
+	require.Equal(t, http.StatusOK, current.Code)
+	require.Contains(t, current.Body.String(), `"application_roles":["constituent"]`)
+	require.Contains(t, current.Body.String(), `"preferred_language":"EN"`)
+
+	unauthenticatedChange := executeJSON(t, router, http.MethodPost, "/api/v1/account/password", map[string]any{
+		"current_password": "StrongPassword1!", "new_password": "ChangedPassword2!",
+	}, nil, 0)
+	require.Equal(t, http.StatusUnauthorized, unauthenticatedChange.Code)
+	wrongCurrentPassword := executeJSON(t, router, http.MethodPost, "/api/v1/account/password", map[string]any{
+		"current_password": "incorrect", "new_password": "ChangedPassword2!",
+	}, headers, 0)
+	require.Equal(t, http.StatusUnprocessableEntity, wrongCurrentPassword.Code)
+	changed := executeJSON(t, router, http.MethodPost, "/api/v1/account/password", map[string]any{
+		"current_password": "StrongPassword1!", "new_password": "ChangedPassword2!",
+	}, headers, 0)
+	require.Equal(t, http.StatusNoContent, changed.Code, changed.Body.String())
+	require.Empty(t, changed.Body.String())
+	identifierChanged := executeJSON(t, router, http.MethodPost, "/api/v1/account/login-identifier", map[string]any{
+		"current_password": "ChangedPassword2!", "login_identifier": "alex.http.updated",
+	}, headers, 0)
+	require.Equal(t, http.StatusOK, identifierChanged.Code, identifierChanged.Body.String())
+	require.Contains(t, identifierChanged.Body.String(), `"authenticated":true`)
+
+	resetUnknown := executeJSON(t, router, http.MethodPost, "/api/v1/auth/password-reset/request", map[string]any{
+		"email": "unknown@example.invalid",
+	}, nil, 0)
+	resetExisting := executeJSON(t, router, http.MethodPost, "/api/v1/auth/password-reset/request", map[string]any{
+		"email": "alex-http@example.invalid",
+	}, nil, 0)
+	require.Equal(t, http.StatusAccepted, resetUnknown.Code)
+	require.Equal(t, resetUnknown.Body.String(), resetExisting.Body.String())
+	require.NoError(t, identity.RetryPendingNotifications(context.Background()))
+	require.Len(t, notifier.resetTokens, 1)
+	confirmed := executeJSON(t, router, http.MethodPost, "/api/v1/auth/password-reset/confirm", map[string]any{
+		"token": notifier.resetTokens[0], "password": "ResetPassword3!",
+	}, nil, 0)
+	require.Equal(t, http.StatusOK, confirmed.Code, confirmed.Body.String())
+	require.NoError(t, identity.RetryPendingNotifications(context.Background()))
+	require.Equal(t, 2, notifier.notices)
+
+	signedOut := executeJSON(t, router, http.MethodDelete, "/api/v1/session", nil, headers, 0)
+	// The reset already revoked this session, so the server does not pretend it
+	// can log out an authenticated actor.
+	require.Equal(t, http.StatusUnauthorized, signedOut.Code)
+
+	account, err := store.LookupCity311LocalAccountByLoginIdentifier(context.Background(), st, "alex.http.updated")
+	require.NoError(t, err)
+	audits, _, err := store.SearchCity311AuditEvents(context.Background(), st, composeTypes.City311AuditEventFilter{EntityID: strconv.FormatUint(account.ID, 10)})
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(audits), 3)
+}
+
+func TestIdentitySignOutDeletesServerSessionAndExpiresCookie(t *testing.T) {
+	router, _, _, _ := testIdentityRouter(t)
+	registration := identityRegistrationBody("alex.logout", "alex-logout@example.invalid")
+	require.Equal(t, http.StatusAccepted, executeJSON(t, router, http.MethodPost, "/api/v1/accounts", registration, nil, 0).Code)
+	signedIn := executeJSON(t, router, http.MethodPost, "/api/v1/session", map[string]any{
+		"login_identifier": "alex.logout", "password": "StrongPassword1!",
+	}, nil, 0)
+	require.Equal(t, http.StatusOK, signedIn.Code)
+	sessionCookie := signedIn.Result().Cookies()[0]
+	headers := map[string]string{"Cookie": sessionCookie.Name + "=" + sessionCookie.Value}
+	signedOut := executeJSON(t, router, http.MethodDelete, "/api/v1/session", nil, headers, 0)
+	require.Equal(t, http.StatusNoContent, signedOut.Code)
+	require.Empty(t, signedOut.Body.String())
+	expiredCookies := signedOut.Result().Cookies()
+	require.Len(t, expiredCookies, 1)
+	require.Less(t, expiredCookies[0].MaxAge, 0)
+	require.True(t, expiredCookies[0].HttpOnly)
+	require.True(t, expiredCookies[0].Secure)
+
+	current := executeJSON(t, router, http.MethodGet, "/api/v1/session", nil, headers, 0)
+	require.Equal(t, http.StatusOK, current.Code)
+	require.Contains(t, current.Body.String(), `"authenticated":false`)
+}
+
 func TestPortalSubmissionUsesSinglePublishedSuccessStatus(t *testing.T) {
 	router, _, _ := testRouter(t)
 	headers := map[string]string{contract.IdempotencyHeader: "portal-replay-1"}

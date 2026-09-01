@@ -65,6 +65,7 @@ func (e YamlEncoder) Encode(ctx context.Context, p envoyx.EncodeParams, rt strin
 		if err != nil {
 			return
 		}
+
 	case types.ModuleResourceType:
 		aux, err = e.encodeModules(ctx, p, nodes, tt)
 		if err != nil {

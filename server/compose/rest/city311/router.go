@@ -1,6 +1,7 @@
 package city311
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,14 +19,21 @@ import (
 )
 
 const (
-	maximumJSONBody      = 72 << 20
-	serviceRequestsRoute = "/service-requests"
-	invalidFieldsMessage = "The request contains invalid fields."
+	maximumJSONBody               = 72 << 20
+	serviceRequestsRoute          = "/service-requests"
+	sessionRoute                  = "/session"
+	invalidFieldsMessage          = "The request contains invalid fields."
+	authenticationRequiredMessage = "Authentication is required."
 )
 
 var strongVersionPattern = regexp.MustCompile(`^"[1-9][0-9]*"$`)
 
-type handler struct{ service *city311Service.Service }
+type handler struct {
+	service  *city311Service.Service
+	identity *city311Service.IdentityService
+}
+
+type identitySessionContextKey struct{}
 
 type stringList []string
 
@@ -59,12 +67,28 @@ type staffQueueFilters struct {
 }
 
 func MountRoutes() func(chi.Router) {
-	return MountRoutesWithService(city311Service.Default)
+	return MountRoutesWithServices(city311Service.Default, city311Service.DefaultIdentity)
 }
 
 func MountRoutesWithService(service *city311Service.Service) func(chi.Router) {
+	return MountRoutesWithServices(service, city311Service.NewIdentity(service.Store(), city311Service.IdentityOptions{}))
+}
+
+func MountRoutesWithServices(service *city311Service.Service, identity *city311Service.IdentityService) func(chi.Router) {
 	return func(r chi.Router) {
-		h := &handler{service: service}
+		h := &handler{service: service, identity: identity}
+		r.Use(h.optionalIdentitySession)
+		r.Post("/accounts", h.accountRegister)
+		r.Get(sessionRoute, h.sessionCurrent)
+		r.Post(sessionRoute, h.sessionSignIn)
+		r.Delete(sessionRoute, h.sessionSignOut)
+		r.Post("/auth/password-reset/request", h.passwordResetRequest)
+		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
+		r.Route("/account", func(r chi.Router) {
+			r.Use(requireCityIdentitySession)
+			r.Post("/password", h.passwordChange)
+			r.Post("/login-identifier", h.loginIdentifierChange)
+		})
 		r.With(requireScope(contract.ScopeRequestWrite)).Post(serviceRequestsRoute, h.integrationSubmit)
 		r.Post("/portal/service-requests", h.portalSubmit)
 		r.Route("/staff", func(r chi.Router) {
@@ -75,6 +99,141 @@ func MountRoutesWithService(service *city311Service.Service) func(chi.Router) {
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
 		})
 	}
+}
+
+func (h *handler) optionalIdentitySession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.identity == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		cookie, err := r.Cookie(city311Service.IdentitySessionCookie)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		resolved, err := h.identity.Resolve(r.Context(), cookie.Value)
+		if err != nil {
+			writeResult(w, 0, nil, err)
+			return
+		}
+		if resolved == nil {
+			h.expireIdentityCookie(w)
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx := auth.SetIdentityToContext(r.Context(), resolved.User)
+		ctx = context.WithValue(ctx, identitySessionContextKey{}, resolved)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func identitySessionFromContext(ctx context.Context) *city311Service.ResolvedSession {
+	resolved, _ := ctx.Value(identitySessionContextKey{}).(*city311Service.ResolvedSession)
+	return resolved
+}
+
+func requireCityIdentitySession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if identitySessionFromContext(r.Context()) == nil {
+			writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: authenticationRequiredMessage, Retryable: false})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (h *handler) accountRegister(w http.ResponseWriter, r *http.Request) {
+	input := contract.AccountRegistration{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	response, err := h.identity.Register(r.Context(), input)
+	writeResult(w, http.StatusAccepted, response, err)
+}
+
+func (h *handler) sessionCurrent(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.identity.Session(identitySessionFromContext(r.Context())))
+}
+
+func (h *handler) sessionSignIn(w http.ResponseWriter, r *http.Request) {
+	input := contract.LocalSignIn{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	token, resolved, err := h.identity.SignIn(r.Context(), input)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	h.setIdentityCookie(w, token)
+	writeJSON(w, http.StatusOK, h.identity.Session(resolved))
+}
+
+func (h *handler) sessionSignOut(w http.ResponseWriter, r *http.Request) {
+	resolved := identitySessionFromContext(r.Context())
+	if resolved == nil {
+		writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: authenticationRequiredMessage, Retryable: false})
+		return
+	}
+	if err := h.identity.SignOut(r.Context(), resolved); err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	h.expireIdentityCookie(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handler) passwordResetRequest(w http.ResponseWriter, r *http.Request) {
+	input := contract.PasswordResetRequest{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	writeJSON(w, http.StatusAccepted, h.identity.RequestPasswordReset(r.Context(), input.Email))
+}
+
+func (h *handler) passwordResetConfirm(w http.ResponseWriter, r *http.Request) {
+	input := contract.PasswordResetConfirm{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	response, err := h.identity.ConfirmPasswordReset(r.Context(), input)
+	writeResult(w, http.StatusOK, response, err)
+}
+
+func (h *handler) passwordChange(w http.ResponseWriter, r *http.Request) {
+	input := contract.PasswordChange{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := h.identity.ChangePassword(r.Context(), identitySessionFromContext(r.Context()), input); err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handler) loginIdentifierChange(w http.ResponseWriter, r *http.Request) {
+	input := contract.LoginIdentifierChange{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	response, err := h.identity.ChangeLoginIdentifier(r.Context(), identitySessionFromContext(r.Context()), input)
+	writeResult(w, http.StatusOK, response, err)
+}
+
+func (h *handler) setIdentityCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name: city311Service.IdentitySessionCookie, Value: token, Path: "/",
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (h *handler) expireIdentityCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name: city311Service.IdentitySessionCookie, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func (h *handler) integrationSubmit(w http.ResponseWriter, r *http.Request) {
@@ -398,7 +557,7 @@ func parseIfMatch(value string) (uint64, error) {
 func requireIdentity(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !auth.GetIdentityFromContext(r.Context()).Valid() {
-			writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: "Authentication is required.", Retryable: false})
+			writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: authenticationRequiredMessage, Retryable: false})
 			return
 		}
 		next.ServeHTTP(w, r)

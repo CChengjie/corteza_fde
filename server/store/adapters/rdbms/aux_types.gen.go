@@ -228,6 +228,8 @@ type (
 	auxCity311AuditEvent struct {
 		ID            uint64                     `db:"id"`
 		RequestID     uint64                     `db:"request_id"`
+		EntityType    string                     `db:"entity_type"`
+		EntityID      string                     `db:"entity_id"`
 		EventType     string                     `db:"event_type"`
 		ActorType     composeType.AuditActorType `db:"actor_type"`
 		ActorID       uint64                     `db:"actor_id"`
@@ -259,6 +261,52 @@ type (
 		RequestID      uint64                  `db:"request_id"`
 		CreatedAt      time.Time               `db:"created_at"`
 		ExpiresAt      time.Time               `db:"expires_at"`
+	}
+
+	// auxCity311IdentityNotification is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311IdentityNotification struct {
+		ID          uint64                  `db:"id"`
+		UserID      uint64                  `db:"user_id"`
+		Kind        string                  `db:"kind"`
+		Recipient   string                  `db:"recipient"`
+		DeliveryKey string                  `db:"delivery_key"`
+		Payload     composeType.City311JSON `db:"payload"`
+		Status      string                  `db:"status"`
+		Attempts    int                     `db:"attempts"`
+		LastError   string                  `db:"last_error"`
+		CreatedAt   time.Time               `db:"created_at"`
+		UpdatedAt   time.Time               `db:"updated_at"`
+	}
+
+	// auxCity311IdentitySession is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311IdentitySession struct {
+		ID                uint64    `db:"id"`
+		TokenHash         string    `db:"token_hash"`
+		UserID            uint64    `db:"user_id"`
+		IssuedAt          time.Time `db:"issued_at"`
+		LastSeenAt        time.Time `db:"last_seen_at"`
+		ExpiresAt         time.Time `db:"expires_at"`
+		AbsoluteExpiresAt time.Time `db:"absolute_expires_at"`
+	}
+
+	// auxCity311LocalAccount is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311LocalAccount struct {
+		ID                uint64    `db:"id"`
+		LoginIdentifier   string    `db:"login_identifier"`
+		VerifiedEmail     string    `db:"verified_email"`
+		PreferredLanguage string    `db:"preferred_language"`
+		CreatedAt         time.Time `db:"created_at"`
+		UpdatedAt         time.Time `db:"updated_at"`
+	}
+
+	// auxCity311PasswordResetToken is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311PasswordResetToken struct {
+		ID        uint64     `db:"id"`
+		TokenHash string     `db:"token_hash"`
+		UserID    uint64     `db:"user_id"`
+		CreatedAt time.Time  `db:"created_at"`
+		ExpiresAt time.Time  `db:"expires_at"`
+		UsedAt    *time.Time `db:"used_at"`
 	}
 
 	// auxCity311PublicHistoryItem is an auxiliary structure used for transporting to/from RDBMS store
@@ -1533,6 +1581,8 @@ func (aux *auxCity311ActorProfile) scan(row scanner) error {
 func (aux *auxCity311AuditEvent) encode(res *composeType.City311AuditEvent) (_ error) {
 	aux.ID = res.ID
 	aux.RequestID = res.RequestID
+	aux.EntityType = res.EntityType
+	aux.EntityID = res.EntityID
 	aux.EventType = res.EventType
 	aux.ActorType = res.ActorType
 	aux.ActorID = res.ActorID
@@ -1550,6 +1600,8 @@ func (aux auxCity311AuditEvent) decode() (res *composeType.City311AuditEvent, _ 
 	res = new(composeType.City311AuditEvent)
 	res.ID = aux.ID
 	res.RequestID = aux.RequestID
+	res.EntityType = aux.EntityType
+	res.EntityID = aux.EntityID
 	res.EventType = aux.EventType
 	res.ActorType = aux.ActorType
 	res.ActorID = aux.ActorID
@@ -1567,6 +1619,8 @@ func (aux *auxCity311AuditEvent) scan(row scanner) error {
 	return row.Scan(
 		&aux.ID,
 		&aux.RequestID,
+		&aux.EntityType,
+		&aux.EntityID,
 		&aux.EventType,
 		&aux.ActorType,
 		&aux.ActorID,
@@ -1668,6 +1722,188 @@ func (aux *auxCity311IdempotencyRecord) scan(row scanner) error {
 		&aux.RequestID,
 		&aux.CreatedAt,
 		&aux.ExpiresAt,
+	)
+}
+
+// encodes City311IdentityNotification to auxCity311IdentityNotification
+//
+// This function is auto-generated
+func (aux *auxCity311IdentityNotification) encode(res *composeType.City311IdentityNotification) (_ error) {
+	aux.ID = res.ID
+	aux.UserID = res.UserID
+	aux.Kind = res.Kind
+	aux.Recipient = res.Recipient
+	aux.DeliveryKey = res.DeliveryKey
+	aux.Payload = res.Payload
+	aux.Status = res.Status
+	aux.Attempts = res.Attempts
+	aux.LastError = res.LastError
+	aux.CreatedAt = res.CreatedAt
+	aux.UpdatedAt = res.UpdatedAt
+	return
+}
+
+// decodes City311IdentityNotification from auxCity311IdentityNotification
+//
+// This function is auto-generated
+func (aux auxCity311IdentityNotification) decode() (res *composeType.City311IdentityNotification, _ error) {
+	res = new(composeType.City311IdentityNotification)
+	res.ID = aux.ID
+	res.UserID = aux.UserID
+	res.Kind = aux.Kind
+	res.Recipient = aux.Recipient
+	res.DeliveryKey = aux.DeliveryKey
+	res.Payload = aux.Payload
+	res.Status = aux.Status
+	res.Attempts = aux.Attempts
+	res.LastError = aux.LastError
+	res.CreatedAt = aux.CreatedAt
+	res.UpdatedAt = aux.UpdatedAt
+	return
+}
+
+// scans row and fills auxCity311IdentityNotification fields
+//
+// This function is auto-generated
+func (aux *auxCity311IdentityNotification) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.UserID,
+		&aux.Kind,
+		&aux.Recipient,
+		&aux.DeliveryKey,
+		&aux.Payload,
+		&aux.Status,
+		&aux.Attempts,
+		&aux.LastError,
+		&aux.CreatedAt,
+		&aux.UpdatedAt,
+	)
+}
+
+// encodes City311IdentitySession to auxCity311IdentitySession
+//
+// This function is auto-generated
+func (aux *auxCity311IdentitySession) encode(res *composeType.City311IdentitySession) (_ error) {
+	aux.ID = res.ID
+	aux.TokenHash = res.TokenHash
+	aux.UserID = res.UserID
+	aux.IssuedAt = res.IssuedAt
+	aux.LastSeenAt = res.LastSeenAt
+	aux.ExpiresAt = res.ExpiresAt
+	aux.AbsoluteExpiresAt = res.AbsoluteExpiresAt
+	return
+}
+
+// decodes City311IdentitySession from auxCity311IdentitySession
+//
+// This function is auto-generated
+func (aux auxCity311IdentitySession) decode() (res *composeType.City311IdentitySession, _ error) {
+	res = new(composeType.City311IdentitySession)
+	res.ID = aux.ID
+	res.TokenHash = aux.TokenHash
+	res.UserID = aux.UserID
+	res.IssuedAt = aux.IssuedAt
+	res.LastSeenAt = aux.LastSeenAt
+	res.ExpiresAt = aux.ExpiresAt
+	res.AbsoluteExpiresAt = aux.AbsoluteExpiresAt
+	return
+}
+
+// scans row and fills auxCity311IdentitySession fields
+//
+// This function is auto-generated
+func (aux *auxCity311IdentitySession) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.TokenHash,
+		&aux.UserID,
+		&aux.IssuedAt,
+		&aux.LastSeenAt,
+		&aux.ExpiresAt,
+		&aux.AbsoluteExpiresAt,
+	)
+}
+
+// encodes City311LocalAccount to auxCity311LocalAccount
+//
+// This function is auto-generated
+func (aux *auxCity311LocalAccount) encode(res *composeType.City311LocalAccount) (_ error) {
+	aux.ID = res.ID
+	aux.LoginIdentifier = res.LoginIdentifier
+	aux.VerifiedEmail = res.VerifiedEmail
+	aux.PreferredLanguage = res.PreferredLanguage
+	aux.CreatedAt = res.CreatedAt
+	aux.UpdatedAt = res.UpdatedAt
+	return
+}
+
+// decodes City311LocalAccount from auxCity311LocalAccount
+//
+// This function is auto-generated
+func (aux auxCity311LocalAccount) decode() (res *composeType.City311LocalAccount, _ error) {
+	res = new(composeType.City311LocalAccount)
+	res.ID = aux.ID
+	res.LoginIdentifier = aux.LoginIdentifier
+	res.VerifiedEmail = aux.VerifiedEmail
+	res.PreferredLanguage = aux.PreferredLanguage
+	res.CreatedAt = aux.CreatedAt
+	res.UpdatedAt = aux.UpdatedAt
+	return
+}
+
+// scans row and fills auxCity311LocalAccount fields
+//
+// This function is auto-generated
+func (aux *auxCity311LocalAccount) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.LoginIdentifier,
+		&aux.VerifiedEmail,
+		&aux.PreferredLanguage,
+		&aux.CreatedAt,
+		&aux.UpdatedAt,
+	)
+}
+
+// encodes City311PasswordResetToken to auxCity311PasswordResetToken
+//
+// This function is auto-generated
+func (aux *auxCity311PasswordResetToken) encode(res *composeType.City311PasswordResetToken) (_ error) {
+	aux.ID = res.ID
+	aux.TokenHash = res.TokenHash
+	aux.UserID = res.UserID
+	aux.CreatedAt = res.CreatedAt
+	aux.ExpiresAt = res.ExpiresAt
+	aux.UsedAt = res.UsedAt
+	return
+}
+
+// decodes City311PasswordResetToken from auxCity311PasswordResetToken
+//
+// This function is auto-generated
+func (aux auxCity311PasswordResetToken) decode() (res *composeType.City311PasswordResetToken, _ error) {
+	res = new(composeType.City311PasswordResetToken)
+	res.ID = aux.ID
+	res.TokenHash = aux.TokenHash
+	res.UserID = aux.UserID
+	res.CreatedAt = aux.CreatedAt
+	res.ExpiresAt = aux.ExpiresAt
+	res.UsedAt = aux.UsedAt
+	return
+}
+
+// scans row and fills auxCity311PasswordResetToken fields
+//
+// This function is auto-generated
+func (aux *auxCity311PasswordResetToken) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.TokenHash,
+		&aux.UserID,
+		&aux.CreatedAt,
+		&aux.ExpiresAt,
+		&aux.UsedAt,
 	)
 }
 

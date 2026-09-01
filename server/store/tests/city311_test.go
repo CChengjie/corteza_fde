@@ -59,6 +59,7 @@ func testCity311AuditEvents(t *testing.T, s store.City311AuditEvents) {
 	require.NoError(t, s.TruncateCity311AuditEvents(ctx))
 	event := &composeTypes.City311AuditEvent{
 		ID: 201, RequestID: 301, EventType: "SERVICE_REQUEST_SUBMITTED", ActorType: contract.AuditActorSystem,
+		EntityType: "service_request", EntityID: "301",
 		SourceChannel: contract.SourceChannelAPI, Before: composeTypes.City311JSON{}, After: composeTypes.City311JSON{"status": "SUBMITTED"}, CreatedAt: *now(),
 	}
 	require.NoError(t, s.CreateCity311AuditEvent(ctx, event))
@@ -115,6 +116,95 @@ func testCity311IdempotencyRecords(t *testing.T, s store.City311IdempotencyRecor
 	require.NoError(t, err)
 	require.Equal(t, record.RequestHash, fetched.RequestHash)
 	require.NoError(t, s.DeleteCity311IdempotencyRecordByID(ctx, record.ID))
+}
+
+func testCity311IdentityNotifications(t *testing.T, s store.City311IdentityNotifications) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311IdentityNotifications(ctx))
+	createdAt := *now()
+	notification := &composeTypes.City311IdentityNotification{
+		ID: 451, UserID: 501, Kind: "PASSWORD_RESET", Recipient: "resident@example.invalid",
+		DeliveryKey: "password-reset:501:451", Payload: composeTypes.City311JSON{"language": "EN"},
+		Status: "PENDING", CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	require.NoError(t, s.CreateCity311IdentityNotification(ctx, notification))
+	fetched, err := s.LookupCity311IdentityNotificationByID(ctx, notification.ID)
+	require.NoError(t, err)
+	require.Equal(t, "EN", fetched.Payload["language"])
+	fetched.Status = "SENT"
+	fetched.Attempts = 1
+	fetched.UpdatedAt = *now()
+	require.NoError(t, s.UpdateCity311IdentityNotification(ctx, fetched))
+	set, _, err := s.SearchCity311IdentityNotifications(ctx, composeTypes.City311IdentityNotificationFilter{UserID: notification.UserID, Status: "SENT"})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	require.NoError(t, s.DeleteCity311IdentityNotificationByID(ctx, notification.ID))
+}
+
+func testCity311IdentitySessions(t *testing.T, s store.City311IdentitySessions) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311IdentitySessions(ctx))
+	issuedAt := *now()
+	session := &composeTypes.City311IdentitySession{
+		ID: 551, TokenHash: "session-token-hash", UserID: 501, IssuedAt: issuedAt, LastSeenAt: issuedAt,
+		ExpiresAt: issuedAt.Add(30 * time.Minute), AbsoluteExpiresAt: issuedAt.Add(8 * time.Hour),
+	}
+	require.NoError(t, s.CreateCity311IdentitySession(ctx, session))
+	fetched, err := s.LookupCity311IdentitySessionByTokenHash(ctx, session.TokenHash)
+	require.NoError(t, err)
+	require.Equal(t, session.UserID, fetched.UserID)
+	fetched.LastSeenAt = issuedAt.Add(time.Minute)
+	require.NoError(t, s.UpdateCity311IdentitySession(ctx, fetched))
+	set, _, err := s.SearchCity311IdentitySessions(ctx, composeTypes.City311IdentitySessionFilter{UserID: session.UserID})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	require.NoError(t, s.DeleteCity311IdentitySessionByID(ctx, session.ID))
+}
+
+func testCity311LocalAccounts(t *testing.T, s store.City311LocalAccounts) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311LocalAccounts(ctx))
+	createdAt := *now()
+	account := &composeTypes.City311LocalAccount{
+		ID: 501, LoginIdentifier: "resident-501", VerifiedEmail: "resident@example.invalid",
+		PreferredLanguage: "EN", CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	require.NoError(t, s.CreateCity311LocalAccount(ctx, account))
+	fetched, err := s.LookupCity311LocalAccountByLoginIdentifier(ctx, account.LoginIdentifier)
+	require.NoError(t, err)
+	require.Equal(t, account.VerifiedEmail, fetched.VerifiedEmail)
+	byEmail, err := s.LookupCity311LocalAccountByVerifiedEmail(ctx, account.VerifiedEmail)
+	require.NoError(t, err)
+	require.Equal(t, account.ID, byEmail.ID)
+	fetched.PreferredLanguage = "ES"
+	require.NoError(t, s.UpdateCity311LocalAccount(ctx, fetched))
+	duplicate := *account
+	duplicate.ID++
+	duplicate.VerifiedEmail = "other@example.invalid"
+	require.Error(t, s.CreateCity311LocalAccount(ctx, &duplicate))
+	require.NoError(t, s.DeleteCity311LocalAccountByID(ctx, account.ID))
+}
+
+func testCity311PasswordResetTokens(t *testing.T, s store.City311PasswordResetTokens) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311PasswordResetTokens(ctx))
+	createdAt := *now()
+	token := &composeTypes.City311PasswordResetToken{
+		ID: 601, TokenHash: "password-reset-token-hash", UserID: 501,
+		CreatedAt: createdAt, ExpiresAt: createdAt.Add(15 * time.Minute),
+	}
+	require.NoError(t, s.CreateCity311PasswordResetToken(ctx, token))
+	fetched, err := s.LookupCity311PasswordResetTokenByTokenHash(ctx, token.TokenHash)
+	require.NoError(t, err)
+	require.Nil(t, fetched.UsedAt)
+	usedAt := createdAt.Add(time.Minute)
+	fetched.UsedAt = &usedAt
+	require.NoError(t, s.UpdateCity311PasswordResetToken(ctx, fetched))
+	set, _, err := s.SearchCity311PasswordResetTokens(ctx, composeTypes.City311PasswordResetTokenFilter{UserID: token.UserID})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	require.Equal(t, usedAt, *set[0].UsedAt)
+	require.NoError(t, s.DeleteCity311PasswordResetTokenByID(ctx, token.ID))
 }
 
 func testCity311RequestSequences(t *testing.T, s store.City311RequestSequences) {

@@ -23,6 +23,8 @@ import (
 
 func testService(t *testing.T) (*Service, store.Storer) {
 	t.Helper()
+	t.Setenv(seedConstituentPasswordEnv, "SeedConstituentPassword1!")
+	t.Setenv(seedConstituentTwoPasswordEnv, "SeedConstituentPassword2!")
 	ctx := context.Background()
 	dsn := fmt.Sprintf("sqlite3://file:%s?mode=memory&cache=shared", t.Name())
 	st, err := sqlite.Connect(ctx, dsn)
@@ -52,6 +54,22 @@ func TestSeedIsRepeatableAndPreservesSeededRows(t *testing.T) {
 	svc, st := testService(t)
 	ctx := context.Background()
 	require.NoError(t, svc.Seed(ctx, svc.now()))
+	identity := NewIdentity(st, IdentityOptions{Secret: []byte("seed-login-test-session-secret")})
+	for _, seeded := range []struct {
+		handle   string
+		password string
+	}{
+		{handle: "city311-constituent", password: "SeedConstituentPassword1!"},
+		{handle: "city311-constituent-two", password: "SeedConstituentPassword2!"},
+	} {
+		_, _, err := identity.SignIn(ctx, contract.LocalSignIn{LoginIdentifier: seeded.handle, Password: seeded.password})
+		require.NoError(t, err)
+	}
+	seedUser, err := store.LookupUserByHandle(ctx, st, "city311-constituent")
+	require.NoError(t, err)
+	credentialsBefore, _, err := store.SearchCredentials(ctx, st, systemTypes.CredentialFilter{OwnerID: seedUser.ID, Kind: passwordCredentialKind})
+	require.NoError(t, err)
+	require.Len(t, credentialsBefore, 1)
 
 	seeded, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
 	require.NoError(t, err)
@@ -62,6 +80,10 @@ func TestSeedIsRepeatableAndPreservesSeededRows(t *testing.T) {
 	constituent.Profile["display_name"] = "Preserved constituent edit"
 	require.NoError(t, store.UpdateCity311Constituent(ctx, st, constituent))
 	require.NoError(t, svc.Seed(ctx, svc.now()))
+	credentialsAfter, _, err := store.SearchCredentials(ctx, st, systemTypes.CredentialFilter{OwnerID: seedUser.ID, Kind: passwordCredentialKind})
+	require.NoError(t, err)
+	require.Len(t, credentialsAfter, 1)
+	require.Equal(t, credentialsBefore[0].ID, credentialsAfter[0].ID)
 
 	set, _, err := store.SearchCity311ServiceRequests(ctx, st, composeTypes.City311ServiceRequestFilter{Paging: filter.Paging{Limit: 100}})
 	require.NoError(t, err)
@@ -74,7 +96,7 @@ func TestSeedIsRepeatableAndPreservesSeededRows(t *testing.T) {
 	require.Equal(t, "Preserved constituent edit", constituent.Profile["display_name"])
 	constituents, _, err := store.SearchCity311Constituents(ctx, st, composeTypes.City311ConstituentFilter{Paging: filter.Paging{Limit: 100}})
 	require.NoError(t, err)
-	require.Len(t, constituents, 8)
+	require.Len(t, constituents, 10)
 	history, _, err := store.SearchCity311PublicHistoryItems(ctx, st, composeTypes.City311PublicHistoryItemFilter{RequestID: seeded.ID})
 	require.NoError(t, err)
 	require.Len(t, history, 1)
@@ -133,7 +155,7 @@ func TestSubmitIsTransactionalAndIdempotent(t *testing.T) {
 	require.Len(t, set, 9)
 	constituents, _, err := store.SearchCity311Constituents(ctx, st, composeTypes.City311ConstituentFilter{Paging: filter.Paging{Limit: 100}})
 	require.NoError(t, err)
-	require.Len(t, constituents, 9)
+	require.Len(t, constituents, 11)
 	sequence, err := store.LookupCity311RequestSequenceByID(ctx, st, 2026)
 	require.NoError(t, err)
 	require.Equal(t, uint64(42), sequence.NextNumber)

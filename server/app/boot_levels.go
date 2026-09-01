@@ -15,6 +15,7 @@ import (
 	authSettings "github.com/cortezaproject/corteza/server/auth/settings"
 	autService "github.com/cortezaproject/corteza/server/automation/service"
 	cmpService "github.com/cortezaproject/corteza/server/compose/service"
+	city311Service "github.com/cortezaproject/corteza/server/compose/service/city311"
 	cmpEvent "github.com/cortezaproject/corteza/server/compose/service/event"
 	discoveryService "github.com/cortezaproject/corteza/server/discovery/service"
 	fedService "github.com/cortezaproject/corteza/server/federation/service"
@@ -695,6 +696,9 @@ func updateAuthSettings(svc authServicer, current *types.AppSettings) {
 	saml.UpdateSettings(current, as)
 
 	svc.UpdateSettings(as)
+	if city311Service.DefaultIdentity != nil {
+		city311Service.DefaultIdentity.UpdateMFASettings(as)
+	}
 }
 
 // Checks if federation is enabled in the options

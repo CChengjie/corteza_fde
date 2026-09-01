@@ -80,6 +80,52 @@ type ListResponse struct {
 	Sort           []string           `json:"sort"`
 }
 
+type AccountRegistration struct {
+	DisplayName       string   `json:"display_name"`
+	Email             string   `json:"email"`
+	LoginIdentifier   string   `json:"login_identifier"`
+	Password          string   `json:"password"`
+	PreferredLanguage Language `json:"preferred_language"`
+}
+
+type AccountRegistrationAcknowledgement struct {
+	Accepted bool `json:"accepted"`
+}
+
+type LocalSignIn struct {
+	LoginIdentifier string `json:"login_identifier"`
+	Password        string `json:"password"`
+}
+
+type CurrentActor struct {
+	ActorID          string            `json:"actor_id"`
+	DisplayName      string            `json:"display_name"`
+	OIDCActorType    *string           `json:"oidc_actor_type,omitempty"`
+	ApplicationRoles []ApplicationRole `json:"application_roles"`
+	DepartmentCodes  []DepartmentCode  `json:"department_codes"`
+	DistrictCodes    []DistrictCode    `json:"district_codes"`
+	Capabilities     []string          `json:"capabilities"`
+	Scopes           []string          `json:"scopes"`
+	AvailableRoutes  []string          `json:"available_routes"`
+}
+
+type Session struct {
+	Authenticated     bool          `json:"authenticated"`
+	Actor             *CurrentActor `json:"actor"`
+	ExpiresAt         *time.Time    `json:"expires_at"`
+	PreferredLanguage Language      `json:"preferred_language"`
+}
+
+type PasswordChange struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+type LoginIdentifierChange struct {
+	CurrentPassword string `json:"current_password"`
+	LoginIdentifier string `json:"login_identifier"`
+}
+
 // Actor carries server-resolved roles and record scope.
 type Actor struct {
 	ID         uint64

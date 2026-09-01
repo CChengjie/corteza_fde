@@ -78,6 +78,18 @@ type (
 		// optional city311IdempotencyRecord filter function called after the generated function
 		City311IdempotencyRecord func(*Store, composeType.City311IdempotencyRecordFilter) ([]goqu.Expression, composeType.City311IdempotencyRecordFilter, error)
 
+		// optional city311IdentityNotification filter function called after the generated function
+		City311IdentityNotification func(*Store, composeType.City311IdentityNotificationFilter) ([]goqu.Expression, composeType.City311IdentityNotificationFilter, error)
+
+		// optional city311IdentitySession filter function called after the generated function
+		City311IdentitySession func(*Store, composeType.City311IdentitySessionFilter) ([]goqu.Expression, composeType.City311IdentitySessionFilter, error)
+
+		// optional city311LocalAccount filter function called after the generated function
+		City311LocalAccount func(*Store, composeType.City311LocalAccountFilter) ([]goqu.Expression, composeType.City311LocalAccountFilter, error)
+
+		// optional city311PasswordResetToken filter function called after the generated function
+		City311PasswordResetToken func(*Store, composeType.City311PasswordResetTokenFilter) ([]goqu.Expression, composeType.City311PasswordResetTokenFilter, error)
+
 		// optional city311PublicHistoryItem filter function called after the generated function
 		City311PublicHistoryItem func(*Store, composeType.City311PublicHistoryItemFilter) ([]goqu.Expression, composeType.City311PublicHistoryItemFilter, error)
 
@@ -550,6 +562,14 @@ func City311AuditEventFilter(d drivers.Dialect, f composeType.City311AuditEventF
 		ee = append(ee, goqu.C("request_id").Eq(f.RequestID))
 	}
 
+	if val := strings.TrimSpace(f.EntityType); len(val) > 0 {
+		ee = append(ee, goqu.C("entity_type").Eq(f.EntityType))
+	}
+
+	if val := strings.TrimSpace(f.EntityID); len(val) > 0 {
+		ee = append(ee, goqu.C("entity_id").Eq(f.EntityID))
+	}
+
 	if val := strings.TrimSpace(f.EventType); len(val) > 0 {
 		ee = append(ee, goqu.C("event_type").Eq(f.EventType))
 	}
@@ -596,6 +616,82 @@ func City311IdempotencyRecordFilter(d drivers.Dialect, f composeType.City311Idem
 
 	if val := strings.TrimSpace(f.KeyHash); len(val) > 0 {
 		ee = append(ee, goqu.C("key_hash").Eq(f.KeyHash))
+	}
+
+	return ee, f, err
+}
+
+// City311IdentityNotificationFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311IdentityNotifications() and can be extended
+// by setting Store.Filters.City311IdentityNotification. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311IdentityNotificationFilter(d drivers.Dialect, f composeType.City311IdentityNotificationFilter) (ee []goqu.Expression, _ composeType.City311IdentityNotificationFilter, err error) {
+
+	if f.UserID > 0 {
+		ee = append(ee, goqu.C("user_id").Eq(f.UserID))
+	}
+
+	if val := strings.TrimSpace(f.Status); len(val) > 0 {
+		ee = append(ee, goqu.C("status").Eq(f.Status))
+	}
+
+	return ee, f, err
+}
+
+// City311IdentitySessionFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311IdentitySessions() and can be extended
+// by setting Store.Filters.City311IdentitySession. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311IdentitySessionFilter(d drivers.Dialect, f composeType.City311IdentitySessionFilter) (ee []goqu.Expression, _ composeType.City311IdentitySessionFilter, err error) {
+
+	if val := strings.TrimSpace(f.TokenHash); len(val) > 0 {
+		ee = append(ee, goqu.C("token_hash").Eq(f.TokenHash))
+	}
+
+	if f.UserID > 0 {
+		ee = append(ee, goqu.C("user_id").Eq(f.UserID))
+	}
+
+	return ee, f, err
+}
+
+// City311LocalAccountFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311LocalAccounts() and can be extended
+// by setting Store.Filters.City311LocalAccount. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311LocalAccountFilter(d drivers.Dialect, f composeType.City311LocalAccountFilter) (ee []goqu.Expression, _ composeType.City311LocalAccountFilter, err error) {
+
+	if val := strings.TrimSpace(f.LoginIdentifier); len(val) > 0 {
+		ee = append(ee, goqu.C("login_identifier").Eq(f.LoginIdentifier))
+	}
+
+	if val := strings.TrimSpace(f.VerifiedEmail); len(val) > 0 {
+		ee = append(ee, goqu.C("verified_email").Eq(f.VerifiedEmail))
+	}
+
+	return ee, f, err
+}
+
+// City311PasswordResetTokenFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311PasswordResetTokens() and can be extended
+// by setting Store.Filters.City311PasswordResetToken. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311PasswordResetTokenFilter(d drivers.Dialect, f composeType.City311PasswordResetTokenFilter) (ee []goqu.Expression, _ composeType.City311PasswordResetTokenFilter, err error) {
+
+	if f.UserID > 0 {
+		ee = append(ee, goqu.C("user_id").Eq(f.UserID))
 	}
 
 	return ee, f, err

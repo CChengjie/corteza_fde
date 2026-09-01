@@ -1515,6 +1515,8 @@ var (
 		return d.Select(
 			"id",
 			"request_id",
+			"entity_type",
+			"entity_id",
 			"event_type",
 			"actor_type",
 			"actor_id",
@@ -1533,6 +1535,8 @@ var (
 			Rows(goqu.Record{
 				"id":             res.ID,
 				"request_id":     res.RequestID,
+				"entity_type":    res.EntityType,
+				"entity_id":      res.EntityID,
 				"event_type":     res.EventType,
 				"actor_type":     res.ActorType,
 				"actor_id":       res.ActorID,
@@ -1554,6 +1558,8 @@ var (
 				goqu.DoUpdate(target[1:],
 					goqu.Record{
 						"request_id":     res.RequestID,
+						"entity_type":    res.EntityType,
+						"entity_id":      res.EntityID,
 						"event_type":     res.EventType,
 						"actor_type":     res.ActorType,
 						"actor_id":       res.ActorID,
@@ -1573,6 +1579,8 @@ var (
 		return d.Update(city311AuditEventTable).
 			Set(goqu.Record{
 				"request_id":     res.RequestID,
+				"entity_type":    res.EntityType,
+				"entity_id":      res.EntityID,
 				"event_type":     res.EventType,
 				"actor_type":     res.ActorType,
 				"actor_id":       res.ActorID,
@@ -1802,6 +1810,398 @@ var (
 	//
 	// This function is auto-generated
 	city311IdempotencyRecordPrimaryKeys = func(res *composeType.City311IdempotencyRecord) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
+	// city311IdentityNotificationTable represents city311IdentityNotifications store table
+	//
+	// This value is auto-generated
+	city311IdentityNotificationTable = goqu.T("compose_city311_identity_notification")
+
+	// city311IdentityNotificationSelectQuery assembles select query for fetching city311IdentityNotifications
+	//
+	// This function is auto-generated
+	city311IdentityNotificationSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"user_id",
+			"kind",
+			"recipient",
+			"delivery_key",
+			"payload",
+			"status",
+			"attempts",
+			"last_error",
+			"created_at",
+			"updated_at",
+		).From(city311IdentityNotificationTable)
+	}
+
+	// city311IdentityNotificationInsertQuery assembles query inserting city311IdentityNotifications
+	//
+	// This function is auto-generated
+	city311IdentityNotificationInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311IdentityNotification) *goqu.InsertDataset {
+		return d.Insert(city311IdentityNotificationTable).
+			Rows(goqu.Record{
+				"id":           res.ID,
+				"user_id":      res.UserID,
+				"kind":         res.Kind,
+				"recipient":    res.Recipient,
+				"delivery_key": res.DeliveryKey,
+				"payload":      res.Payload,
+				"status":       res.Status,
+				"attempts":     res.Attempts,
+				"last_error":   res.LastError,
+				"created_at":   res.CreatedAt,
+				"updated_at":   res.UpdatedAt,
+			})
+	}
+
+	// city311IdentityNotificationUpsertQuery assembles (insert+on-conflict) query for replacing city311IdentityNotifications
+	//
+	// This function is auto-generated
+	city311IdentityNotificationUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311IdentityNotification) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311IdentityNotificationInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"user_id":      res.UserID,
+						"kind":         res.Kind,
+						"recipient":    res.Recipient,
+						"delivery_key": res.DeliveryKey,
+						"payload":      res.Payload,
+						"status":       res.Status,
+						"attempts":     res.Attempts,
+						"last_error":   res.LastError,
+						"created_at":   res.CreatedAt,
+						"updated_at":   res.UpdatedAt,
+					},
+				),
+			)
+	}
+
+	// city311IdentityNotificationUpdateQuery assembles query for updating city311IdentityNotifications
+	//
+	// This function is auto-generated
+	city311IdentityNotificationUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311IdentityNotification) *goqu.UpdateDataset {
+		return d.Update(city311IdentityNotificationTable).
+			Set(goqu.Record{
+				"user_id":      res.UserID,
+				"kind":         res.Kind,
+				"recipient":    res.Recipient,
+				"delivery_key": res.DeliveryKey,
+				"payload":      res.Payload,
+				"status":       res.Status,
+				"attempts":     res.Attempts,
+				"last_error":   res.LastError,
+				"created_at":   res.CreatedAt,
+				"updated_at":   res.UpdatedAt,
+			}).
+			Where(city311IdentityNotificationPrimaryKeys(res))
+	}
+
+	// city311IdentityNotificationDeleteQuery assembles delete query for removing city311IdentityNotifications
+	//
+	// This function is auto-generated
+	city311IdentityNotificationDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311IdentityNotificationTable).Where(ee...)
+	}
+
+	// city311IdentityNotificationDeleteQuery assembles delete query for removing city311IdentityNotifications
+	//
+	// This function is auto-generated
+	city311IdentityNotificationTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311IdentityNotificationTable)
+	}
+
+	// city311IdentityNotificationPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311IdentityNotificationPrimaryKeys = func(res *composeType.City311IdentityNotification) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
+	// city311IdentitySessionTable represents city311IdentitySessions store table
+	//
+	// This value is auto-generated
+	city311IdentitySessionTable = goqu.T("compose_city311_identity_session")
+
+	// city311IdentitySessionSelectQuery assembles select query for fetching city311IdentitySessions
+	//
+	// This function is auto-generated
+	city311IdentitySessionSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"token_hash",
+			"user_id",
+			"issued_at",
+			"last_seen_at",
+			"expires_at",
+			"absolute_expires_at",
+		).From(city311IdentitySessionTable)
+	}
+
+	// city311IdentitySessionInsertQuery assembles query inserting city311IdentitySessions
+	//
+	// This function is auto-generated
+	city311IdentitySessionInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311IdentitySession) *goqu.InsertDataset {
+		return d.Insert(city311IdentitySessionTable).
+			Rows(goqu.Record{
+				"id":                  res.ID,
+				"token_hash":          res.TokenHash,
+				"user_id":             res.UserID,
+				"issued_at":           res.IssuedAt,
+				"last_seen_at":        res.LastSeenAt,
+				"expires_at":          res.ExpiresAt,
+				"absolute_expires_at": res.AbsoluteExpiresAt,
+			})
+	}
+
+	// city311IdentitySessionUpsertQuery assembles (insert+on-conflict) query for replacing city311IdentitySessions
+	//
+	// This function is auto-generated
+	city311IdentitySessionUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311IdentitySession) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311IdentitySessionInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"token_hash":          res.TokenHash,
+						"user_id":             res.UserID,
+						"issued_at":           res.IssuedAt,
+						"last_seen_at":        res.LastSeenAt,
+						"expires_at":          res.ExpiresAt,
+						"absolute_expires_at": res.AbsoluteExpiresAt,
+					},
+				),
+			)
+	}
+
+	// city311IdentitySessionUpdateQuery assembles query for updating city311IdentitySessions
+	//
+	// This function is auto-generated
+	city311IdentitySessionUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311IdentitySession) *goqu.UpdateDataset {
+		return d.Update(city311IdentitySessionTable).
+			Set(goqu.Record{
+				"token_hash":          res.TokenHash,
+				"user_id":             res.UserID,
+				"issued_at":           res.IssuedAt,
+				"last_seen_at":        res.LastSeenAt,
+				"expires_at":          res.ExpiresAt,
+				"absolute_expires_at": res.AbsoluteExpiresAt,
+			}).
+			Where(city311IdentitySessionPrimaryKeys(res))
+	}
+
+	// city311IdentitySessionDeleteQuery assembles delete query for removing city311IdentitySessions
+	//
+	// This function is auto-generated
+	city311IdentitySessionDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311IdentitySessionTable).Where(ee...)
+	}
+
+	// city311IdentitySessionDeleteQuery assembles delete query for removing city311IdentitySessions
+	//
+	// This function is auto-generated
+	city311IdentitySessionTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311IdentitySessionTable)
+	}
+
+	// city311IdentitySessionPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311IdentitySessionPrimaryKeys = func(res *composeType.City311IdentitySession) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
+	// city311LocalAccountTable represents city311LocalAccounts store table
+	//
+	// This value is auto-generated
+	city311LocalAccountTable = goqu.T("compose_city311_local_account")
+
+	// city311LocalAccountSelectQuery assembles select query for fetching city311LocalAccounts
+	//
+	// This function is auto-generated
+	city311LocalAccountSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"login_identifier",
+			"verified_email",
+			"preferred_language",
+			"created_at",
+			"updated_at",
+		).From(city311LocalAccountTable)
+	}
+
+	// city311LocalAccountInsertQuery assembles query inserting city311LocalAccounts
+	//
+	// This function is auto-generated
+	city311LocalAccountInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311LocalAccount) *goqu.InsertDataset {
+		return d.Insert(city311LocalAccountTable).
+			Rows(goqu.Record{
+				"id":                 res.ID,
+				"login_identifier":   res.LoginIdentifier,
+				"verified_email":     res.VerifiedEmail,
+				"preferred_language": res.PreferredLanguage,
+				"created_at":         res.CreatedAt,
+				"updated_at":         res.UpdatedAt,
+			})
+	}
+
+	// city311LocalAccountUpsertQuery assembles (insert+on-conflict) query for replacing city311LocalAccounts
+	//
+	// This function is auto-generated
+	city311LocalAccountUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311LocalAccount) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311LocalAccountInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"login_identifier":   res.LoginIdentifier,
+						"verified_email":     res.VerifiedEmail,
+						"preferred_language": res.PreferredLanguage,
+						"created_at":         res.CreatedAt,
+						"updated_at":         res.UpdatedAt,
+					},
+				),
+			)
+	}
+
+	// city311LocalAccountUpdateQuery assembles query for updating city311LocalAccounts
+	//
+	// This function is auto-generated
+	city311LocalAccountUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311LocalAccount) *goqu.UpdateDataset {
+		return d.Update(city311LocalAccountTable).
+			Set(goqu.Record{
+				"login_identifier":   res.LoginIdentifier,
+				"verified_email":     res.VerifiedEmail,
+				"preferred_language": res.PreferredLanguage,
+				"created_at":         res.CreatedAt,
+				"updated_at":         res.UpdatedAt,
+			}).
+			Where(city311LocalAccountPrimaryKeys(res))
+	}
+
+	// city311LocalAccountDeleteQuery assembles delete query for removing city311LocalAccounts
+	//
+	// This function is auto-generated
+	city311LocalAccountDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311LocalAccountTable).Where(ee...)
+	}
+
+	// city311LocalAccountDeleteQuery assembles delete query for removing city311LocalAccounts
+	//
+	// This function is auto-generated
+	city311LocalAccountTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311LocalAccountTable)
+	}
+
+	// city311LocalAccountPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311LocalAccountPrimaryKeys = func(res *composeType.City311LocalAccount) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
+	// city311PasswordResetTokenTable represents city311PasswordResetTokens store table
+	//
+	// This value is auto-generated
+	city311PasswordResetTokenTable = goqu.T("compose_city311_password_reset_token")
+
+	// city311PasswordResetTokenSelectQuery assembles select query for fetching city311PasswordResetTokens
+	//
+	// This function is auto-generated
+	city311PasswordResetTokenSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"token_hash",
+			"user_id",
+			"created_at",
+			"expires_at",
+			"used_at",
+		).From(city311PasswordResetTokenTable)
+	}
+
+	// city311PasswordResetTokenInsertQuery assembles query inserting city311PasswordResetTokens
+	//
+	// This function is auto-generated
+	city311PasswordResetTokenInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311PasswordResetToken) *goqu.InsertDataset {
+		return d.Insert(city311PasswordResetTokenTable).
+			Rows(goqu.Record{
+				"id":         res.ID,
+				"token_hash": res.TokenHash,
+				"user_id":    res.UserID,
+				"created_at": res.CreatedAt,
+				"expires_at": res.ExpiresAt,
+				"used_at":    res.UsedAt,
+			})
+	}
+
+	// city311PasswordResetTokenUpsertQuery assembles (insert+on-conflict) query for replacing city311PasswordResetTokens
+	//
+	// This function is auto-generated
+	city311PasswordResetTokenUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311PasswordResetToken) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311PasswordResetTokenInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"token_hash": res.TokenHash,
+						"user_id":    res.UserID,
+						"created_at": res.CreatedAt,
+						"expires_at": res.ExpiresAt,
+						"used_at":    res.UsedAt,
+					},
+				),
+			)
+	}
+
+	// city311PasswordResetTokenUpdateQuery assembles query for updating city311PasswordResetTokens
+	//
+	// This function is auto-generated
+	city311PasswordResetTokenUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311PasswordResetToken) *goqu.UpdateDataset {
+		return d.Update(city311PasswordResetTokenTable).
+			Set(goqu.Record{
+				"token_hash": res.TokenHash,
+				"user_id":    res.UserID,
+				"created_at": res.CreatedAt,
+				"expires_at": res.ExpiresAt,
+				"used_at":    res.UsedAt,
+			}).
+			Where(city311PasswordResetTokenPrimaryKeys(res))
+	}
+
+	// city311PasswordResetTokenDeleteQuery assembles delete query for removing city311PasswordResetTokens
+	//
+	// This function is auto-generated
+	city311PasswordResetTokenDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311PasswordResetTokenTable).Where(ee...)
+	}
+
+	// city311PasswordResetTokenDeleteQuery assembles delete query for removing city311PasswordResetTokens
+	//
+	// This function is auto-generated
+	city311PasswordResetTokenTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311PasswordResetTokenTable)
+	}
+
+	// city311PasswordResetTokenPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311PasswordResetTokenPrimaryKeys = func(res *composeType.City311PasswordResetToken) goqu.Ex {
 		return goqu.Ex{
 			"id": res.ID,
 		}

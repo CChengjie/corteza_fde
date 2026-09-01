@@ -47,6 +47,7 @@ func (e StoreEncoder) Prepare(ctx context.Context, p envoyx.EncodeParams, rt str
 	switch rt {
 	case types.ChartResourceType:
 		return e.prepareChart(ctx, p, s, nn)
+
 	case types.ModuleResourceType:
 		return e.prepareModule(ctx, p, s, nn)
 	case types.ModuleFieldResourceType:

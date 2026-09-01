@@ -11,6 +11,7 @@ import (
 	automationRest "github.com/cortezaproject/corteza/server/automation/rest"
 	composeRest "github.com/cortezaproject/corteza/server/compose/rest"
 	city311Rest "github.com/cortezaproject/corteza/server/compose/rest/city311"
+	city311Service "github.com/cortezaproject/corteza/server/compose/service/city311"
 	city311Contract "github.com/cortezaproject/corteza/server/compose/types/city311"
 	discoveryRest "github.com/cortezaproject/corteza/server/discovery/rest"
 	"github.com/cortezaproject/corteza/server/docs"
@@ -171,6 +172,17 @@ func (app *CortezaApp) healthz(w http.ResponseWriter, request *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_ = json.NewEncoder(w).Encode(city311Contract.APIError{
 			Error: city311Contract.ErrorTemporarilyUnavailable, Message: "A required database connection or migration is unavailable.", Retryable: true,
+		})
+		return
+	}
+	if err := city311Service.ValidateIdentityEnvironment(); err != nil {
+		if app.Log != nil {
+			app.Log.Error("City 311 identity configuration is unavailable", zap.Error(err))
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(city311Contract.APIError{
+			Error:   city311Contract.ErrorTemporarilyUnavailable,
+			Message: "A required City 311 identity configuration is unavailable.", Retryable: true,
 		})
 		return
 	}

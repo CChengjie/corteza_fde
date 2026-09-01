@@ -60,6 +60,10 @@ type (
 		City311AuditEvents
 		City311Constituents
 		City311IdempotencyRecords
+		City311IdentityNotifications
+		City311IdentitySessions
+		City311LocalAccounts
+		City311PasswordResetTokens
 		City311PublicHistoryItems
 		City311RequestAttachments
 		City311RequestSequences
@@ -308,6 +312,58 @@ type (
 		TruncateCity311IdempotencyRecords(ctx context.Context) error
 		LookupCity311IdempotencyRecordByID(ctx context.Context, id uint64) (*composeType.City311IdempotencyRecord, error)
 		LookupCity311IdempotencyRecordByOperationKeyHash(ctx context.Context, operation string, keyHash string) (*composeType.City311IdempotencyRecord, error)
+	}
+
+	City311IdentityNotifications interface {
+		SearchCity311IdentityNotifications(ctx context.Context, f composeType.City311IdentityNotificationFilter) (composeType.City311IdentityNotificationSet, composeType.City311IdentityNotificationFilter, error)
+		CreateCity311IdentityNotification(ctx context.Context, rr ...*composeType.City311IdentityNotification) error
+		UpdateCity311IdentityNotification(ctx context.Context, rr ...*composeType.City311IdentityNotification) error
+		UpsertCity311IdentityNotification(ctx context.Context, rr ...*composeType.City311IdentityNotification) error
+		DeleteCity311IdentityNotification(ctx context.Context, rr ...*composeType.City311IdentityNotification) error
+
+		DeleteCity311IdentityNotificationByID(ctx context.Context, id uint64) error
+		TruncateCity311IdentityNotifications(ctx context.Context) error
+		LookupCity311IdentityNotificationByID(ctx context.Context, id uint64) (*composeType.City311IdentityNotification, error)
+	}
+
+	City311IdentitySessions interface {
+		SearchCity311IdentitySessions(ctx context.Context, f composeType.City311IdentitySessionFilter) (composeType.City311IdentitySessionSet, composeType.City311IdentitySessionFilter, error)
+		CreateCity311IdentitySession(ctx context.Context, rr ...*composeType.City311IdentitySession) error
+		UpdateCity311IdentitySession(ctx context.Context, rr ...*composeType.City311IdentitySession) error
+		UpsertCity311IdentitySession(ctx context.Context, rr ...*composeType.City311IdentitySession) error
+		DeleteCity311IdentitySession(ctx context.Context, rr ...*composeType.City311IdentitySession) error
+
+		DeleteCity311IdentitySessionByID(ctx context.Context, id uint64) error
+		TruncateCity311IdentitySessions(ctx context.Context) error
+		LookupCity311IdentitySessionByID(ctx context.Context, id uint64) (*composeType.City311IdentitySession, error)
+		LookupCity311IdentitySessionByTokenHash(ctx context.Context, tokenHash string) (*composeType.City311IdentitySession, error)
+	}
+
+	City311LocalAccounts interface {
+		SearchCity311LocalAccounts(ctx context.Context, f composeType.City311LocalAccountFilter) (composeType.City311LocalAccountSet, composeType.City311LocalAccountFilter, error)
+		CreateCity311LocalAccount(ctx context.Context, rr ...*composeType.City311LocalAccount) error
+		UpdateCity311LocalAccount(ctx context.Context, rr ...*composeType.City311LocalAccount) error
+		UpsertCity311LocalAccount(ctx context.Context, rr ...*composeType.City311LocalAccount) error
+		DeleteCity311LocalAccount(ctx context.Context, rr ...*composeType.City311LocalAccount) error
+
+		DeleteCity311LocalAccountByID(ctx context.Context, id uint64) error
+		TruncateCity311LocalAccounts(ctx context.Context) error
+		LookupCity311LocalAccountByID(ctx context.Context, id uint64) (*composeType.City311LocalAccount, error)
+		LookupCity311LocalAccountByLoginIdentifier(ctx context.Context, loginIdentifier string) (*composeType.City311LocalAccount, error)
+		LookupCity311LocalAccountByVerifiedEmail(ctx context.Context, verifiedEmail string) (*composeType.City311LocalAccount, error)
+	}
+
+	City311PasswordResetTokens interface {
+		SearchCity311PasswordResetTokens(ctx context.Context, f composeType.City311PasswordResetTokenFilter) (composeType.City311PasswordResetTokenSet, composeType.City311PasswordResetTokenFilter, error)
+		CreateCity311PasswordResetToken(ctx context.Context, rr ...*composeType.City311PasswordResetToken) error
+		UpdateCity311PasswordResetToken(ctx context.Context, rr ...*composeType.City311PasswordResetToken) error
+		UpsertCity311PasswordResetToken(ctx context.Context, rr ...*composeType.City311PasswordResetToken) error
+		DeleteCity311PasswordResetToken(ctx context.Context, rr ...*composeType.City311PasswordResetToken) error
+
+		DeleteCity311PasswordResetTokenByID(ctx context.Context, id uint64) error
+		TruncateCity311PasswordResetTokens(ctx context.Context) error
+		LookupCity311PasswordResetTokenByID(ctx context.Context, id uint64) (*composeType.City311PasswordResetToken, error)
+		LookupCity311PasswordResetTokenByTokenHash(ctx context.Context, tokenHash string) (*composeType.City311PasswordResetToken, error)
 	}
 
 	City311PublicHistoryItems interface {
@@ -1831,6 +1887,258 @@ func LookupCity311IdempotencyRecordByID(ctx context.Context, s City311Idempotenc
 // This function is auto-generated
 func LookupCity311IdempotencyRecordByOperationKeyHash(ctx context.Context, s City311IdempotencyRecords, operation string, keyHash string) (*composeType.City311IdempotencyRecord, error) {
 	return s.LookupCity311IdempotencyRecordByOperationKeyHash(ctx, operation, keyHash)
+}
+
+// SearchCity311IdentityNotifications returns all matching City311IdentityNotifications from store
+//
+// This function is auto-generated
+func SearchCity311IdentityNotifications(ctx context.Context, s City311IdentityNotifications, f composeType.City311IdentityNotificationFilter) (composeType.City311IdentityNotificationSet, composeType.City311IdentityNotificationFilter, error) {
+	return s.SearchCity311IdentityNotifications(ctx, f)
+}
+
+// CreateCity311IdentityNotification creates one or more City311IdentityNotifications in store
+//
+// This function is auto-generated
+func CreateCity311IdentityNotification(ctx context.Context, s City311IdentityNotifications, rr ...*composeType.City311IdentityNotification) error {
+	return s.CreateCity311IdentityNotification(ctx, rr...)
+}
+
+// UpdateCity311IdentityNotification updates one or more (existing) City311IdentityNotifications in store
+//
+// This function is auto-generated
+func UpdateCity311IdentityNotification(ctx context.Context, s City311IdentityNotifications, rr ...*composeType.City311IdentityNotification) error {
+	return s.UpdateCity311IdentityNotification(ctx, rr...)
+}
+
+// UpsertCity311IdentityNotification creates new or updates existing one or more City311IdentityNotifications in store
+//
+// This function is auto-generated
+func UpsertCity311IdentityNotification(ctx context.Context, s City311IdentityNotifications, rr ...*composeType.City311IdentityNotification) error {
+	return s.UpsertCity311IdentityNotification(ctx, rr...)
+}
+
+// DeleteCity311IdentityNotification deletes one or more City311IdentityNotifications from store
+//
+// This function is auto-generated
+func DeleteCity311IdentityNotification(ctx context.Context, s City311IdentityNotifications, rr ...*composeType.City311IdentityNotification) error {
+	return s.DeleteCity311IdentityNotification(ctx, rr...)
+}
+
+// DeleteCity311IdentityNotificationByID deletes one or more City311IdentityNotifications from store
+//
+// This function is auto-generated
+func DeleteCity311IdentityNotificationByID(ctx context.Context, s City311IdentityNotifications, id uint64) error {
+	return s.DeleteCity311IdentityNotificationByID(ctx, id)
+}
+
+// TruncateCity311IdentityNotifications Deletes all City311IdentityNotifications from store
+//
+// This function is auto-generated
+func TruncateCity311IdentityNotifications(ctx context.Context, s City311IdentityNotifications) error {
+	return s.TruncateCity311IdentityNotifications(ctx)
+}
+
+// LookupCity311IdentityNotificationByID
+//
+// This function is auto-generated
+func LookupCity311IdentityNotificationByID(ctx context.Context, s City311IdentityNotifications, id uint64) (*composeType.City311IdentityNotification, error) {
+	return s.LookupCity311IdentityNotificationByID(ctx, id)
+}
+
+// SearchCity311IdentitySessions returns all matching City311IdentitySessions from store
+//
+// This function is auto-generated
+func SearchCity311IdentitySessions(ctx context.Context, s City311IdentitySessions, f composeType.City311IdentitySessionFilter) (composeType.City311IdentitySessionSet, composeType.City311IdentitySessionFilter, error) {
+	return s.SearchCity311IdentitySessions(ctx, f)
+}
+
+// CreateCity311IdentitySession creates one or more City311IdentitySessions in store
+//
+// This function is auto-generated
+func CreateCity311IdentitySession(ctx context.Context, s City311IdentitySessions, rr ...*composeType.City311IdentitySession) error {
+	return s.CreateCity311IdentitySession(ctx, rr...)
+}
+
+// UpdateCity311IdentitySession updates one or more (existing) City311IdentitySessions in store
+//
+// This function is auto-generated
+func UpdateCity311IdentitySession(ctx context.Context, s City311IdentitySessions, rr ...*composeType.City311IdentitySession) error {
+	return s.UpdateCity311IdentitySession(ctx, rr...)
+}
+
+// UpsertCity311IdentitySession creates new or updates existing one or more City311IdentitySessions in store
+//
+// This function is auto-generated
+func UpsertCity311IdentitySession(ctx context.Context, s City311IdentitySessions, rr ...*composeType.City311IdentitySession) error {
+	return s.UpsertCity311IdentitySession(ctx, rr...)
+}
+
+// DeleteCity311IdentitySession deletes one or more City311IdentitySessions from store
+//
+// This function is auto-generated
+func DeleteCity311IdentitySession(ctx context.Context, s City311IdentitySessions, rr ...*composeType.City311IdentitySession) error {
+	return s.DeleteCity311IdentitySession(ctx, rr...)
+}
+
+// DeleteCity311IdentitySessionByID deletes one or more City311IdentitySessions from store
+//
+// This function is auto-generated
+func DeleteCity311IdentitySessionByID(ctx context.Context, s City311IdentitySessions, id uint64) error {
+	return s.DeleteCity311IdentitySessionByID(ctx, id)
+}
+
+// TruncateCity311IdentitySessions Deletes all City311IdentitySessions from store
+//
+// This function is auto-generated
+func TruncateCity311IdentitySessions(ctx context.Context, s City311IdentitySessions) error {
+	return s.TruncateCity311IdentitySessions(ctx)
+}
+
+// LookupCity311IdentitySessionByID
+//
+// This function is auto-generated
+func LookupCity311IdentitySessionByID(ctx context.Context, s City311IdentitySessions, id uint64) (*composeType.City311IdentitySession, error) {
+	return s.LookupCity311IdentitySessionByID(ctx, id)
+}
+
+// LookupCity311IdentitySessionByTokenHash
+//
+// This function is auto-generated
+func LookupCity311IdentitySessionByTokenHash(ctx context.Context, s City311IdentitySessions, tokenHash string) (*composeType.City311IdentitySession, error) {
+	return s.LookupCity311IdentitySessionByTokenHash(ctx, tokenHash)
+}
+
+// SearchCity311LocalAccounts returns all matching City311LocalAccounts from store
+//
+// This function is auto-generated
+func SearchCity311LocalAccounts(ctx context.Context, s City311LocalAccounts, f composeType.City311LocalAccountFilter) (composeType.City311LocalAccountSet, composeType.City311LocalAccountFilter, error) {
+	return s.SearchCity311LocalAccounts(ctx, f)
+}
+
+// CreateCity311LocalAccount creates one or more City311LocalAccounts in store
+//
+// This function is auto-generated
+func CreateCity311LocalAccount(ctx context.Context, s City311LocalAccounts, rr ...*composeType.City311LocalAccount) error {
+	return s.CreateCity311LocalAccount(ctx, rr...)
+}
+
+// UpdateCity311LocalAccount updates one or more (existing) City311LocalAccounts in store
+//
+// This function is auto-generated
+func UpdateCity311LocalAccount(ctx context.Context, s City311LocalAccounts, rr ...*composeType.City311LocalAccount) error {
+	return s.UpdateCity311LocalAccount(ctx, rr...)
+}
+
+// UpsertCity311LocalAccount creates new or updates existing one or more City311LocalAccounts in store
+//
+// This function is auto-generated
+func UpsertCity311LocalAccount(ctx context.Context, s City311LocalAccounts, rr ...*composeType.City311LocalAccount) error {
+	return s.UpsertCity311LocalAccount(ctx, rr...)
+}
+
+// DeleteCity311LocalAccount deletes one or more City311LocalAccounts from store
+//
+// This function is auto-generated
+func DeleteCity311LocalAccount(ctx context.Context, s City311LocalAccounts, rr ...*composeType.City311LocalAccount) error {
+	return s.DeleteCity311LocalAccount(ctx, rr...)
+}
+
+// DeleteCity311LocalAccountByID deletes one or more City311LocalAccounts from store
+//
+// This function is auto-generated
+func DeleteCity311LocalAccountByID(ctx context.Context, s City311LocalAccounts, id uint64) error {
+	return s.DeleteCity311LocalAccountByID(ctx, id)
+}
+
+// TruncateCity311LocalAccounts Deletes all City311LocalAccounts from store
+//
+// This function is auto-generated
+func TruncateCity311LocalAccounts(ctx context.Context, s City311LocalAccounts) error {
+	return s.TruncateCity311LocalAccounts(ctx)
+}
+
+// LookupCity311LocalAccountByID
+//
+// This function is auto-generated
+func LookupCity311LocalAccountByID(ctx context.Context, s City311LocalAccounts, id uint64) (*composeType.City311LocalAccount, error) {
+	return s.LookupCity311LocalAccountByID(ctx, id)
+}
+
+// LookupCity311LocalAccountByLoginIdentifier
+//
+// This function is auto-generated
+func LookupCity311LocalAccountByLoginIdentifier(ctx context.Context, s City311LocalAccounts, loginIdentifier string) (*composeType.City311LocalAccount, error) {
+	return s.LookupCity311LocalAccountByLoginIdentifier(ctx, loginIdentifier)
+}
+
+// LookupCity311LocalAccountByVerifiedEmail
+//
+// This function is auto-generated
+func LookupCity311LocalAccountByVerifiedEmail(ctx context.Context, s City311LocalAccounts, verifiedEmail string) (*composeType.City311LocalAccount, error) {
+	return s.LookupCity311LocalAccountByVerifiedEmail(ctx, verifiedEmail)
+}
+
+// SearchCity311PasswordResetTokens returns all matching City311PasswordResetTokens from store
+//
+// This function is auto-generated
+func SearchCity311PasswordResetTokens(ctx context.Context, s City311PasswordResetTokens, f composeType.City311PasswordResetTokenFilter) (composeType.City311PasswordResetTokenSet, composeType.City311PasswordResetTokenFilter, error) {
+	return s.SearchCity311PasswordResetTokens(ctx, f)
+}
+
+// CreateCity311PasswordResetToken creates one or more City311PasswordResetTokens in store
+//
+// This function is auto-generated
+func CreateCity311PasswordResetToken(ctx context.Context, s City311PasswordResetTokens, rr ...*composeType.City311PasswordResetToken) error {
+	return s.CreateCity311PasswordResetToken(ctx, rr...)
+}
+
+// UpdateCity311PasswordResetToken updates one or more (existing) City311PasswordResetTokens in store
+//
+// This function is auto-generated
+func UpdateCity311PasswordResetToken(ctx context.Context, s City311PasswordResetTokens, rr ...*composeType.City311PasswordResetToken) error {
+	return s.UpdateCity311PasswordResetToken(ctx, rr...)
+}
+
+// UpsertCity311PasswordResetToken creates new or updates existing one or more City311PasswordResetTokens in store
+//
+// This function is auto-generated
+func UpsertCity311PasswordResetToken(ctx context.Context, s City311PasswordResetTokens, rr ...*composeType.City311PasswordResetToken) error {
+	return s.UpsertCity311PasswordResetToken(ctx, rr...)
+}
+
+// DeleteCity311PasswordResetToken deletes one or more City311PasswordResetTokens from store
+//
+// This function is auto-generated
+func DeleteCity311PasswordResetToken(ctx context.Context, s City311PasswordResetTokens, rr ...*composeType.City311PasswordResetToken) error {
+	return s.DeleteCity311PasswordResetToken(ctx, rr...)
+}
+
+// DeleteCity311PasswordResetTokenByID deletes one or more City311PasswordResetTokens from store
+//
+// This function is auto-generated
+func DeleteCity311PasswordResetTokenByID(ctx context.Context, s City311PasswordResetTokens, id uint64) error {
+	return s.DeleteCity311PasswordResetTokenByID(ctx, id)
+}
+
+// TruncateCity311PasswordResetTokens Deletes all City311PasswordResetTokens from store
+//
+// This function is auto-generated
+func TruncateCity311PasswordResetTokens(ctx context.Context, s City311PasswordResetTokens) error {
+	return s.TruncateCity311PasswordResetTokens(ctx)
+}
+
+// LookupCity311PasswordResetTokenByID
+//
+// This function is auto-generated
+func LookupCity311PasswordResetTokenByID(ctx context.Context, s City311PasswordResetTokens, id uint64) (*composeType.City311PasswordResetToken, error) {
+	return s.LookupCity311PasswordResetTokenByID(ctx, id)
+}
+
+// LookupCity311PasswordResetTokenByTokenHash
+//
+// This function is auto-generated
+func LookupCity311PasswordResetTokenByTokenHash(ctx context.Context, s City311PasswordResetTokens, tokenHash string) (*composeType.City311PasswordResetToken, error) {
+	return s.LookupCity311PasswordResetTokenByTokenHash(ctx, tokenHash)
 }
 
 // SearchCity311PublicHistoryItems returns all matching City311PublicHistoryItems from store

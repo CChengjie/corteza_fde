@@ -2,6 +2,8 @@ package helpers
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/cortezaproject/corteza/server/app"
 	"github.com/cortezaproject/corteza/server/pkg/cli"
@@ -30,6 +32,21 @@ func NewIntegrationTestApp(ctx context.Context, initTestServices func(*app.Corte
 	// Create a new JWT secret (to prevent any security weirdness)
 	a.Opt.Auth.Secret = string(rand.Bytes(32))
 	a.Opt.Auth.DefaultClient = ""
+	// City 311 requires the same runtime-only identity inputs in production.
+	// Supply isolated values in the integration harness without weakening the
+	// application startup validation.
+	if os.Getenv("SESSION_SECRET") == "" {
+		_ = os.Setenv("SESSION_SECRET", string(rand.Bytes(32)))
+	}
+	if os.Getenv("APP_BASE_URL") == "" {
+		_ = os.Setenv("APP_BASE_URL", "http://city311.integration.test")
+	}
+	if os.Getenv("CITY311_SEED_CONSTITUENT_PASSWORD") == "" {
+		_ = os.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", fmt.Sprintf("Seed-%x-Aa1!", rand.Bytes(16)))
+	}
+	if os.Getenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD") == "" {
+		_ = os.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", fmt.Sprintf("Seed-%x-Aa1!", rand.Bytes(16)))
+	}
 
 	a.Log = logger.Default()
 

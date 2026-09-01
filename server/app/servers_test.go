@@ -32,6 +32,8 @@ func TestHealthzReportsIdentityConfigurationReadiness(t *testing.T) {
 	application := &CortezaApp{Store: st, Log: zap.New(logCore)}
 	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")
 	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
+	t.Setenv("MAP_BASE_URL", "https://mapping.example.invalid")
+	t.Setenv("MAP_API_TOKEN", "runtime-map-token")
 
 	t.Setenv("SESSION_SECRET", "")
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
@@ -55,6 +57,45 @@ func TestHealthzReportsIdentityConfigurationReadiness(t *testing.T) {
 	}
 
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
+	response = httptest.NewRecorder()
+	application.healthz(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	require.Equal(t, http.StatusOK, response.Code)
+	require.JSONEq(t, `{"status":"ok","database":"ok"}`, response.Body.String())
+}
+
+func TestHealthzReportsMappingConfigurationReadiness(t *testing.T) {
+	ctx := context.Background()
+	st, err := sqlite.Connect(ctx, fmt.Sprintf("sqlite3://file:%s-health?mode=memory&cache=shared", t.Name()))
+	require.NoError(t, err)
+	logCore, observedLogs := observer.New(zap.ErrorLevel)
+	application := &CortezaApp{Store: st, Log: zap.New(logCore)}
+	t.Setenv("SESSION_SECRET", "runtime-identity-secret")
+	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
+	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")
+	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
+
+	t.Setenv("MAP_BASE_URL", "")
+	t.Setenv("MAP_API_TOKEN", "")
+	response := httptest.NewRecorder()
+	application.healthz(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.Contains(t, response.Body.String(), "A required City 311 mapping configuration is unavailable.")
+	require.NotContains(t, response.Body.String(), "MAP_BASE_URL")
+	require.NotContains(t, response.Body.String(), "MAP_API_TOKEN")
+	require.Contains(t, observedLogs.All()[0].ContextMap()["error"], "MAP_BASE_URL is required")
+
+	t.Setenv("MAP_BASE_URL", "relative-url")
+	t.Setenv("MAP_API_TOKEN", "runtime-map-token")
+	response = httptest.NewRecorder()
+	application.healthz(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.Contains(t, response.Body.String(), "A required City 311 mapping configuration is unavailable.")
+	require.NotContains(t, response.Body.String(), "MAP_BASE_URL")
+	require.NotContains(t, response.Body.String(), "absolute HTTP or HTTPS URL")
+	require.Contains(t, observedLogs.All()[1].ContextMap()["error"], "MAP_BASE_URL must be an absolute HTTP or HTTPS URL")
+
+	t.Setenv("MAP_BASE_URL", "https://mapping.example.invalid")
+	t.Setenv("MAP_API_TOKEN", "runtime-map-token")
 	response = httptest.NewRecorder()
 	application.healthz(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	require.Equal(t, http.StatusOK, response.Code)

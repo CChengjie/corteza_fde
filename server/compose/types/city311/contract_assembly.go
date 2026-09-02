@@ -165,9 +165,15 @@ func contractProtocol() map[string]interface{} {
 			"failure_rule":           "validation or concurrency failure returns the generic error envelope with failing_request_id and changes no selected record",
 		},
 		"attachment_transport": map[string]interface{}{
-			"portal":      "stage with portal_attachment_upload and submit returned attachment_token values",
-			"integration": "inline base64 in service_request_create",
-			"validation":  "filename, media type, count, and decoded size are validated before request creation",
+			"portal":                   "stage with portal_attachment_upload and submit returned attachment_token values",
+			"integration":              "inline base64 in service_request_create",
+			"validation":               "filename, media type, count, and decoded size are validated before request creation",
+			"staging_lifetime_seconds": 3600,
+			"staging_scope":            "anonymous receipts are bearer capabilities; authenticated uploads are bound to the uploading account; raw tokens are never persisted or download identifiers",
+			"consumption":              "all tokens are validated and consumed atomically with submission; invalid, expired, foreign, duplicate or consumed tokens return 422 VALIDATION_ERROR at /attachment_tokens/{index} (staff: /request/attachment_tokens/{index}); failure leaves valid stages reusable",
+			"replay":                   "equivalent portal submission by the same actor with the same Idempotency-Key returns the original 201 body even after token consumption or staging expiry; changing the actor returns 409 IDEMPOTENCY_CONFLICT, with or without attachments",
+			"cleanup":                  "remove a staged item from the client submission list to abandon it; no staged-delete endpoint is published; server startup and periodic cleanup remove expired unconsumed bytes",
+			"download":                 "authorized request details expose request.attachments[].attachment_id; GET attachment_download returns a JSON envelope with required body_encoding=base64 and body encoded as RFC 4648 base64; decode to bytes before creating a Blob; no literal-text mode or absent-encoding fallback is supported",
 		},
 	}
 }

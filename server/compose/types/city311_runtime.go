@@ -135,6 +135,24 @@ type (
 	}
 	City311AuditEventSet []*City311AuditEvent
 
+	City311StagedAttachment struct {
+		ID        uint64
+		TokenHash string
+		OwnerID   uint64
+		Filename  string
+		MediaType string
+		Content   []byte
+		CreatedAt time.Time
+		ExpiresAt time.Time
+	}
+	City311StagedAttachmentFilter struct {
+		OwnerID uint64
+		Check   func(*City311StagedAttachment) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311StagedAttachmentSet []*City311StagedAttachment
+
 	City311RequestAttachment struct {
 		ID        uint64    `json:"id,string"`
 		RequestID uint64    `json:"requestID,string"`

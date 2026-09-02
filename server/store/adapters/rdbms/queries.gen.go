@@ -2611,6 +2611,106 @@ var (
 		}
 	}
 
+	// city311StagedAttachmentTable represents city311StagedAttachments store table
+	//
+	// This value is auto-generated
+	city311StagedAttachmentTable = goqu.T("compose_city311_staged_attachment")
+
+	// city311StagedAttachmentSelectQuery assembles select query for fetching city311StagedAttachments
+	//
+	// This function is auto-generated
+	city311StagedAttachmentSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"token_hash",
+			"owner_id",
+			"filename",
+			"media_type",
+			"content",
+			"created_at",
+			"expires_at",
+		).From(city311StagedAttachmentTable)
+	}
+
+	// city311StagedAttachmentInsertQuery assembles query inserting city311StagedAttachments
+	//
+	// This function is auto-generated
+	city311StagedAttachmentInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311StagedAttachment) *goqu.InsertDataset {
+		return d.Insert(city311StagedAttachmentTable).
+			Rows(goqu.Record{
+				"id":         res.ID,
+				"token_hash": res.TokenHash,
+				"owner_id":   res.OwnerID,
+				"filename":   res.Filename,
+				"media_type": res.MediaType,
+				"content":    res.Content,
+				"created_at": res.CreatedAt,
+				"expires_at": res.ExpiresAt,
+			})
+	}
+
+	// city311StagedAttachmentUpsertQuery assembles (insert+on-conflict) query for replacing city311StagedAttachments
+	//
+	// This function is auto-generated
+	city311StagedAttachmentUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311StagedAttachment) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311StagedAttachmentInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"token_hash": res.TokenHash,
+						"owner_id":   res.OwnerID,
+						"filename":   res.Filename,
+						"media_type": res.MediaType,
+						"content":    res.Content,
+						"created_at": res.CreatedAt,
+						"expires_at": res.ExpiresAt,
+					},
+				),
+			)
+	}
+
+	// city311StagedAttachmentUpdateQuery assembles query for updating city311StagedAttachments
+	//
+	// This function is auto-generated
+	city311StagedAttachmentUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311StagedAttachment) *goqu.UpdateDataset {
+		return d.Update(city311StagedAttachmentTable).
+			Set(goqu.Record{
+				"token_hash": res.TokenHash,
+				"owner_id":   res.OwnerID,
+				"filename":   res.Filename,
+				"media_type": res.MediaType,
+				"content":    res.Content,
+				"created_at": res.CreatedAt,
+				"expires_at": res.ExpiresAt,
+			}).
+			Where(city311StagedAttachmentPrimaryKeys(res))
+	}
+
+	// city311StagedAttachmentDeleteQuery assembles delete query for removing city311StagedAttachments
+	//
+	// This function is auto-generated
+	city311StagedAttachmentDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311StagedAttachmentTable).Where(ee...)
+	}
+
+	// city311StagedAttachmentDeleteQuery assembles delete query for removing city311StagedAttachments
+	//
+	// This function is auto-generated
+	city311StagedAttachmentTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311StagedAttachmentTable)
+	}
+
+	// city311StagedAttachmentPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311StagedAttachmentPrimaryKeys = func(res *composeType.City311StagedAttachment) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
 	// composeAttachmentTable represents composeAttachments store table
 	//
 	// This value is auto-generated

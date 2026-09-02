@@ -86,6 +86,9 @@ func testAllGenerated(t *testing.T, s store.Storer) {
 	t.Run("city311ServiceRequest", func(t *testing.T) {
 		testCity311ServiceRequests(t, s)
 	})
+	t.Run("city311StagedAttachment", func(t *testing.T) {
+		testCity311StagedAttachments(t, s)
+	})
 	t.Run("composeAttachment", func(t *testing.T) {
 		testComposeAttachments(t, s)
 	})

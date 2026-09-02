@@ -3,7 +3,7 @@ package city311
 import "time"
 
 // ContractVersion identifies the frozen City 311 client/server contract.
-const ContractVersion = "1.0.0"
+const ContractVersion = "2.0.0"
 
 type (
 	ServiceRequestStatus string
@@ -430,6 +430,7 @@ type (
 		Version          uint64                  `json:"version"`
 		CreatedAt        time.Time               `json:"created_at"`
 		UpdatedAt        time.Time               `json:"updated_at"`
+		Attachments      []AttachmentMetadata    `json:"attachments,omitempty"`
 	}
 
 	ResourceLinks struct {
@@ -443,6 +444,7 @@ type (
 		Version       uint64               `json:"version"`
 		CreatedAt     time.Time            `json:"created_at"`
 		Links         ResourceLinks        `json:"links"`
+		Attachments   []AttachmentMetadata `json:"attachments,omitempty"`
 	}
 
 	FieldError struct {

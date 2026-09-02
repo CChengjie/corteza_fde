@@ -31,6 +31,22 @@ func TestOpenAPISnapshotMatchesAuthoritativeContract(t *testing.T) {
 	}
 }
 
+func TestOpenAPIAttachmentEncodingIsRequiredAndStandard(t *testing.T) {
+	document := NewOpenAPIDocument()
+	schemas := document["components"].(map[string]interface{})["schemas"].(map[string]interface{})
+	schema := schemas["binary_attachment"].(map[string]interface{})
+	if !reflect.DeepEqual(schema["required"], []string{"content_type", "content_disposition", "body", "body_encoding"}) {
+		t.Fatal("OpenAPI must require the same encoding as the runtime DTO")
+	}
+	body := schema["properties"].(map[string]interface{})["body"].(map[string]interface{})
+	if body["contentEncoding"] != "base64" {
+		t.Fatal("base64 must use the standard JSON Schema contentEncoding keyword")
+	}
+	if _, present := body["format"]; present {
+		t.Fatal("base64 JSON strings must not be described as raw binary transport")
+	}
+}
+
 func TestOpenAPICoversEveryProvidedOperationAndDeclaredExample(t *testing.T) {
 	contract := NewContractDocument()
 	document := NewOpenAPIDocument()

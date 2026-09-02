@@ -91,6 +91,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		})
 		r.With(requireScope(contract.ScopeRequestWrite)).Post(serviceRequestsRoute, h.integrationSubmit)
 		r.Post("/portal/service-requests", h.portalSubmit)
+		r.Post("/portal/attachments", h.attachmentUpload)
+		r.With(requireIdentity).Get("/attachments/{attachment_id}", h.attachmentDownload)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
@@ -257,10 +259,6 @@ func (h *handler) portalSubmit(w http.ResponseWriter, r *http.Request) {
 		writeValidation(w, "/attachment_tokens", contract.ValidationTooManyItems)
 		return
 	}
-	if len(input.AttachmentTokens) > 0 {
-		writeValidation(w, "/attachment_tokens", contract.ValidationInvalidValue)
-		return
-	}
 	identity := auth.GetIdentityFromContext(r.Context())
 	source := contract.SourceChannelPortalAnonymous
 	actorID := uint64(0)
@@ -274,6 +272,7 @@ func (h *handler) portalSubmit(w http.ResponseWriter, r *http.Request) {
 	}, r.Header.Get(contract.IdempotencyHeader), city311Service.SubmissionOptions{
 		Operation: "portal_service_request_submit", SourceChannel: source,
 		ActorType: contract.AuditActorConstituent, ActorID: actorID, RequireIdempotency: true,
+		AttachmentTokens: input.AttachmentTokens,
 	})
 	// This endpoint publishes one success status. Replays return the original
 	// representation with 201 while the integration endpoint distinguishes 200.
@@ -302,10 +301,6 @@ func (h *handler) staffSubmit(w http.ResponseWriter, r *http.Request) {
 		writeValidation(w, "/request/attachment_tokens", contract.ValidationTooManyItems)
 		return
 	}
-	if len(input.Request.AttachmentTokens) > 0 {
-		writeValidation(w, "/request/attachment_tokens", contract.ValidationInvalidValue)
-		return
-	}
 	requester, existingConstituentID, err := staffRequester(input.Constituent)
 	if err != nil {
 		writeResult(w, 0, nil, err)
@@ -317,6 +312,7 @@ func (h *handler) staffSubmit(w http.ResponseWriter, r *http.Request) {
 	}, "", city311Service.SubmissionOptions{
 		Operation: "staff_service_request_create", SourceChannel: contract.SourceChannelStaffInPerson,
 		ActorType: contract.AuditActorStaff, ActorID: actor.ID, StaffActor: &actor, ExistingConstituentID: existingConstituentID,
+		AttachmentTokens: input.Request.AttachmentTokens, AttachmentField: "/request/attachment_tokens",
 	})
 	if err != nil {
 		writeResult(w, 0, nil, err)

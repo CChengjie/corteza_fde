@@ -358,6 +358,18 @@ type (
 		UpdatedAt         time.Time                        `db:"updated_at"`
 	}
 
+	// auxCity311StagedAttachment is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311StagedAttachment struct {
+		ID        uint64    `db:"id"`
+		TokenHash string    `db:"token_hash"`
+		OwnerID   uint64    `db:"owner_id"`
+		Filename  string    `db:"filename"`
+		MediaType string    `db:"media_type"`
+		Content   []byte    `db:"content"`
+		CreatedAt time.Time `db:"created_at"`
+		ExpiresAt time.Time `db:"expires_at"`
+	}
+
 	// auxComposeAttachment is an auxiliary structure used for transporting to/from RDBMS store
 	auxComposeAttachment struct {
 		ID          uint64                     `db:"id"`
@@ -2095,6 +2107,53 @@ func (aux *auxCity311ServiceRequest) scan(row scanner) error {
 		&aux.Version,
 		&aux.CreatedAt,
 		&aux.UpdatedAt,
+	)
+}
+
+// encodes City311StagedAttachment to auxCity311StagedAttachment
+//
+// This function is auto-generated
+func (aux *auxCity311StagedAttachment) encode(res *composeType.City311StagedAttachment) (_ error) {
+	aux.ID = res.ID
+	aux.TokenHash = res.TokenHash
+	aux.OwnerID = res.OwnerID
+	aux.Filename = res.Filename
+	aux.MediaType = res.MediaType
+	aux.Content = res.Content
+	aux.CreatedAt = res.CreatedAt
+	aux.ExpiresAt = res.ExpiresAt
+	return
+}
+
+// decodes City311StagedAttachment from auxCity311StagedAttachment
+//
+// This function is auto-generated
+func (aux auxCity311StagedAttachment) decode() (res *composeType.City311StagedAttachment, _ error) {
+	res = new(composeType.City311StagedAttachment)
+	res.ID = aux.ID
+	res.TokenHash = aux.TokenHash
+	res.OwnerID = aux.OwnerID
+	res.Filename = aux.Filename
+	res.MediaType = aux.MediaType
+	res.Content = aux.Content
+	res.CreatedAt = aux.CreatedAt
+	res.ExpiresAt = aux.ExpiresAt
+	return
+}
+
+// scans row and fills auxCity311StagedAttachment fields
+//
+// This function is auto-generated
+func (aux *auxCity311StagedAttachment) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.TokenHash,
+		&aux.OwnerID,
+		&aux.Filename,
+		&aux.MediaType,
+		&aux.Content,
+		&aux.CreatedAt,
+		&aux.ExpiresAt,
 	)
 }
 

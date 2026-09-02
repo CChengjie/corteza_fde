@@ -55,6 +55,8 @@ func clientMocks() map[string]MockContract {
 			"attachment_token": "upload-00031", "filename": "pothole.jpg", "media_type": "image/jpeg", "size": 248031,
 			"expires_at": "2026-08-25T12:15:00Z",
 		}),
+		"attachment_download_binary":     mock(200, BinaryAttachment{ContentType: "image/png", ContentDisposition: "attachment; filename=photo.png", Body: "AP+A", BodyEncoding: "base64"}),
+		"attachment_token_invalid":       mock(422, APIError{Error: ErrorValidation, Message: "The request contains invalid fields.", Retryable: false, Errors: []FieldError{{Field: "/attachment_tokens/0", Code: ValidationInvalidValue}}}),
 		"portal_service_request_created": mock(201, MockCreatedServiceRequest()),
 		"public_branding": mock(200, map[string]interface{}{
 			"organisation_name": "City 311", "logo_url": "/assets/city-logo.svg", "favicon_url": "/assets/favicon.ico",
@@ -140,6 +142,8 @@ func linkMocks(mocks map[string]MockContract) {
 		"bulk_concurrency_failure":          "staff_request_bulk",
 		"expected_version_required":         "staff_request_transition",
 		"portal_attachment_staged":          "portal_attachment_upload",
+		"attachment_download_binary":        "attachment_download",
+		"attachment_token_invalid":          "portal_service_request_submit",
 		"portal_service_request_created":    "portal_service_request_submit",
 		"public_branding":                   "public_branding_get",
 		"public_content_home":               "public_content_get",

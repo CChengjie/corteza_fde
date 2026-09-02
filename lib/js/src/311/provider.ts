@@ -1,5 +1,5 @@
 import { C311ApiError, type C311FieldError } from './errors'
-import type { ErrorCode, HelpKey, IdentityProvider, Language, PublicContentKey } from './enums'
+import { PORTAL_ATTACHMENT_MAX_BYTES, PORTAL_ATTACHMENT_MAX_FILENAME_LENGTH, PORTAL_ATTACHMENT_MEDIA_TYPES, type ErrorCode, type HelpKey, type IdentityProvider, type Language, type PortalAttachmentMediaType, type PublicContentKey } from './enums'
 import type {
   AnonymousStatusLookupRequest,
   AnonymousStatusLookupResponse,
@@ -175,7 +175,18 @@ export class C311FetchTransport implements C311Transport {
 export interface PortalAttachmentUpload {
   file: Blob | string
   filename: string
-  media_type: string
+  media_type: PortalAttachmentMediaType
+}
+
+export function validatePortalAttachment (input: { filename?: unknown, media_type?: unknown, size?: unknown }): C311FieldError[] {
+  const errors: C311FieldError[] = []
+  const filename = String(input.filename || '').split(/[\\/]/).pop() || ''
+  const size = Number(input.size)
+  if (!filename) errors.push({ field: 'filename', code: 'REQUIRED' })
+  else if (filename.length > PORTAL_ATTACHMENT_MAX_FILENAME_LENGTH) errors.push({ field: 'filename', code: 'TOO_LONG' })
+  if (!PORTAL_ATTACHMENT_MEDIA_TYPES.includes(input.media_type as PortalAttachmentMediaType)) errors.push({ field: 'media_type', code: 'INVALID_FORMAT' })
+  if (!Number.isInteger(size) || size < 1 || size > PORTAL_ATTACHMENT_MAX_BYTES) errors.push({ field: 'file', code: 'OUT_OF_RANGE' })
+  return errors
 }
 
 export interface ReportExportOptions extends C311RequestOptions {
@@ -353,6 +364,11 @@ export class C311HttpProvider implements C311Provider {
   }
 
   uploadPortalAttachment (input: PortalAttachmentUpload): Promise<PortalAttachment> {
+    const size = typeof input.file === 'string' ? input.file.length : input.file.size
+    const validationErrors = validatePortalAttachment({ filename: input.filename, media_type: input.media_type, size })
+    if (validationErrors.length) {
+      return Promise.reject(new C311ApiError({ error: 'VALIDATION_ERROR', message: 'The attachment is not valid.', retryable: false, errors: validationErrors }, 422))
+    }
     const body = new FormData()
     body.append('file', input.file)
     body.append('filename', input.filename)

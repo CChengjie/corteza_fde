@@ -105,6 +105,8 @@ export {
   C311FocusModal,
   C311HelpDrawer,
   C311InteractionHarness,
+  C311AttachmentPicker,
+  C311LocationPicker,
   C311LanguageSelector,
   C311MainNav,
   C311ResponsiveData,

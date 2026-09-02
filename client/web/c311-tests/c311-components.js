@@ -8,6 +8,8 @@ import C311LanguageSelector from '../../../lib/vue/src/components/c311/C311Langu
 import C311MainNav from '../../../lib/vue/src/components/c311/C311MainNav.vue'
 import C311ResponsiveData from '../../../lib/vue/src/components/c311/C311ResponsiveData.vue'
 import C311StatusAnnouncer from '../../../lib/vue/src/components/c311/C311StatusAnnouncer.vue'
+import C311AttachmentPicker from '../../../lib/vue/src/components/c311/C311AttachmentPicker.vue'
+import C311LocationPicker from '../../../lib/vue/src/components/c311/C311LocationPicker.vue'
 import c311DirtyGuard from '../../../lib/vue/src/mixins/c311-dirty-guard.js'
 import * as c311I18n from '../../../lib/vue/src/libs/c311-i18n'
 
@@ -22,6 +24,8 @@ export const components = {
   C311MainNav,
   C311ResponsiveData,
   C311StatusAnnouncer,
+  C311AttachmentPicker,
+  C311LocationPicker,
 }
 export const mixins = { c311DirtyGuard }
 export { c311I18n }

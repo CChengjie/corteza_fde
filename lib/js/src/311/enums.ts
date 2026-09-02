@@ -88,6 +88,18 @@ export type ContactCategory = typeof CONTACT_CATEGORIES[number]
 export const SERVICE_TYPES = ['TREE_MAINTENANCE', 'POTHOLE', 'MISSED_TRASH', 'GENERAL_INQUIRY'] as const
 export type ServiceType = typeof SERVICE_TYPES[number]
 
+export const PORTAL_ATTACHMENT_MEDIA_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'application/pdf',
+  'text/plain',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+] as const
+export type PortalAttachmentMediaType = typeof PORTAL_ATTACHMENT_MEDIA_TYPES[number]
+export const PORTAL_ATTACHMENT_MAX_COUNT = 5
+export const PORTAL_ATTACHMENT_MAX_BYTES = 10485760
+export const PORTAL_ATTACHMENT_MAX_FILENAME_LENGTH = 120
+
 export const SERVICE_TYPE_RULES: Record<ServiceType, { department: string; location_required: boolean; confirmed_coordinates_required: boolean }> = {
   GENERAL_INQUIRY: { department: 'GENERAL_SERVICES', location_required: false, confirmed_coordinates_required: false },
   MISSED_TRASH: { department: 'SANITATION', location_required: true, confirmed_coordinates_required: true },
@@ -220,6 +232,10 @@ export const C311_SCENARIOS = [
   'successful-registration',
   'successful-reset',
   'account-loading',
+  'attachment-retryable',
+  'attachment-terminal',
+  'map-retryable',
+  'map-auth-failure',
 ] as const
 export type C311Scenario = typeof C311_SCENARIOS[number]
 

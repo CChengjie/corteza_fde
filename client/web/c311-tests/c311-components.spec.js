@@ -12,6 +12,13 @@ import adminRoutes from '../admin/src/views/routes'
 
 jest.mock('@cortezaproject/corteza-js', () => ({
   formatC311DateTime: value => mockFormatC311DateTime(value, 'en-US'),
+  PORTAL_ATTACHMENT_MEDIA_TYPES: ['image/jpeg', 'image/png', 'application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  PORTAL_ATTACHMENT_MAX_COUNT: 5,
+  validatePortalAttachment: ({ filename, media_type, size }) => [
+    !filename ? { field: 'filename', code: 'REQUIRED' } : null,
+    !['image/jpeg', 'image/png', 'application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(media_type) ? { field: 'media_type', code: 'INVALID_FORMAT' } : null,
+    !Number.isInteger(size) || size < 1 || size > 10485760 ? { field: 'file', code: 'OUT_OF_RANGE' } : null,
+  ].filter(Boolean),
 }))
 jest.mock('@cortezaproject/corteza-vue', () => ({
   components: {
@@ -23,6 +30,14 @@ jest.mock('@cortezaproject/corteza-vue', () => ({
     C311LanguageSelector: {},
     C311MainNav: {},
     C311ResponsiveData: {},
+    C311AttachmentPicker: {
+      props: ['attachments', 'uploading', 'progress', 'error', 'canDownload'],
+      render (h) { return h('div', { attrs: { 'data-c311-attachment-picker': 'true' } }, [h('input', { attrs: { id: 'c311-attachment-file', type: 'file' }, on: { change: event => this.$emit('select', event) } })]) },
+    },
+    C311LocationPicker: {
+      props: ['address', 'latitude', 'longitude', 'confirmed', 'geocodeError'],
+      render (h) { return h('fieldset', { attrs: { 'data-c311-location-picker': 'true' } }, [h('input', { attrs: { id: 'c311-location-address' } }), h('input', { attrs: { id: 'c311-location-latitude' } }), h('input', { attrs: { id: 'c311-location-longitude' } })]) },
+    },
   },
   mixins: {
     c311DirtyGuard: {
@@ -58,6 +73,8 @@ const {
   C311MainNav,
   C311ResponsiveData,
   C311StatusAnnouncer,
+  C311AttachmentPicker,
+  C311LocationPicker,
 } = components
 
 const ButtonStub = {
@@ -748,7 +765,7 @@ describe('C311 shared components', () => {
     expect(wrapper.find('#c311-requester-email').exists()).toBe(true)
     expect(wrapper.find('#c311-requester-phone').exists()).toBe(true)
     expect(wrapper.find('#c311-location-address').exists()).toBe(true)
-    expect(wrapper.find('#c311-attachment-token').exists()).toBe(true)
+    expect(wrapper.find('#c311-attachment-token').exists()).toBe(false)
     expect(wrapper.find('#c311-custom-fields').exists()).toBe(true)
     expect(wrapper.find('#c311-consent').exists()).toBe(true)
     expect(wrapper.vm.form.requester.display_name).toBe('Alex Example')
@@ -1026,6 +1043,25 @@ describe('C311 shared components', () => {
     expect(provider.submitPortalRequest.mock.calls[0][0]).not.toHaveProperty('attachment_contents')
   })
 
+  it('blocks request creation when an attachment fails client validation', async () => {
+    const provider = { uploadPortalAttachment: jest.fn(), submitPortalRequest: jest.fn() }
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: { name: 'c311.submit', query: {} }, $C311: { provider, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-capability-action': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    const file = new File(['fixture'], 'fixture.zip', { type: 'application/zip' })
+    const input = wrapper.find('#c311-attachment-file').element
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+    await wrapper.find('#c311-attachment-file').trigger('change')
+    wrapper.vm.form.summary = 'Valid summary'
+    wrapper.vm.form.description = 'A valid description for a city service request.'
+    wrapper.vm.form.requester = { display_name: 'Resident', email: 'resident@example.test', phone: '' }
+    wrapper.vm.form.consent = true
+    await wrapper.vm.submit()
+    expect(provider.submitPortalRequest).not.toHaveBeenCalled()
+    expect(wrapper.vm.formErrors).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'attachment-file' })]))
+  })
+
   it('allows an attachment upload to be retried after a retryable failure', async () => {
     const provider = {
       uploadPortalAttachment: jest.fn()
@@ -1051,6 +1087,167 @@ describe('C311 shared components', () => {
     await Vue.nextTick()
     expect(provider.uploadPortalAttachment).toHaveBeenCalledTimes(2)
     expect(wrapper.vm.form.attachment_tokens).toEqual(['opaque-retry-token'])
+  })
+
+  it('renders attachment metadata, progress, retry and the five-file limit', async () => {
+    const wrapper = mount(C311AttachmentPicker, {
+      propsData: {
+        uploading: true,
+        progress: 50,
+        attachments: [{ attachment_token: 'opaque-1', filename: 'fixture.txt', media_type: 'text/plain', size: 7 }],
+        error: { message: 'Temporary upload failure', retryable: true },
+        actionError: { message: 'Attachment preview failed.' },
+      },
+      mocks,
+    })
+    expect(wrapper.find('[data-c311-upload-progress]').attributes('aria-valuenow')).toBe('50')
+    expect(wrapper.find('[data-c311-attachment-name]').text()).toBe('fixture.txt')
+    expect(wrapper.find('[data-c311-action="retry-attachment"]').exists()).toBe(true)
+    expect(wrapper.find('[data-c311-attachment-action-error]').text()).toContain('Attachment preview failed.')
+    await wrapper.setProps({ uploading: false, attachments: new Array(5).fill(null).map((_, index) => ({ attachment_token: `opaque-${index}`, filename: `f${index}.txt`, media_type: 'text/plain', size: 1 })) })
+    expect(wrapper.find('#c311-attachment-file').attributes('disabled')).toBe('disabled')
+  })
+
+  it('only exposes attachment download and preview actions with capability', async () => {
+    const wrapper = mount(C311AttachmentPicker, {
+      propsData: {
+        attachments: [{ attachment_token: 'opaque-1', filename: 'fixture.txt', media_type: 'text/plain', size: 7 }],
+        canDownload: false,
+      },
+      mocks,
+    })
+    expect(wrapper.find('[data-c311-action="download-attachment"]').exists()).toBe(false)
+    expect(wrapper.find('[data-c311-action="preview-attachment"]').exists()).toBe(false)
+    await wrapper.setProps({ canDownload: true })
+    expect(wrapper.find('[data-c311-action="download-attachment"]').exists()).toBe(true)
+    expect(wrapper.find('[data-c311-action="preview-attachment"]').exists()).toBe(true)
+  })
+
+  it('consumes attachment response bodies for download and preview without blocking submit', async () => {
+    const provider = {
+      downloadAttachment: jest.fn()
+        .mockResolvedValueOnce({ content_type: 'text/plain', content_disposition: 'attachment; filename="fixture.txt"', body: 'download body' })
+        .mockResolvedValueOnce({ content_type: 'text/plain', content_disposition: 'inline; filename="fixture.txt"', body: 'preview body' })
+        .mockRejectedValueOnce({ status: 404, code: 'NOT_FOUND', message: 'Attachment not found.' }),
+    }
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: { name: 'c311.submit', query: {} }, $C311: { provider, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-capability-action': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    wrapper.vm.form = {
+      service_type: 'GENERAL_INQUIRY', summary: 'A valid summary', description: 'A valid description for download tests.',
+      requester: { display_name: 'Resident', email: 'resident@example.test', phone: '' }, location: { address: '', latitude: null, longitude: null },
+      attachment_tokens: ['opaque-download-token'], custom_fields: {}, consent: true,
+    }
+    wrapper.vm.attachmentMetadata = [{ attachment_token: 'opaque-download-token', filename: 'fixture.txt', media_type: 'text/plain', size: 13 }]
+    const originalCreateObjectURL = URL.createObjectURL
+    const originalRevokeObjectURL = URL.revokeObjectURL
+    const createObjectURL = jest.fn().mockReturnValue('blob:c311-fixture')
+    const revokeObjectURL = jest.fn()
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: revokeObjectURL })
+    const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const attachment = wrapper.vm.attachmentItems[0]
+
+    await wrapper.vm.downloadAttachment(attachment)
+    expect(provider.downloadAttachment).toHaveBeenNthCalledWith(1, 'opaque-download-token')
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(click).toHaveBeenCalled()
+    expect(wrapper.vm.attachmentError).toBe(null)
+
+    await wrapper.vm.previewAttachment(attachment)
+    expect(provider.downloadAttachment).toHaveBeenNthCalledWith(2, 'opaque-download-token')
+    expect(wrapper.vm.attachmentPreview).toEqual(expect.objectContaining({ url: 'blob:c311-fixture', content_type: 'text/plain', body: 'preview body' }))
+
+    await wrapper.vm.downloadAttachment(attachment)
+    expect(wrapper.vm.attachmentError).toBe(null)
+    expect(wrapper.vm.attachmentActionError).toEqual(expect.objectContaining({ status: 404 }))
+    const errors = []
+    wrapper.vm.validateAttachments(errors)
+    expect(errors.some(error => error.field === 'attachment-file')).toBe(false)
+
+    wrapper.vm.closeAttachmentPreview()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:c311-fixture')
+    click.mockRestore()
+    if (originalCreateObjectURL) Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: originalCreateObjectURL })
+    else delete URL.createObjectURL
+    if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: originalRevokeObjectURL })
+    else delete URL.revokeObjectURL
+  })
+
+  it('exposes keyboard marker movement and coordinate confirmation events', async () => {
+    const wrapper = mount(C311LocationPicker, {
+      propsData: { address: '100 Example Street', latitude: 42.9, longitude: -78.88, mode: 'mock' },
+      mocks,
+    })
+    const marker = wrapper.find('[data-c311-map-marker]')
+    expect(marker.exists()).toBe(true)
+    await marker.trigger('keydown', { key: 'ArrowRight' })
+    expect(wrapper.emitted('move-marker')[0][0]).toEqual({ latitude: 0, longitude: 0.0001 })
+    await wrapper.find('[data-c311-action="confirm-location"]').trigger('click')
+    expect(wrapper.emitted('confirm')).toBeTruthy()
+    expect(wrapper.find('[data-c311-action="move-marker-north"]').attributes('aria-label')).toBeTruthy()
+    expect(wrapper.find('[data-c311-action="move-marker-south"]').attributes('aria-label')).toBeTruthy()
+    expect(wrapper.find('[data-c311-action="move-marker-east"]').attributes('aria-label')).toBeTruthy()
+    expect(wrapper.find('[data-c311-action="move-marker-west"]').attributes('aria-label')).toBeTruthy()
+  })
+
+  it('keeps out-of-range coordinates intact so validation reports OUT_OF_RANGE', async () => {
+    const provider = { submitPortalRequest: jest.fn() }
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: { name: 'c311.submit', query: {} }, $C311: { provider, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-capability-action': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    wrapper.vm.updateCoordinate('latitude', '91')
+    expect(wrapper.vm.form.location.latitude).toBe(91)
+    const errors = wrapper.vm.validate()
+    expect(errors).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'location.latitude', code: 'OUT_OF_RANGE' })]))
+    wrapper.vm.confirmLocation()
+    expect(wrapper.vm.locationConfirmed).toBe(false)
+    await wrapper.vm.submit()
+    expect(provider.submitPortalRequest).not.toHaveBeenCalled()
+  })
+
+  it('releases staged mock attachment tokens when leaving the request form route', async () => {
+    const provider = { removePortalAttachment: jest.fn() }
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: { name: 'c311.submit', path: '/c311/submit', query: {} }, $C311: { provider, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-capability-action': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'c311-attachment-picker': ChildStub, 'c311-location-picker': ChildStub, 'router-link': RouterLinkStub },
+    })
+    wrapper.vm.form.attachment_tokens = ['token-a', 'token-b']
+    const handler = wrapper.vm.$options.watch.$route.handler
+    await handler.call(wrapper.vm, { name: 'c311.status', path: '/c311/status', query: {} }, { name: 'c311.submit', path: '/c311/submit', query: {} })
+    expect(provider.removePortalAttachment).toHaveBeenCalledWith('token-a')
+    expect(provider.removePortalAttachment).toHaveBeenCalledWith('token-b')
+  })
+
+  it('keeps request input when geocoding succeeds and then becomes retryable', async () => {
+    const provider = {
+      geocode: jest.fn().mockResolvedValue({ address: '100 Main St, Buffalo, NY', latitude: 42.90006, longitude: -78.88004, precision_digits: 4 }),
+    }
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: { name: 'c311.submit', path: '/c311/submit', query: {} }, $C311: { provider, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-capability-action': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    wrapper.vm.form.summary = 'Keep this summary'
+    wrapper.vm.form.description = 'Keep this description while the map retries.'
+    wrapper.vm.form.requester = { display_name: 'Resident', email: 'resident@example.test', phone: '' }
+    wrapper.vm.form.location.address = '100 Main Street'
+    await wrapper.vm.geocodeAddress()
+    expect(provider.geocode).toHaveBeenCalledWith({ address: '100 Main Street' })
+    expect(wrapper.vm.form.location.address).toBe('100 Main St, Buffalo, NY')
+    expect(wrapper.vm.form.location.latitude).toBe(42.9001)
+    expect(wrapper.vm.form.location.longitude).toBe(-78.88)
+    wrapper.vm.confirmLocation()
+    expect(wrapper.vm.locationConfirmed).toBe(true)
+
+    provider.geocode.mockRejectedValueOnce({ status: 503, code: 'MAP_TEMPORARILY_UNAVAILABLE', retryable: true, message: 'Map service temporarily unavailable.' })
+    wrapper.vm.updateAddress('200 Main Street')
+    await wrapper.vm.geocodeAddress()
+    expect(wrapper.vm.geocodeError.code).toBe('MAP_TEMPORARILY_UNAVAILABLE')
+    expect(wrapper.vm.form.summary).toBe('Keep this summary')
+    expect(wrapper.vm.form.description).toBe('Keep this description while the map retries.')
+    expect(wrapper.vm.form.requester.email).toBe('resident@example.test')
   })
 
 })

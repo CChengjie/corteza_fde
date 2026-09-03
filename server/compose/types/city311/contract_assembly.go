@@ -88,6 +88,7 @@ func assembleContract(document *ContractDocument) {
 	applySchemaRules(document)
 	mergeMocks(document.Mocks, clientMocks())
 	linkMocks(document.Mocks)
+	completeProfileContract(document)
 
 	document.CivicWorksTransitionPlans["RESOLVED+COMPLETED"] = []string{}
 	document.CivicWorksTransitionPlans["CLOSED+COMPLETED"] = []string{}

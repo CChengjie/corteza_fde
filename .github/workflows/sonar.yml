@@ -68,8 +68,8 @@ jobs:
       - name: Generate City 311 Go coverage report
         working-directory: server
         run: |
-          go test -covermode=atomic -coverprofile=../.sonar/coverage/go.out \
-            -coverpkg=./compose/rest/city311,./compose/service/city311,./compose/types/city311,./app \
+          go test -count=1 -covermode=atomic -coverprofile=../.sonar/coverage/go.out \
+            -coverpkg=./compose/rest/city311,./compose/service/city311,./compose/types/city311,./app,./store,./store/adapters/rdbms \
             ./compose/rest/city311 ./compose/service/city311 ./compose/types/city311 ./app/... ./store/tests/...
           test -s ../.sonar/coverage/go.out
       - name: SonarQube Scan

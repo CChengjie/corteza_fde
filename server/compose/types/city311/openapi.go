@@ -58,7 +58,7 @@ func NewOpenAPIDocument() map[string]interface{} {
 		"components": map[string]interface{}{
 			"schemas": components,
 			"securitySchemes": map[string]interface{}{
-				"sessionCookie": map[string]interface{}{"type": "apiKey", "in": "cookie", "name": "corteza_session"},
+				"sessionCookie": map[string]interface{}{"type": "apiKey", "in": "cookie", "name": SessionCookieName},
 				"oauth2": map[string]interface{}{
 					"type": "oauth2", "flows": map[string]interface{}{
 						"clientCredentials": map[string]interface{}{
@@ -163,6 +163,9 @@ func openAPIResponses(contract ContractDocument, endpointName string, endpoint E
 		status := endpoint.SuccessStatuses[label]
 		key := strconv.Itoa(status)
 		response := responseAt(responses, key, label)
+		if description := endpoint.ResponseHeaders["ETag"]; description != "" && status >= 200 && status < 300 {
+			response["headers"] = map[string]interface{}{"ETag": map[string]interface{}{"description": description, "required": true, "schema": map[string]interface{}{"type": "string", "pattern": `^"[1-9][0-9]*"$`, "example": `"1"`}}}
+		}
 		response["x-city311-example"] = map[string]interface{}{"status": status, "body": nil}
 		if status != 204 && endpoint.ResponseSchema != "" && endpoint.ResponseSchema != "empty_response" {
 			body := responseExampleBody(contract, endpointName, status, "", exampleForSchema(contract, endpoint.ResponseSchema, map[string]bool{}))

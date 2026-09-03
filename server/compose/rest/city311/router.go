@@ -78,6 +78,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 	return func(r chi.Router) {
 		h := &handler{service: service, identity: identity}
 		r.Use(h.optionalIdentitySession)
+		r.Post("/public/service-request-status", h.publicStatusLookup)
 		r.Post("/accounts", h.accountRegister)
 		r.Get(sessionRoute, h.sessionCurrent)
 		r.Post(sessionRoute, h.sessionSignIn)

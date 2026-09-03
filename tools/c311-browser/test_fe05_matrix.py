@@ -63,6 +63,11 @@ class Fe05MatrixTests(unittest.TestCase):
         self.assertTrue(allowed_failure("http://127.0.0.1:18086/code-snippets.js"))
         self.assertFalse(allowed_failure("http://127.0.0.1:18086/api/v1/unknown"))
 
+    def test_browser_harness_is_not_counted_as_production_coverage(self) -> None:
+        properties = Path(__file__).parents[2] / "sonar-project.properties"
+        contents = properties.read_text(encoding="utf-8")
+        self.assertIn("tools/c311-browser/fe05_matrix.py", contents)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,6 +34,11 @@ import type {
   RequestQueueItem,
   RequestSummary,
   ReopenRequestResponse,
+  ConstituentLink,
+  ConstituentUnlink,
+  RequestNote,
+  AccountDispositionRequest,
+  AccountDispositionResult,
   ServiceRequest,
   ServiceRequestCreate,
   ServiceRequestResponse,
@@ -196,6 +201,8 @@ export interface C311Provider {
   confirmPasswordReset (input: PasswordResetConfirm): Promise<PasswordResetResponse>
   changeLoginIdentifier (input: LoginIdentifierChange): Promise<Session>
   changePassword (input: PasswordChange): Promise<void>
+  /** Frontend mock-only until the backend publishes an account disposition operation. */
+  deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult>
   startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect>
   confirmAccountLink (): Promise<Session>
   completeFederatedSignIn (provider: IdentityProvider, query?: Record<string, string>): Promise<FederatedSignInResult>
@@ -221,11 +228,16 @@ export interface C311Provider {
   linkAnonymousRequest (input: AnonymousStatusLookupRequest): Promise<ServiceRequest>
   reopenPortalRequest (requestID: string, reason: string, options?: C311RequestOptions): Promise<ReopenRequestResponse>
   getPublicStatus (input: AnonymousStatusLookupRequest): Promise<AnonymousStatusLookupResponse>
+  /** Mock-only public voter note append until a portal note operation is published. */
+  createPortalNote (requestID: string, input: RequestNote): Promise<RequestNote>
 
   geocode (input: GeocodeRequest): Promise<GeocodeResponse>
   listStaffRequests (query?: RequestListQuery): Promise<PageResponse<RequestQueueItem>>
   getStaffRequest (requestID: string): Promise<StaffServiceRequestDetail>
   transitionStaffRequest (requestID: string, input: RequestTransition, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  linkStaffConstituent (requestID: string, input: ConstituentLink, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  unlinkStaffConstituent (requestID: string, constituentID: string, input: ConstituentUnlink, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  createStaffNote (requestID: string, input: RequestNote): Promise<RequestNote>
 
   listReports (query?: ListQuery): Promise<PageResponse<ReportDefinition>>
   getReport (reportID: string): Promise<ReportDefinition>
@@ -310,6 +322,16 @@ export class C311HttpProvider implements C311Provider {
 
   changePassword (input: PasswordChange): Promise<void> {
     return this.request({ method: 'POST', path: '/api/v1/account/password', body: input })
+  }
+
+  deleteOrAnonymizeAccount (_input: AccountDispositionRequest): Promise<AccountDispositionResult> {
+    // No canonical account deletion/anonymization operation exists yet. Keep HTTP
+    // mode explicit and side-effect free until the backend contract is published.
+    return Promise.reject(new C311ApiError({
+      error: 'OPERATION_FAILED',
+      message: 'Account deletion or anonymization is not available in HTTP mode.',
+      retryable: false,
+    }, 501))
   }
 
   startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect> {
@@ -420,6 +442,14 @@ export class C311HttpProvider implements C311Provider {
       : { request_detail: null }
   }
 
+  createPortalNote (_requestID: string, _input: RequestNote): Promise<RequestNote> {
+    return Promise.reject(new C311ApiError({
+      error: 'OPERATION_FAILED',
+      message: 'Public voter notes are not available in HTTP mode.',
+      retryable: false,
+    }, 501))
+  }
+
   geocode (input: GeocodeRequest): Promise<GeocodeResponse> {
     return this.request({ method: 'POST', path: '/api/v1/geocode', body: input })
   }
@@ -434,6 +464,18 @@ export class C311HttpProvider implements C311Provider {
 
   transitionStaffRequest (requestID: string, input: RequestTransition, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/transitions`, body: input, ...this.requestOptions(options) })
+  }
+
+  linkStaffConstituent (requestID: string, input: ConstituentLink, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/constituents`, body: input, ...this.requestOptions(options) })
+  }
+
+  unlinkStaffConstituent (requestID: string, constituentID: string, input: ConstituentUnlink, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'DELETE', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/constituents/${encodeURIComponent(constituentID)}`, body: input, ...this.requestOptions(options) })
+  }
+
+  createStaffNote (requestID: string, input: RequestNote): Promise<RequestNote> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/notes`, body: input })
   }
 
   listReports (query: ListQuery = {}): Promise<PageResponse<ReportDefinition>> {

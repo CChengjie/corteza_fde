@@ -220,6 +220,8 @@ export const C311_SCENARIOS = [
   'successful-registration',
   'successful-reset',
   'account-loading',
+  'account-disposition-conflict',
+  'account-disposition-failure',
 ] as const
 export type C311Scenario = typeof C311_SCENARIOS[number]
 

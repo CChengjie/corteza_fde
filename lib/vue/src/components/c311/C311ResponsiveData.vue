@@ -7,6 +7,7 @@
             <th v-for="column in visibleColumns" :key="column.key" scope="col">
               {{ column.label }}
             </th>
+            <th v-if="selectable" scope="col">{{ actionLabel }}</th>
           </tr>
         </thead>
         <tbody>
@@ -14,6 +15,7 @@
             <td v-for="column in visibleColumns" :key="column.key" :data-label="column.label">
               {{ valueFor(item, column) }}
             </td>
+            <td v-if="selectable" data-label=""><button type="button" class="btn btn-link p-0" :data-c311-action="`view-request-${item[rowKey]}`" @click="$emit('select', item)">{{ actionLabel }}</button></td>
           </tr>
         </tbody>
       </table>
@@ -26,6 +28,7 @@
             <dd class="mb-0 text-right">{{ valueFor(item, column) }}</dd>
           </div>
         </dl>
+        <button v-if="selectable" type="button" class="btn btn-link p-0 mt-2" :data-c311-action="`view-request-${item[rowKey]}`" @click="$emit('select', item)">{{ actionLabel }}</button>
       </article>
     </div>
   </div>
@@ -50,6 +53,14 @@ export default {
     label: {
       type: String,
       default: 'Data table',
+    },
+    selectable: {
+      type: Boolean,
+      default: false,
+    },
+    actionLabel: {
+      type: String,
+      default: 'View',
     },
   },
   computed: {

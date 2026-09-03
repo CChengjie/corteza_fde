@@ -21,6 +21,7 @@ import type {
   ServiceType,
   SourceChannel,
   ValidationCode,
+  RelationshipType,
 } from './enums'
 import type { C311ErrorPayload } from './errors'
 
@@ -334,6 +335,60 @@ export interface StaffServiceRequestDetail {
   history: PublicHistoryItem[]
   audit: Record<string, unknown>[]
   external_work_order?: Record<string, unknown> | null
+  /** Optional adapter projection populated by MockC311Provider and future API responses. */
+  relationships?: RequestRelationship[]
+  notes?: RequestNote[]
+}
+
+export interface RequestRelationship {
+  constituent_id: string
+  relationship_type: RelationshipType
+  portal_visible: boolean
+  notify_status: boolean
+  notification_target?: string | null
+  notification_result?: 'NOT_REQUESTED' | 'QUEUED' | 'SENT' | 'FAILED'
+  audit?: RequestRelationshipAudit[]
+}
+
+export interface RequestRelationshipAudit {
+  audit_id: string
+  action: 'LINKED' | 'UNLINKED' | 'UPDATED'
+  actor_id: string
+  occurred_at: ISODateTime
+}
+
+export interface ConstituentLink {
+  constituent_id: string
+  relationship_type: RelationshipType
+  portal_visible: boolean
+  notify_status: boolean
+  notification_target?: string | null
+}
+
+export interface ConstituentUnlink {
+  reason: string
+}
+
+export interface RequestNote {
+  note_id?: string
+  request_id?: string
+  author_constituent_id?: string
+  body: string
+  portal_visible: boolean
+  created_at?: ISODateTime
+}
+
+/** Frontend mock-only account disposition until a backend operation is published. */
+export type AccountDispositionMode = 'DELETE' | 'ANONYMIZE'
+
+export interface AccountDispositionRequest {
+  mode: AccountDispositionMode
+  confirmation: string
+}
+
+export interface AccountDispositionResult {
+  status: 'DELETED' | 'ANONYMIZED'
+  message: string
 }
 
 export interface PublicServiceRequestDetail {
@@ -344,6 +399,9 @@ export interface PublicServiceRequestDetail {
   owning_department: DepartmentCode
   updated_at: ISODateTime
   history: PublicHistoryItem[]
+  /** Optional public projection; hidden relationships/notes are filtered by the provider. */
+  relationships?: RequestRelationship[]
+  notes?: RequestNote[]
 }
 
 export interface AnonymousStatusLookupRequest {
@@ -459,6 +517,11 @@ export interface C311FixtureSet {
   branding?: Branding
   public_content?: Record<PublicContentKey, ContentObject>
   public_help?: Record<HelpKey, HelpContent>
+  relationships?: Record<string, RequestRelationship[]>
+  notes?: Record<string, RequestNote[]>
+  /** Mock-only public projection sources; the provider filters portal visibility. */
+  public_relationships?: Record<string, RequestRelationship[]>
+  public_notes?: Record<string, RequestNote[]>
 }
 
 export interface ValidationFailure {

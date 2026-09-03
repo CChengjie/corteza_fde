@@ -1,9 +1,11 @@
 import { C311ApiError } from './errors'
-import { APPLICATION_ROLES, CONTACT_CATEGORIES, C311_SCENARIOS, LANGUAGES, PHONE_LABELS, type ApplicationRole, type C311Scenario, type ContractCapability, type HelpKey, type IdentityProvider, type Language, type PublicContentKey } from './enums'
+import { APPLICATION_ROLES, CONTACT_CATEGORIES, C311_SCENARIOS, LANGUAGES, PHONE_LABELS, RELATIONSHIP_TYPES, type ApplicationRole, type C311Scenario, type ContractCapability, type HelpKey, type IdentityProvider, type Language, type PublicContentKey } from './enums'
 import { cloneFixtureSet, createDefaultFixtureSet } from './fixtures'
 import type {
   AccountRegistration,
   AccountRegistrationAcknowledgement,
+  AccountDispositionRequest,
+  AccountDispositionResult,
   AnonymousStatusLookupRequest,
   AnonymousStatusLookupResponse,
   BinaryAttachment,
@@ -41,6 +43,11 @@ import type {
   Constituent,
   StaffServiceRequestDetail,
   StaffServiceRequestCreate,
+  ConstituentLink,
+  ConstituentUnlink,
+  RequestNote,
+  RequestRelationship,
+  RequestRelationshipAudit,
   WorkflowDefinition,
 } from './types'
 import type { C311Provider, C311RequestOptions, PortalAttachmentUpload, ReportExportOptions, RequestTransition } from './provider'
@@ -50,6 +57,8 @@ export interface MockC311ProviderOptions {
   fixtures?: C311FixtureSet
   role?: ApplicationRole
   sessionVariant?: 'current' | 'expired'
+  /** Optional constituent profile for relationship-aware portal fixtures. */
+  profile?: Constituent
 }
 
 const statusByScenario: Partial<Record<C311Scenario, number>> = {
@@ -72,6 +81,8 @@ const statusByScenario: Partial<Record<C311Scenario, number>> = {
   'help-loading-failure': 503,
   'account-loading': 503,
   'identity-claims-failure': 401,
+  'account-disposition-conflict': 409,
+  'account-disposition-failure': 500,
 }
 
 function copy<T> (value: T): T {
@@ -85,10 +96,13 @@ function validMockProfileInput (input: ProfileUpdate): boolean {
   if (input.preferred_language !== undefined && !LANGUAGES.includes(input.preferred_language)) return false
   if (input.primary_category !== undefined && !CONTACT_CATEGORIES.includes(input.primary_category)) return false
   if (input.phone_numbers !== undefined) {
-    if (input.phone_numbers.length > 3 || input.phone_numbers.some(phone => !PHONE_LABELS.includes(phone.label) || typeof phone.value !== 'string')) return false
+    if (input.phone_numbers.length > 3 || input.phone_numbers.some(phone => !PHONE_LABELS.includes(phone.label) || typeof phone.value !== 'string' || !/^\+[1-9]\d{1,14}$/.test(phone.value))) return false
   }
   if (input.addresses !== undefined) {
-    if (input.addresses.length > 5 || input.addresses.some(address => ['line1', 'city', 'region', 'postal_code', 'country'].some(field => !String((address as unknown as Record<string, unknown>)[field] || '').trim()))) return false
+    if (input.addresses.length > 5 || input.addresses.some(address => {
+      const values = address as unknown as Record<string, unknown>
+      return ['line1', 'city', 'region', 'postal_code', 'country'].some(field => !String(values[field] || '').trim()) || String(values.line1).length > 200 || String(values.line2 || '').length > 200 || String(values.city).length > 120 || String(values.region).length > 120 || String(values.postal_code).length > 32 || String(values.country).length !== 2
+    })) return false
     if (input.addresses.length > 0 && input.addresses.filter(address => address.primary).length !== 1) return false
   }
   return true
@@ -114,6 +128,13 @@ export class MockC311Provider implements C311Provider {
   private pendingAccountLinkExpiresAt: string | null = null
   private pendingAccountLinkConsumed = false
   private profile: Constituent
+  private readonly relationships: Record<string, RequestRelationship[]>
+  private readonly notes: Record<string, RequestNote[]>
+  private readonly publicRelationships: Record<string, RequestRelationship[]>
+  private readonly publicNotes: Record<string, RequestNote[]>
+  private readonly requestVersions: Record<string, number> = {}
+  private readonly relationshipAudits: Record<string, RequestRelationshipAudit[]> = {}
+  private noteSerial = 0
 
   constructor (options: MockC311ProviderOptions = {}) {
     this.fixtures = cloneFixtureSet(options.fixtures || createDefaultFixtureSet())
@@ -130,7 +151,17 @@ export class MockC311Provider implements C311Provider {
     this.currentSession = this.role
       ? copy(this.sessionVariant === 'expired' ? this.fixtures.role_fixtures[this.role].expired_session : this.fixtures.role_fixtures[this.role].session)
       : copy(this.fixtures.session)
-    this.profile = copy(this.fixtures.requests[0].primary_requester)
+    this.profile = copy(options.profile || this.fixtures.requests[0].primary_requester)
+    this.relationships = copy(this.fixtures.relationships || {})
+    this.notes = copy(this.fixtures.notes || {})
+    this.publicRelationships = copy(this.fixtures.public_relationships || this.relationships)
+    this.publicNotes = copy(this.fixtures.public_notes || this.notes)
+    Object.entries(this.relationships).forEach(([requestID, relationships]) => {
+      this.relationshipAudits[requestID] = relationships.flatMap(relationship => relationship.audit || []).map(audit => copy(audit))
+    })
+    Object.entries(this.fixtures.details).forEach(([requestID, detail]) => {
+      this.requestVersions[requestID] = detail.request.version
+    })
     this.restorePendingAccountLink()
     Object.entries(this.fixtures.drafts).forEach(([requestID, draft]) => {
       const payload = 'primary_requester' in draft ? {
@@ -286,6 +317,88 @@ export class MockC311Provider implements C311Provider {
     return request
   }
 
+  private requestVersion (requestID: string): number {
+    if (this.requestVersions[requestID] === undefined) {
+      const detail = this.fixtures.details[requestID]
+      const request = this.fixtures.requests.find(item => item.request_id === requestID)
+      this.requestVersions[requestID] = detail?.request.version || request?.version || 1
+    }
+    return this.requestVersions[requestID]
+  }
+
+  private updateRequestStatus (requestID: string, status: ServiceRequest['status']): number {
+    const request = this.request(requestID)
+    const version = this.requestVersion(requestID) + 1
+    const updatedAt = '2026-01-15T15:00:00.000Z'
+    request.status = status
+    request.version = version
+    request.updated_at = updatedAt
+    this.requestVersions[requestID] = version
+
+    const detail = this.fixtures.details[requestID]
+    if (detail) {
+      detail.request = { ...detail.request, status, version, updated_at: updatedAt }
+      detail.history = detail.history.concat({ action: status, occurred_at: updatedAt, responsible_department: request.owning_department })
+    }
+    const publicDetail = request.request_number ? this.fixtures.public_details[request.request_number] : undefined
+    if (publicDetail) {
+      publicDetail.status = status
+      publicDetail.updated_at = updatedAt
+      publicDetail.history = publicDetail.history.concat({ action: status, occurred_at: updatedAt, responsible_department: request.owning_department })
+    }
+    const queueItem = this.fixtures.queue.find(item => item.request_id === requestID)
+    if (queueItem) {
+      queueItem.status = status
+      queueItem.version = version
+      queueItem.updated_at = updatedAt
+    }
+    return version
+  }
+
+  private portalRelationshipIDs (): Set<string> {
+    return new Set([this.profile.constituent_id, this.currentSession.actor?.actor_id].filter(Boolean) as string[])
+  }
+
+  private hasVisiblePortalRelationship (requestID: string): boolean {
+    const identities = this.portalRelationshipIDs()
+    return (this.relationships[requestID] || []).some(relationship => relationship.portal_visible && identities.has(relationship.constituent_id))
+  }
+
+  private hasValidAuthenticatedSession (): boolean {
+    const expiresAt = this.currentSession.expires_at
+    return this.currentSession.authenticated && (!expiresAt || Date.parse(expiresAt) > Date.now())
+  }
+
+  private requireVisiblePortalRelationship (requestID: string): void {
+    if (!this.hasVisiblePortalRelationship(requestID)) {
+      throw new C311ApiError({ error: 'FORBIDDEN', message: 'You are not associated with this request.', retryable: false }, 403)
+    }
+  }
+
+  private syncPublicRelationships (requestID: string): void {
+    const current = this.relationships[requestID] || []
+    const currentKeys = new Set(current.map(item => `${item.constituent_id}:${item.relationship_type}`))
+    const preservedHidden = (this.publicRelationships[requestID] || []).filter(item => !currentKeys.has(`${item.constituent_id}:${item.relationship_type}`) && !item.portal_visible)
+    this.publicRelationships[requestID] = current.concat(preservedHidden)
+  }
+
+  private syncPublicNotes (requestID: string, note: RequestNote): void {
+    if (!note.portal_visible) return
+    this.publicNotes[requestID] = (this.publicNotes[requestID] || []).concat(note)
+  }
+
+  private staffDetail (requestID: string): StaffServiceRequestDetail {
+    const detail = this.fixtures.details[requestID]
+    if (!detail) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+    return copy({
+      ...detail,
+      request: { ...detail.request, version: this.requestVersion(requestID) },
+      relationships: this.relationships[requestID] || [],
+      notes: this.notes[requestID] || [],
+      audit: [...detail.audit, ...(this.relationshipAudits[requestID] || []).map(event => ({ ...event } as Record<string, unknown>))],
+    })
+  }
+
   private draft (requestID: string): ServiceRequest {
     const draft = this.draftRecords[requestID]
     if (!draft) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
@@ -348,14 +461,39 @@ export class MockC311Provider implements C311Provider {
   }
 
   async changeLoginIdentifier (_input: LoginIdentifierChange): Promise<Session> {
+    this.requireCapability('login_identifier_change')
     if (this.scenario === 'invalid-credentials') this.failScenario('invalid-credentials')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict'])
     return copy(this.currentSession)
   }
 
   async changePassword (_input: PasswordChange): Promise<void> {
+    this.requireCapability('password_change')
     if (this.scenario === 'invalid-credentials') this.failScenario('invalid-credentials')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict'])
+  }
+
+  async deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult> {
+    this.requireCapability('profile_get')
+    if (!input || !['DELETE', 'ANONYMIZE'].includes(input.mode) || input.confirmation !== input.mode) this.failScenario('validation')
+    if (this.scenario === 'account-disposition-conflict') this.failScenario('account-disposition-conflict')
+    if (this.scenario === 'account-disposition-failure') this.failScenario('account-disposition-failure')
+    this.countWrite('account_disposition')
+    if (input.mode === 'ANONYMIZE') {
+      this.profile = {
+        ...this.profile,
+        display_name: 'Anonymous user',
+        login_identifier: undefined,
+        emails: [],
+        phone_numbers: [],
+        addresses: [],
+      }
+    }
+    this.currentSession = { authenticated: false, actor: null, preferred_language: 'EN', expires_at: null }
+    return {
+      status: input.mode === 'DELETE' ? 'DELETED' : 'ANONYMIZED',
+      message: input.mode === 'DELETE' ? 'Account deleted.' : 'Account anonymized.',
+    }
   }
 
   async startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect> {
@@ -426,11 +564,13 @@ export class MockC311Provider implements C311Provider {
   }
 
   async getProfile (): Promise<Constituent> {
+    this.requireCapability('profile_get')
     if (this.scenario === 'account-loading') this.failScenario('account-loading')
     return copy(this.profile)
   }
 
   async updateProfile (input: ProfileUpdate, options: C311RequestOptions = {}): Promise<Constituent> {
+    this.requireCapability('profile_update')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict'])
     if (options.expectedVersion === undefined) throw new C311ApiError({ error: 'EXPECTED_VERSION_REQUIRED', message: 'If-Match is required for this update.', retryable: false }, 428)
     if (options.expectedVersion !== undefined && options.expectedVersion !== this.profile.version) this.failScenario('version-conflict')
@@ -630,31 +770,75 @@ export class MockC311Provider implements C311Provider {
   }
 
   async listPortalRequests (query: RequestListQuery = {}): Promise<PageResponse<RequestSummary>> {
+    this.requireCapability('portal_my_requests')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'retryable', 'version-conflict', 'terminal'])
-    const items = this.scenario === 'empty' || this.scenario === 'empty-my-requests' ? [] : this.fixtures.requests
+    const sourceItems = this.scenario === 'empty' || this.scenario === 'empty-my-requests' ? [] : this.fixtures.requests
+    const items = sourceItems.filter(request => this.hasVisiblePortalRelationship(request.request_id))
+    if (sourceItems.length && !items.length) {
+      throw new C311ApiError({ error: 'FORBIDDEN', message: 'You are not associated with any portal requests.', retryable: false }, 403)
+    }
     return this.page(items.map(request => this.requestSummary(request)), query)
   }
 
   async linkAnonymousRequest (input: AnonymousStatusLookupRequest): Promise<ServiceRequest> {
+    this.requireCapability('portal_link_anonymous_request')
     this.failIfNeeded(['forbidden', 'not-found', 'validation'])
     const item = this.fixtures.requests.find(request => request.request_number === input.request_number && request.primary_requester.emails.includes(input.email))
     if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
     return copy(item)
   }
 
-  async reopenPortalRequest (requestID: string, _reason: string, _options: C311RequestOptions = {}): Promise<ReopenRequestResponse> {
+  async reopenPortalRequest (requestID: string, reason: string, _options: C311RequestOptions = {}): Promise<ReopenRequestResponse> {
+    this.requireCapability('portal_reopen_request')
     this.failIfNeeded(['forbidden', 'not-found', 'validation'])
-    this.request(requestID)
+    if (!String(reason || '').trim()) this.failScenario('validation')
+    const request = this.request(requestID)
+    this.requireVisiblePortalRelationship(requestID)
+    if (request.status !== 'RESOLVED' && request.status !== 'CLOSED') {
+      throw new C311ApiError({
+        error: 'VALIDATION_ERROR',
+        message: 'Only resolved or closed requests can be reopened.',
+        retryable: false,
+      }, 422)
+    }
+    this.updateRequestStatus(requestID, 'REOPENED')
     return { request_id: requestID, status: 'PENDING_APPROVAL' }
   }
 
   async getPublicStatus (input: AnonymousStatusLookupRequest): Promise<AnonymousStatusLookupResponse> {
     if (this.scenario === 'not-found') return { request_detail: null }
-    this.failIfNeeded()
+    this.failIfNeeded(['validation', 'retryable', 'terminal'])
     const normalizedEmail = typeof input.email === 'string' ? input.email.trim().toLowerCase() : ''
-    const request = this.fixtures.requests.find(item => item.request_number === input.request_number && item.primary_requester.emails.some(email => email.toLowerCase() === normalizedEmail))
+    const request = this.fixtures.requests.find(item => item.request_number === input.request_number)
     const detail = request ? this.fixtures.public_details[input.request_number] : undefined
-    return { request_detail: detail ? copy(detail) : null }
+    const primaryEmailMatches = !!request && request.primary_requester.emails.some(email => email.trim().toLowerCase() === normalizedEmail)
+    const profileEmailMatches = this.profile.emails.some(email => email.trim().toLowerCase() === normalizedEmail)
+    const relationshipMatches = !!request && this.hasValidAuthenticatedSession() && profileEmailMatches && this.hasVisiblePortalRelationship(request.request_id)
+    if (!request || !detail || (!primaryEmailMatches && !relationshipMatches)) return { request_detail: null }
+    const relationships = (this.publicRelationships[request.request_id] || this.relationships[request.request_id] || []).filter(item => item.portal_visible)
+    const notes = (this.publicNotes[request.request_id] || this.notes[request.request_id] || []).filter(item => item.portal_visible)
+    return { request_detail: copy({ ...detail, relationships, notes }) }
+  }
+
+  async createPortalNote (requestID: string, input: RequestNote): Promise<RequestNote> {
+    this.requireCapability('portal_my_requests')
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'retryable', 'terminal'])
+    this.request(requestID)
+    this.requireVisiblePortalRelationship(requestID)
+    if (!input || typeof input.body !== 'string' || !input.body.trim() || input.body.length > 2000 || input.portal_visible !== true) this.failScenario('validation')
+
+    const note: RequestNote = {
+      note_id: `portal-note-fixture-${String(++this.noteSerial).padStart(3, '0')}`,
+      request_id: requestID,
+      author_constituent_id: this.currentSession.actor?.actor_id,
+      body: input.body,
+      portal_visible: true,
+      created_at: '2026-01-15T15:00:00.000Z',
+    }
+    this.notes[requestID] = (this.notes[requestID] || []).concat(note)
+    this.syncPublicNotes(requestID, note)
+    this.countWrite('portal_note_create')
+    return copy(note)
   }
 
   async geocode (input: GeocodeRequest): Promise<GeocodeResponse> {
@@ -673,15 +857,84 @@ export class MockC311Provider implements C311Provider {
   }
 
   async listStaffRequests (query: RequestListQuery = {}): Promise<PageResponse<RequestQueueItem>> {
+    this.requireCapability('staff_request_queue')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'retryable', 'version-conflict', 'terminal'])
     return this.page(this.scenario === 'empty' ? [] : this.fixtures.queue, query)
   }
 
   async getStaffRequest (requestID: string): Promise<StaffServiceRequestDetail> {
+    this.requireCapability('staff_request_detail')
     this.failIfNeeded(['forbidden', 'not-found', 'validation'])
-    const detail = this.fixtures.details[requestID]
-    if (!detail) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
-    return copy(detail)
+    return this.staffDetail(requestID)
+  }
+
+  async linkStaffConstituent (requestID: string, input: ConstituentLink, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.requireCapability('staff_constituent_link')
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict'])
+    if (options.expectedVersion === undefined) this.failScenario('expected-version-required')
+    const current = this.staffDetail(requestID)
+    if (options.expectedVersion !== current.request.version) this.failScenario('version-conflict')
+    const relationships = this.relationships[requestID] || []
+    if (!input || !input.constituent_id || !RELATIONSHIP_TYPES.includes(input.relationship_type) || typeof input.portal_visible !== 'boolean' || typeof input.notify_status !== 'boolean') this.failScenario('validation')
+    if (relationships.some(item => item.constituent_id === input.constituent_id && item.relationship_type === input.relationship_type)) this.failScenario('validation')
+    if (input.relationship_type === 'PRIMARY_REQUESTER' && relationships.some(item => item.relationship_type === 'PRIMARY_REQUESTER')) this.failScenario('validation')
+    const auditSerial = (this.relationshipAudits[requestID] || []).length + 1
+    const relationship: RequestRelationship = {
+      ...copy(input),
+      notification_target: input.notification_target ?? (input.notify_status ? input.constituent_id : null),
+      notification_result: input.notify_status ? 'SENT' : 'NOT_REQUESTED',
+      audit: [{ audit_id: `relationship-audit-fixture-${String(auditSerial).padStart(3, '0')}`, action: 'LINKED', actor_id: this.currentSession.actor?.actor_id || 'unknown', occurred_at: '2026-01-15T15:00:00.000Z' }],
+    }
+    this.relationshipAudits[requestID] = (this.relationshipAudits[requestID] || []).concat(relationship.audit || [])
+    this.relationships[requestID] = relationships.concat(relationship)
+    this.requestVersions[requestID] = current.request.version + 1
+    this.syncPublicRelationships(requestID)
+    this.countWrite('staff_constituent_link')
+    return this.staffDetail(requestID)
+  }
+
+  async unlinkStaffConstituent (requestID: string, constituentID: string, input: ConstituentUnlink, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.requireCapability('staff_constituent_unlink')
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict'])
+    if (options.expectedVersion === undefined) this.failScenario('expected-version-required')
+    const current = this.staffDetail(requestID)
+    if (options.expectedVersion !== current.request.version) this.failScenario('version-conflict')
+    if (!input?.reason?.trim()) this.failScenario('validation')
+    const relationships = this.relationships[requestID] || []
+    const target = relationships.find(item => item.constituent_id === constituentID)
+    if (!target) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+    if (target.relationship_type === 'PRIMARY_REQUESTER') this.failScenario('validation')
+    this.relationships[requestID] = relationships.filter(item => item !== target)
+    const auditSerial = (this.relationshipAudits[requestID] || []).length + 1
+    this.relationshipAudits[requestID] = (this.relationshipAudits[requestID] || []).concat({
+      audit_id: `relationship-audit-fixture-${String(auditSerial).padStart(3, '0')}`,
+      action: 'UNLINKED',
+      actor_id: this.currentSession.actor?.actor_id || 'unknown',
+      occurred_at: '2026-01-15T15:00:00.000Z',
+    })
+    this.requestVersions[requestID] = current.request.version + 1
+    this.syncPublicRelationships(requestID)
+    this.countWrite('staff_constituent_unlink')
+    return this.staffDetail(requestID)
+  }
+
+  async createStaffNote (requestID: string, input: RequestNote): Promise<RequestNote> {
+    this.requireCapability('staff_note_create')
+    this.failIfNeeded(['forbidden', 'not-found', 'validation'])
+    if (!this.fixtures.details[requestID]) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+    if (!input || typeof input.body !== 'string' || !input.body.trim() || input.body.length > 2000 || typeof input.portal_visible !== 'boolean') this.failScenario('validation')
+    const note: RequestNote = {
+      note_id: `note-fixture-${String(++this.noteSerial).padStart(3, '0')}`,
+      request_id: requestID,
+      author_constituent_id: this.currentSession.actor?.actor_id,
+      body: input.body,
+      portal_visible: input.portal_visible,
+      created_at: '2026-01-15T15:00:00.000Z',
+    }
+    this.notes[requestID] = (this.notes[requestID] || []).concat(note)
+    this.syncPublicNotes(requestID, note)
+    this.countWrite('staff_note_create')
+    return copy(note)
   }
 
   async transitionStaffRequest (requestID: string, _input: RequestTransition, _options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {

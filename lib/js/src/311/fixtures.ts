@@ -1,5 +1,5 @@
 import { APPLICATION_ROLES, CONTRACT_VERSION, type ApplicationRole, type HelpKey, type PublicContentKey } from './enums'
-import type { Branding, C311FixtureSet, C311RoleFixture, Constituent, ContentObject, CurrentActor, HelpContent, PublicHistoryItem, RequestQueueItem, ServiceRequest, Session, StaffServiceRequestDetail } from './types'
+import type { Branding, C311FixtureSet, C311RoleFixture, Constituent, ContentObject, CurrentActor, HelpContent, PublicHistoryItem, RequestNote, RequestQueueItem, RequestRelationship, ServiceRequest, Session, StaffServiceRequestDetail } from './types'
 
 export const BENCHMARK_NOW = '2026-01-15T15:00:00.000Z'
 export const BENCHMARK_TIMEZONE = 'America/New_York'
@@ -91,6 +91,47 @@ const detail: StaffServiceRequestDetail = {
   external_work_order: null,
 }
 
+const relationships: Record<string, RequestRelationship[]> = {
+  [request.request_id]: [{
+    constituent_id: constituent.constituent_id,
+    relationship_type: 'PRIMARY_REQUESTER',
+    portal_visible: true,
+    notify_status: false,
+    notification_target: null,
+    notification_result: 'NOT_REQUESTED',
+    audit: [{ audit_id: 'relationship-audit-fixture-001', action: 'LINKED', actor_id: 'actor-fixture-agent', occurred_at: BENCHMARK_NOW }],
+  }],
+}
+
+const notes: Record<string, RequestNote[]> = {
+  [request.request_id]: [],
+}
+
+const publicRelationships: Record<string, RequestRelationship[]> = {
+  [request.request_id]: [
+    ...relationships[request.request_id],
+    { constituent_id: 'constituent-fixture-hidden', relationship_type: 'REPORTER', portal_visible: false, notify_status: false },
+  ],
+}
+
+const publicNotes: Record<string, RequestNote[]> = {
+  [request.request_id]: [{
+    note_id: 'note-fixture-public-001',
+    request_id: request.request_id,
+    author_constituent_id: 'actor-fixture-agent',
+    body: 'The city is reviewing this request.',
+    portal_visible: true,
+    created_at: BENCHMARK_NOW,
+  }, {
+    note_id: 'note-fixture-private-001',
+    request_id: request.request_id,
+    author_constituent_id: 'actor-fixture-agent',
+    body: 'Internal triage note.',
+    portal_visible: false,
+    created_at: BENCHMARK_NOW,
+  }],
+}
+
 const branding: Branding = {
   organisation_name: 'City 311',
   primary_colour: '#155eef',
@@ -163,9 +204,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Service agent',
     departments: ['STREETS'],
     districts: ['NORTH'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_service_request_create', 'report_catalogue', 'report_export'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_service_request_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_note_create', 'report_catalogue', 'report_export'],
     scopes: ['service_requests.write'],
-    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_service_request_create', 'report_catalogue', 'report_export'],
+    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_service_request_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_note_create', 'report_catalogue', 'report_export'],
     deniedScope: 'workflow.execute',
   },
   supervisor: {
@@ -273,9 +314,9 @@ export function createDefaultFixtureSet (): C311FixtureSet {
         application_roles: ['constituent'],
         department_codes: [],
         district_codes: ['NORTH'],
-        capabilities: ['portal_my_requests', 'portal_draft_create', 'portal_draft_get', 'portal_draft_update', 'portal_draft_delete', 'portal_draft_submit', 'attachment_download'],
+        capabilities: ['portal_my_requests', 'portal_reopen_request', 'portal_link_anonymous_request', 'portal_draft_create', 'portal_draft_get', 'portal_draft_update', 'portal_draft_delete', 'portal_draft_submit', 'attachment_download', 'profile_get', 'profile_update', 'password_change', 'login_identifier_change'],
         scopes: ['service_requests.write'],
-        available_routes: ['session_current', 'portal_my_requests', 'portal_service_request_submit', 'portal_draft_create', 'portal_draft_get', 'portal_draft_update', 'portal_draft_delete', 'portal_draft_submit', 'portal_attachment_upload', 'attachment_download'],
+        available_routes: ['session_current', 'portal_my_requests', 'portal_service_request_submit', 'portal_draft_create', 'portal_draft_get', 'portal_draft_update', 'portal_draft_delete', 'portal_draft_submit', 'portal_attachment_upload', 'attachment_download', 'portal_reopen_request', 'portal_link_anonymous_request', 'profile_get', 'profile_update', 'password_change', 'login_identifier_change'],
       },
       preferred_language: 'EN',
       expires_at: '2099-01-15T16:00:00.000Z',
@@ -396,10 +437,16 @@ export function createDefaultFixtureSet (): C311FixtureSet {
       'content-loading-failure': { error: 'TEMPORARILY_UNAVAILABLE', message: 'Public content is temporarily unavailable.', retryable: true },
       'help-loading-failure': { error: 'TEMPORARILY_UNAVAILABLE', message: 'Help content is temporarily unavailable.', retryable: true },
       'account-loading': { error: 'TEMPORARILY_UNAVAILABLE', message: 'Account data is temporarily unavailable.', retryable: true },
+      'account-disposition-conflict': { error: 'VERSION_CONFLICT', message: 'The account changed before this action completed.', retryable: false, current_version: 2 },
+      'account-disposition-failure': { error: 'OPERATION_FAILED', message: 'The account action could not be completed.', retryable: false },
     },
     branding,
     public_content: publicContent,
     public_help: publicHelp,
+    relationships,
+    notes,
+    public_relationships: publicRelationships,
+    public_notes: publicNotes,
   }
 }
 

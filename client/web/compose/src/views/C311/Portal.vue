@@ -88,48 +88,44 @@
           </div>
         </fieldset>
 
-        <fieldset class="c311-request-section">
-          <legend>{{ t('portal.submit.location', 'Location') }}</legend>
-          <div class="form-group">
-            <label for="c311-location-address">{{ t('field.address', 'Address') }}</label>
-            <input id="c311-location-address" v-model.trim="form.location.address" class="form-control" autocomplete="address-line1" :aria-invalid="hasError('location.address') ? 'true' : 'false'" @input="markDirty">
-          </div>
-          <div class="c311-request-grid">
-            <div class="form-group">
-              <label for="c311-location-latitude">{{ t('field.latitude', 'Latitude (optional)') }}</label>
-              <input id="c311-location-latitude" v-model.number="form.location.latitude" class="form-control" type="number" min="-90" max="90" step="0.0001" :aria-invalid="hasError('location.latitude') ? 'true' : 'false'" @input="markDirty">
-            </div>
-            <div class="form-group">
-              <label for="c311-location-longitude">{{ t('field.longitude', 'Longitude (optional)') }}</label>
-              <input id="c311-location-longitude" v-model.number="form.location.longitude" class="form-control" type="number" min="-180" max="180" step="0.0001" :aria-invalid="hasError('location.longitude') ? 'true' : 'false'" @input="markDirty">
-            </div>
-          </div>
-        </fieldset>
+        <c311-location-picker
+          :address="form.location.address"
+          :latitude="form.location.latitude"
+          :longitude="form.location.longitude"
+          :confirmed="locationConfirmed"
+          :mode="mapMode"
+          :geocode-loading="geocodeLoading"
+          :geocode-error="geocodeError"
+          :normalized-address="normalizedAddress"
+          :address-invalid="hasError('location.address')"
+          :latitude-invalid="hasError('location.latitude')"
+          :longitude-invalid="hasError('location.longitude')"
+          @update:address="updateAddress"
+          @update:latitude="value => updateCoordinate('latitude', value)"
+          @update:longitude="value => updateCoordinate('longitude', value)"
+          @geocode="geocodeAddress"
+          @retry="geocodeAddress"
+          @set-coordinates="setCoordinates"
+          @move-marker="moveMarker"
+          @confirm="confirmLocation"
+        />
 
-        <fieldset class="c311-request-section">
-          <legend>{{ t('portal.submit.attachments', 'Attachments') }}</legend>
-          <div class="form-group">
-            <label for="c311-attachment-file">{{ t('field.attachmentFile', 'Upload an attachment') }}</label>
-            <input id="c311-attachment-file" class="form-control-file" type="file" accept="image/jpeg,image/png,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" :disabled="attachmentUploading || form.attachment_tokens.length >= 5" @change="uploadAttachment">
-            <small class="form-text text-muted">{{ t('portal.submit.attachmentFileHelp', 'JPEG, PNG, PDF, text, or DOCX up to 10 MB.') }}</small>
-          </div>
-          <div class="form-group">
-            <label for="c311-attachment-token">{{ t('field.attachmentToken', 'Attachment token') }}</label>
-            <div class="input-group">
-              <input id="c311-attachment-token" v-model.trim="attachmentTokenInput" class="form-control" type="text" @input="markDirty" @keyup.enter.prevent="addAttachmentToken">
-              <div class="input-group-append"><button class="btn btn-outline-secondary" type="button" data-c311-action="add-attachment-token" @click="addAttachmentToken">{{ t('action.add', 'Add') }}</button></div>
-            </div>
-          </div>
-          <ul v-if="form.attachment_tokens.length" class="list-unstyled" data-c311-attachment-list>
-            <li v-for="token in form.attachment_tokens" :key="token" class="d-flex align-items-center justify-content-between border-bottom py-1">
-              <code>{{ token }}</code>
-              <button class="btn btn-sm btn-link" type="button" :data-c311-action="`remove-attachment-${token}`" @click="removeAttachmentToken(token)">{{ t('action.remove', 'Remove') }}</button>
-            </li>
-          </ul>
-          <small v-if="attachmentUploading" class="form-text text-info" role="status">{{ t('status.uploadingAttachment', 'Uploading attachment...') }}</small>
-          <p v-if="attachmentRecoveryMessage" class="alert alert-warning" role="status" data-c311-attachment-recovery>{{ attachmentRecoveryMessage }}</p>
-          <small class="form-text text-muted">{{ t('portal.submit.attachmentHelp', 'Only the returned attachment token is sent with your request.') }}</small>
-        </fieldset>
+        <c311-attachment-picker
+          :attachments="attachmentItems"
+          :uploading="attachmentUploading"
+          :progress="attachmentProgress"
+          :error="attachmentError"
+          :action-error="attachmentActionError"
+          :preview="attachmentPreview"
+          :can-download="canDownloadAttachment"
+          @select="uploadAttachment"
+          @retry="retryAttachment"
+          @remove="removeAttachment"
+          @download="downloadAttachment"
+          @preview="previewAttachment"
+          @close-preview="closeAttachmentPreview"
+        />
+        <p v-if="attachmentRecoveryMessage" class="alert alert-warning" role="status" data-c311-attachment-recovery>{{ attachmentRecoveryMessage }}</p>
 
         <div class="form-group">
           <label for="c311-custom-fields">{{ t('field.customFields', 'Configured custom fields (JSON)') }}</label>
@@ -172,7 +168,7 @@
 import * as C311JS from '@cortezaproject/corteza-js'
 import { components, mixins, c311 } from '@cortezaproject/corteza-vue'
 
-const { C311AppShell, C311DataState, C311ErrorSummary, C311CapabilityAction, C311HelpDrawer, C311LanguageSelector, C311MainNav, C311ResponsiveData } = components
+const { C311AppShell, C311DataState, C311ErrorSummary, C311CapabilityAction, C311HelpDrawer, C311LanguageSelector, C311MainNav, C311ResponsiveData, C311AttachmentPicker, C311LocationPicker } = components
 const c311StateForError = c311?.c311StateForError
 const serviceTypes = C311JS.SERVICE_TYPES || ['TREE_MAINTENANCE', 'POTHOLE', 'MISSED_TRASH', 'GENERAL_INQUIRY']
 const serviceTypeRules = C311JS.SERVICE_TYPE_RULES || {
@@ -221,7 +217,7 @@ function normalizeError (error) {
 
 export default {
   name: 'C311Portal',
-  components: { C311AppShell, C311DataState, C311ErrorSummary, C311CapabilityAction, C311HelpDrawer, C311LanguageSelector, C311MainNav, C311ResponsiveData },
+  components: { C311AppShell, C311DataState, C311ErrorSummary, C311CapabilityAction, C311HelpDrawer, C311LanguageSelector, C311MainNav, C311ResponsiveData, C311AttachmentPicker, C311LocationPicker },
   mixins: [c311DirtyGuard],
   data: () => ({
     state: 'loading',
@@ -246,9 +242,19 @@ export default {
     idempotencyKey: '',
     idempotencyFingerprint: '',
     idempotencySerial: 0,
-    attachmentTokenInput: '',
     attachmentUploading: false,
+    attachmentProgress: 0,
+    attachmentError: null,
+    attachmentActionError: null,
+    attachmentPreview: null,
+    attachmentRetryFile: null,
+    attachmentMetadata: [],
     attachmentRecoveryMessage: '',
+    locationConfirmed: false,
+    normalizedAddress: '',
+    geocodeLoading: false,
+    geocodeError: null,
+    geocodeGeneration: 0,
     loadGeneration: 0,
     routeSignature: '',
     suppressRouteReload: false,
@@ -286,6 +292,17 @@ export default {
     canUpdateDraft () { return !!this.draftID && this.canCapability('portal_draft_update') },
     canDeleteDraft () { return !!this.draftID && this.canCapability('portal_draft_delete') },
     canSubmitCurrentRequest () { return !this.draftID || this.canCapability('portal_draft_submit') },
+    canDownloadAttachment () {
+      if (!this.isAuthenticated) return false
+      if (typeof this.$C311?.can === 'function') return this.$C311.can('attachment_download')
+      const capabilities = this.$C311?.session?.actor?.capabilities
+      return Array.isArray(capabilities) && capabilities.includes('attachment_download')
+    },
+    mapMode () { return typeof window !== 'undefined' && window.C311Mode === 'mock' ? 'mock' : 'http' },
+    attachmentItems () {
+      const metadata = Object.fromEntries(this.attachmentMetadata.map(item => [item.attachment_token, item]))
+      return this.form.attachment_tokens.map(token => metadata[token] || { attachment_token: token, filename: this.t('field.attachmentToken', 'Attachment token'), media_type: 'opaque', size: 0, expires_at: '' })
+    },
     shellTitle () { return this.isStaffAssistRoute ? this.t('portal.submit.staffTitle', 'Submit a request for a resident') : this.isRequestFormRoute ? this.t('portal.submit.title', 'Submit a service request') : this.t('portal.title', 'City 311') },
     navItems () {
       const items = [
@@ -306,7 +323,7 @@ export default {
     statusLookup: { deep: true, handler (value) { if (this.showStatusLookup) this.saveStatusLookup(value) } },
     $route: {
       deep: true,
-      handler (to) {
+      handler (to, from) {
         const signature = this.routeKey(to)
         if (!signature || signature === this.routeSignature) return
         this.routeSignature = signature
@@ -314,6 +331,7 @@ export default {
           this.suppressRouteReload = false
           return
         }
+        if (this.isRequestFormRouteFor(from) && (!this.isRequestFormRouteFor(to) || from.name !== to.name)) this.releaseStagedAttachments()
         this.resetForRoute()
         this.load()
       },
@@ -323,6 +341,10 @@ export default {
     this.routeSignature = this.routeKey(this.$route)
     this.configureRouteDraft()
     this.load()
+  },
+  beforeDestroy () {
+    this.releaseStagedAttachments?.()
+    this.closeAttachmentPreview?.()
   },
   methods: {
     formatDate (value) { return formatDate(value) },
@@ -335,6 +357,13 @@ export default {
     routeKey (route) {
       if (!route) return ''
       return `${route.name || ''}|${route.path || ''}|${JSON.stringify(route.query || {})}`
+    },
+    isRequestFormRouteFor (route) {
+      return route?.name === 'c311.submit' || route?.name === 'c311.staff.submit'
+    },
+    releaseStagedAttachments () {
+      const tokens = Array.isArray(this.form?.attachment_tokens) ? this.form.attachment_tokens.slice() : []
+      if (typeof this.provider?.removePortalAttachment === 'function') tokens.forEach(token => this.provider.removePortalAttachment(token))
     },
     configureRouteDraft () {
       this.c311DirtyStorageKey = this.isRequestFormRoute ? `c311.portal.${this.isStaffAssistRoute ? 'staff-submit' : 'submit'}` : ''
@@ -358,9 +387,20 @@ export default {
       this.submissionResult = null
       this.idempotencyKey = ''
       this.idempotencyFingerprint = ''
-      this.attachmentTokenInput = ''
       this.attachmentUploading = false
+      this.attachmentProgress = 0
+      this.attachmentError = null
+      this.closeAttachmentPreview?.()
+      this.attachmentPreview = null
+      this.attachmentActionError = null
+      this.attachmentRetryFile = null
+      this.attachmentMetadata = []
       this.attachmentRecoveryMessage = ''
+      this.locationConfirmed = false
+      this.normalizedAddress = ''
+      this.geocodeLoading = false
+      this.geocodeError = null
+      this.geocodeGeneration += 1
       this.profile = null
       this.versionConflict = null
       this.conflictDraft = null
@@ -391,6 +431,9 @@ export default {
       }, {})
       this.form = { ...this.form, ...safeDraft, requester: { ...this.form.requester, ...(source.requester || {}) }, location: { ...this.form.location, ...(source.location || {}) }, attachment_tokens: [], custom_fields: source.custom_fields && typeof source.custom_fields === 'object' ? source.custom_fields : {} }
       this.customFieldsText = JSON.stringify(this.form.custom_fields, null, 2)
+      this.locationConfirmed = false
+      this.normalizedAddress = ''
+      this.attachmentMetadata = []
       this.attachmentRecoveryMessage = attachmentCount > 0 ? this.t('status.attachmentNeedsReupload', 'Previously selected attachments need to be uploaded again after this refresh.') : ''
     },
     hydrateRemoteDraft (draft) {
@@ -400,6 +443,8 @@ export default {
       this.customFieldsText = JSON.stringify(this.form.custom_fields, null, 2)
       this.draftID = draft?.request_id || this.draftID
       this.draftVersion = typeof draft?.version === 'number' ? draft.version : this.draftVersion
+      this.locationConfirmed = Number.isFinite(Number(this.form.location.latitude)) && Number.isFinite(Number(this.form.location.longitude))
+      this.normalizedAddress = this.form.location.address
     },
     isCurrentLoad (generation) { return generation === this.loadGeneration },
     async load () {
@@ -546,7 +591,7 @@ export default {
       const location = this.form.location
       if (rule?.location_required && !location.address) add('location.address', 'LOCATION_REQUIRED', this.t('error.locationRequired', 'A location is required for this service type.'))
       const missingCoordinates = location.latitude === null || location.latitude === '' || location.longitude === null || location.longitude === ''
-      if (rule?.confirmed_coordinates_required && missingCoordinates) add('location.latitude', 'COORDINATES_REQUIRED', this.t('error.coordinatesRequired', 'Latitude and longitude are required for this service type.'))
+      if (rule?.confirmed_coordinates_required && (missingCoordinates || !this.locationConfirmed)) add('location.latitude', 'COORDINATES_REQUIRED', this.t('error.coordinatesRequired', 'Latitude and longitude must be confirmed for this service type.'))
       this.validateCoordinate(errors, 'latitude', location.latitude, -90, 90, add)
       this.validateCoordinate(errors, 'longitude', location.longitude, -180, 180, add)
     },
@@ -559,6 +604,7 @@ export default {
     },
     validateAttachments (errors) {
       if (this.form.attachment_tokens.length > 5) this.addValidationError(errors, 'attachment_tokens', 'TOO_MANY_ITEMS', this.t('error.attachmentsMax', 'You can add up to five attachments.'))
+      if (this.attachmentError) this.addValidationError(errors, 'attachment-file', 'UPLOAD_FAILED', this.attachmentError.message || this.t('error.attachmentUpload', 'The attachment could not be uploaded.'))
       if (!this.form.consent) this.addValidationError(errors, 'consent', 'REQUIRED', this.t('error.consentRequired', 'Please confirm the information is accurate.'))
     },
     validateCustomFields (errors) {
@@ -753,41 +799,183 @@ export default {
         if (generation === this.loadGeneration) this.draftSaving = false
       }
     },
-    async uploadAttachment (event) {
-      const file = event?.target?.files?.[0]
-      if (!file) return
-      const mediaTypes = ['image/jpeg', 'image/png', 'application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-      const invalid = file.size > 10 * 1024 * 1024 || String(file.name || '').length < 1 || String(file.name || '').length > 120 || !mediaTypes.includes(file.type)
-      if (invalid) {
-        this.formErrors = [{ field: 'attachment_tokens', code: 'INVALID_FORMAT', message: this.t('error.attachmentInvalid', 'Choose a supported attachment up to 10 MB.') }]
-        event.target.value = ''
+    updateAddress (value) {
+      this.form.location.address = String(value || '')
+      this.locationConfirmed = false
+      this.normalizedAddress = ''
+      this.geocodeError = null
+      this.markDirty()
+    },
+    normalizeCoordinate (value) {
+      const number = Number(value)
+      if (!Number.isFinite(number)) return null
+      return Math.round(number * 10000) / 10000
+    },
+    updateCoordinate (field, value) {
+      this.$set(this.form.location, field, value === '' ? null : this.normalizeCoordinate(value))
+      this.locationConfirmed = false
+      this.markDirty()
+    },
+    setCoordinates ({ latitude, longitude } = {}) {
+      this.form.location.latitude = this.normalizeCoordinate(latitude)
+      this.form.location.longitude = this.normalizeCoordinate(longitude)
+      this.locationConfirmed = false
+      this.markDirty()
+    },
+    moveMarker ({ latitude = 0, longitude = 0 } = {}) {
+      if (this.form.location.latitude === null || this.form.location.longitude === null) return
+      this.form.location.latitude = this.normalizeCoordinate(Number(this.form.location.latitude) + Number(latitude))
+      this.form.location.longitude = this.normalizeCoordinate(Number(this.form.location.longitude) + Number(longitude))
+      this.locationConfirmed = false
+      this.markDirty()
+    },
+    confirmLocation () {
+      const latitude = this.normalizeCoordinate(this.form.location.latitude)
+      const longitude = this.normalizeCoordinate(this.form.location.longitude)
+      if (latitude === null || longitude === null || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        this.locationConfirmed = false
         return
       }
-      if (this.form.attachment_tokens.length >= 5 || !this.provider?.uploadPortalAttachment) return
+      this.form.location.latitude = latitude
+      this.form.location.longitude = longitude
+      this.locationConfirmed = true
+      this.statusMessage = this.t('status.locationConfirmed', 'Location confirmed.')
+      this.markDirty()
+    },
+    async geocodeAddress () {
+      const address = this.form.location.address.trim()
+      if (!address || !this.provider?.geocode) return
+      const generation = ++this.geocodeGeneration
+      this.geocodeLoading = true
+      this.geocodeError = null
+      this.formErrors = this.formErrors.filter(error => !String(error.field || '').startsWith('location.'))
+      try {
+        const result = await this.provider.geocode({ address })
+        if (generation !== this.geocodeGeneration || !this.isCurrentLoad(this.loadGeneration)) return
+        this.form.location.address = result.address || address
+        this.normalizedAddress = result.address || address
+        this.form.location.latitude = this.normalizeCoordinate(result.latitude)
+        this.form.location.longitude = this.normalizeCoordinate(result.longitude)
+        this.locationConfirmed = false
+        this.statusMessage = this.t('status.addressFound', 'Address found. Confirm the location before submitting.')
+        this.markDirty()
+      } catch (error) {
+        if (generation !== this.geocodeGeneration || !this.isCurrentLoad(this.loadGeneration)) return
+        this.geocodeError = error
+        if (error?.status === 422 || error?.code === 'VALIDATION_ERROR') this.setError(error)
+      } finally {
+        if (generation === this.geocodeGeneration) this.geocodeLoading = false
+      }
+    },
+    async uploadAttachment (eventOrFile) {
+      const event = eventOrFile?.target ? eventOrFile : null
+      const file = event?.target?.files?.[0] || eventOrFile
+      if (!file || this.attachmentUploading || this.form.attachment_tokens.length >= (C311JS.PORTAL_ATTACHMENT_MAX_COUNT || 5)) return
+      const validationErrors = typeof C311JS.validatePortalAttachment === 'function'
+        ? C311JS.validatePortalAttachment({ filename: file.name, media_type: file.type, size: file.size })
+        : []
+      if (validationErrors.length) {
+        this.attachmentError = { message: this.t('error.attachmentInvalid', 'Choose a supported attachment up to 10 MB.'), retryable: false }
+        this.formErrors = validationErrors.map(error => ({ ...error, field: 'attachment-file', message: this.attachmentError.message }))
+        if (event) event.target.value = ''
+        return
+      }
+      if (!this.provider?.uploadPortalAttachment) return
       const generation = this.loadGeneration
+      this.attachmentRetryFile = file
       this.attachmentUploading = true
-      this.formErrors = []
+      this.attachmentProgress = 25
+      this.attachmentError = null
       try {
         const attachment = await this.provider.uploadPortalAttachment({ file, filename: file.name, media_type: file.type })
         if (generation !== this.loadGeneration) return
-        if (attachment?.attachment_token && !this.form.attachment_tokens.includes(attachment.attachment_token)) this.form.attachment_tokens.push(attachment.attachment_token)
+        this.attachmentProgress = 100
+        if (attachment?.attachment_token && !this.form.attachment_tokens.includes(attachment.attachment_token)) {
+          this.form.attachment_tokens.push(attachment.attachment_token)
+          this.attachmentMetadata.push(attachment)
+        }
+        this.attachmentRetryFile = null
+        this.attachmentError = null
+        this.attachmentActionError = null
+        this.formErrors = []
+        this.dataError = null
+        this.state = 'populated'
         this.statusMessage = this.t('status.attachmentUploaded', 'Attachment uploaded.')
         this.attachmentRecoveryMessage = ''
         this.markDirty()
       } catch (error) {
         if (generation !== this.loadGeneration) return
+        this.attachmentError = error
         this.setError(error)
       } finally {
-        if (generation === this.loadGeneration) this.attachmentUploading = false
-        event.target.value = ''
+        if (generation === this.loadGeneration) {
+          this.attachmentUploading = false
+          this.attachmentProgress = 0
+        }
+        if (event) event.target.value = ''
       }
     },
-    addAttachmentToken () {
-      const token = this.attachmentTokenInput.trim(); if (!token) return
-      if (this.form.attachment_tokens.length >= 5) { this.formErrors = [{ field: 'attachment_tokens', code: 'TOO_MANY_ITEMS', message: this.t('error.attachmentsMax', 'You can add up to five attachments.') }]; return }
-      if (!this.form.attachment_tokens.includes(token)) this.form.attachment_tokens.push(token); this.attachmentTokenInput = ''; this.attachmentRecoveryMessage = ''; this.markDirty()
+    retryAttachment () {
+      if (this.attachmentRetryFile && !this.attachmentUploading) return this.uploadAttachment(this.attachmentRetryFile)
     },
-    removeAttachmentToken (token) { this.form.attachment_tokens = this.form.attachment_tokens.filter(item => item !== token); this.markDirty() },
+    removeAttachment (attachment) {
+      const token = typeof attachment === 'string' ? attachment : attachment?.attachment_token
+      if (!token) return
+      this.form.attachment_tokens = this.form.attachment_tokens.filter(item => item !== token)
+      this.attachmentMetadata = this.attachmentMetadata.filter(item => item.attachment_token !== token)
+      if (typeof this.provider?.removePortalAttachment === 'function') this.provider.removePortalAttachment(token)
+      if (this.attachmentPreview?.attachment_token === token) this.closeAttachmentPreview()
+      this.markDirty()
+    },
+    attachmentBlob (response) {
+      if (!response || response.body === undefined || response.body === null) throw new Error(this.t('error.attachmentAction', 'The attachment could not be opened.'))
+      if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') throw new Error(this.t('error.attachmentAction', 'The attachment could not be opened.'))
+      return new Blob([response.body], { type: response.content_type || 'application/octet-stream' })
+    },
+    attachmentFilename (attachment, response) {
+      const disposition = String(response?.content_disposition || '')
+      const match = disposition.match(/filename\s*=\s*"?([^";]+)"?/i)
+      const candidate = match?.[1] || attachment?.filename || 'attachment'
+      const filename = candidate.split(/[\\/]/).pop() || 'attachment'
+      return Array.from(filename).filter(character => {
+        const code = character.charCodeAt(0)
+        return code >= 32 && code !== 127
+      }).join('') || 'attachment'
+    },
+    closeAttachmentPreview () {
+      if (this.attachmentPreview?.url && typeof URL?.revokeObjectURL === 'function') URL.revokeObjectURL(this.attachmentPreview.url)
+      this.attachmentPreview = null
+    },
+    async downloadAttachment (attachment) {
+      try {
+        const response = await this.provider?.downloadAttachment?.(attachment.attachment_token)
+        const url = URL.createObjectURL(this.attachmentBlob(response))
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = this.attachmentFilename(attachment, response)
+        anchor.rel = 'noopener'
+        anchor.style.display = 'none'
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        if (typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url)
+        this.attachmentActionError = null
+        this.statusMessage = this.t('status.attachmentDownloaded', 'Attachment download is ready.')
+      } catch (error) {
+        this.attachmentActionError = error
+      }
+    },
+    async previewAttachment (attachment) {
+      try {
+        const response = await this.provider?.downloadAttachment?.(attachment.attachment_token)
+        this.closeAttachmentPreview()
+        const url = URL.createObjectURL(this.attachmentBlob(response))
+        this.attachmentPreview = { ...attachment, ...response, url, message: this.t('status.attachmentPreviewReady', 'Preview is ready.') }
+        this.attachmentActionError = null
+      } catch (error) {
+        this.attachmentActionError = error
+      }
+    },
     onCustomFieldsInput () {
       try { const value = JSON.parse(this.customFieldsText || '{}'); if (value && typeof value === 'object' && !Array.isArray(value)) this.form.custom_fields = value } catch (_error) {}
       this.markDirty()

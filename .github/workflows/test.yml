@@ -75,6 +75,10 @@ jobs:
         run: tools/c311-browser/run-fe03.sh
         env:
           C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe03-gate
+      - name: "FE-04 attachment and location browser matrix"
+        run: tools/c311-browser/run-fe04.sh
+        env:
+          C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe04-gate
       - name: "FE-05 public query and account browser matrix"
         run: tools/c311-browser/run-fe05.sh
         env:
@@ -99,6 +103,13 @@ jobs:
         with:
           name: c311-fe03-gate
           path: ${{ runner.temp }}/c311-fe03-gate
+          if-no-files-found: ignore
+      - name: "Upload FE-04 gate evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c311-fe04-gate
+          path: ${{ runner.temp }}/c311-fe04-gate
           if-no-files-found: ignore
       - name: "Upload FE-05 gate evidence"
         if: always()

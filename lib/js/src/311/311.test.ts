@@ -6,7 +6,8 @@ import { MockC311Provider } from './mock-provider'
 import { C311FetchTransport, C311HttpProvider, type C311Provider, type C311TransportRequest } from './provider'
 import { C311_TIMEZONE, formatC311DateTime } from './time'
 import type { PortalServiceRequestCreate, ReportDefinition, ServiceRequestCreate, StaffServiceRequestCreate } from './types'
-import { APPLICATION_ROLES } from './enums'
+import { APPLICATION_ROLES, PORTAL_ATTACHMENT_MAX_BYTES, PORTAL_ATTACHMENT_MAX_COUNT, PORTAL_ATTACHMENT_MEDIA_TYPES } from './enums'
+import { validatePortalAttachment } from './provider'
 
 async function expectError (action: () => Promise<unknown>, code: string): Promise<C311ApiError> {
   try {
@@ -304,6 +305,7 @@ describe('City 311 frontend contract', () => {
     await provider.reopenPortalRequest('request-fixture-001', 'fixture reason')
     await provider.downloadAttachment('attachment-fixture-001')
     await provider.uploadPortalAttachment({ file: 'ZmFrZQ==', filename: 'fixture.txt', media_type: 'text/plain' })
+    await provider.geocode({ address: '100 Example Street' })
     await provider.exportReport('report-fixture-001')
     await provider.updateWorkflow('workflow-fixture-001', { name: 'Updated fixture workflow' }, { expectedVersion: 4 })
     await provider.deleteDraft('draft-fixture-001', { expectedVersion: 2 })
@@ -324,17 +326,18 @@ describe('City 311 frontend contract', () => {
     expect(requests[3]).to.deep.include({ method: 'POST', path: '/api/v1/portal/service-requests/request-fixture-001/reopen' })
     expect(requests[4]).to.deep.include({ method: 'GET', path: '/api/v1/attachments/attachment-fixture-001' })
     expect(requests[5].body).to.be.instanceOf(FormData)
-    expect(requests[6]).to.deep.include({
+    expect(requests[6]).to.deep.include({ method: 'POST', path: '/api/v1/geocode', body: { address: '100 Example Street' } })
+    expect(requests[7]).to.deep.include({
       method: 'POST',
       path: '/api/v1/staff/reports/report-fixture-001/export',
       body: { format: 'CSV' },
     })
-    expect(requests[7]).to.deep.include({
+    expect(requests[8]).to.deep.include({
       method: 'PATCH',
       path: '/api/v1/admin/workflows/workflow-fixture-001',
       headers: { 'If-Match': '"4"' },
     })
-    expect(requests[8]).to.deep.include({
+    expect(requests[9]).to.deep.include({
       method: 'DELETE',
       path: '/api/v1/portal/service-request-drafts/draft-fixture-001',
       headers: { 'If-Match': '"2"' },
@@ -758,6 +761,37 @@ describe('City 311 frontend contract', () => {
     expect(missingVersion.status).to.equal(428)
   })
 
+  it('enforces attachment download errors and the five-file staging limit', async () => {
+    await expectError(() => new MockC311Provider({ scenario: 'not-found' }).downloadAttachment('missing-attachment'), 'NOT_FOUND')
+    await expectError(() => new MockC311Provider({ scenario: 'forbidden' }).downloadAttachment('attachment-fixture-001'), 'FORBIDDEN')
+    await expectError(() => new MockC311Provider({ role: 'public_visitor' }).downloadAttachment('attachment-fixture-001'), 'UNAUTHENTICATED')
+    await expectError(() => new MockC311Provider({ role: 'service_agent' }).downloadAttachment('attachment-fixture-001'), 'FORBIDDEN')
+    const authorized = await new MockC311Provider({ role: 'constituent' }).downloadAttachment('attachment-fixture-001')
+    expect(authorized.body).to.equal('fixture attachment')
+
+    const provider = new MockC311Provider({ role: 'public_visitor' })
+    const uploaded: Array<{ attachment_token: string }> = []
+    for (let index = 0; index < PORTAL_ATTACHMENT_MAX_COUNT; index += 1) {
+      uploaded.push(await provider.uploadPortalAttachment({ file: 'fixture', filename: `fixture-${index}.txt`, media_type: 'text/plain' }))
+    }
+    const tooMany = await expectError(() => provider.uploadPortalAttachment({ file: 'fixture', filename: 'fixture-six.txt', media_type: 'text/plain' }), 'VALIDATION_ERROR')
+    expect(tooMany.status).to.equal(422)
+    expect(provider.getWriteCount('portal_attachment_upload')).to.equal(PORTAL_ATTACHMENT_MAX_COUNT)
+    provider.removePortalAttachment(uploaded[0].attachment_token)
+    const replacement = await provider.uploadPortalAttachment({ file: 'fixture', filename: 'replacement.txt', media_type: 'text/plain' })
+    expect(replacement.filename).to.equal('replacement.txt')
+    expect(provider.getWriteCount('portal_attachment_upload')).to.equal(PORTAL_ATTACHMENT_MAX_COUNT + 1)
+    await provider.submitPortalRequest({
+      summary: 'Consume staged attachments',
+      description: 'This fixture consumes the current staged attachment batch.',
+      service_type: 'GENERAL_INQUIRY',
+      requester: { display_name: 'Fixture Resident', email: 'resident@example.test' },
+      attachment_tokens: [...uploaded.slice(1).map(item => item.attachment_token), replacement.attachment_token],
+    }, { idempotencyKey: 'attachment-batch-submit' })
+    await provider.uploadPortalAttachment({ file: 'fixture', filename: 'next-request.txt', media_type: 'text/plain' })
+    expect(provider.getWriteCount('portal_attachment_upload')).to.equal(PORTAL_ATTACHMENT_MAX_COUNT + 2)
+  })
+
   it('exposes explicit idempotency and retryable attachment scenarios', async () => {
     const conflict = await expectError(() => new MockC311Provider({ scenario: 'idempotency-conflict' }).submitPortalRequest({
       summary: 'Fixture request',
@@ -769,6 +803,49 @@ describe('City 311 frontend contract', () => {
     const retryable = await expectError(() => new MockC311Provider({ scenario: 'retryable' }).uploadPortalAttachment({ file: 'fixture', filename: 'fixture.txt', media_type: 'text/plain' }), 'TEMPORARILY_UNAVAILABLE')
     expect(retryable.status).to.equal(503)
     expect(retryable.retryable).to.equal(true)
+  })
+
+  it('centralizes attachment contract validation and map failure fixtures', async () => {
+    expect(PORTAL_ATTACHMENT_MAX_COUNT).to.equal(5)
+    expect(PORTAL_ATTACHMENT_MAX_BYTES).to.equal(10485760)
+    expect(PORTAL_ATTACHMENT_MEDIA_TYPES).to.have.members(['image/jpeg', 'image/png', 'application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
+    expect(validatePortalAttachment({ filename: 'fixture.txt', media_type: 'text/plain', size: PORTAL_ATTACHMENT_MAX_BYTES })).to.deep.equal([])
+    expect(validatePortalAttachment({ filename: '', media_type: 'text/plain', size: 1 }).map(error => error.code)).to.include('REQUIRED')
+    expect(validatePortalAttachment({ filename: 'x'.repeat(121), media_type: 'application/zip', size: PORTAL_ATTACHMENT_MAX_BYTES + 1 }).map(error => error.code)).to.have.members(['TOO_LONG', 'INVALID_FORMAT', 'OUT_OF_RANGE'])
+
+    const success = await new MockC311Provider().geocode({ address: '100 Example Street, Buffalo, NY 14201' })
+    expect(success.address).to.equal('100 Example Street, Buffalo, NY 14201')
+    expect(success.latitude.toFixed(4)).to.equal('42.9001')
+    const normalized = await new MockC311Provider().geocode({ address: '  100   example street,   buffalo, ny 14201  ' })
+    expect(normalized.address).to.equal(success.address)
+    expect(normalized.latitude).to.equal(success.latitude)
+    expect(normalized.longitude).to.equal(success.longitude)
+    await expectError(() => new MockC311Provider({ scenario: 'not-found' }).geocode({ address: 'missing' }), 'ADDRESS_NOT_FOUND')
+    const unavailable = await expectError(() => new MockC311Provider({ scenario: 'map-retryable' }).geocode({ address: 'fixture' }), 'MAP_TEMPORARILY_UNAVAILABLE')
+    expect(unavailable.status).to.equal(503)
+    const unauthenticated = await expectError(() => new MockC311Provider({ scenario: 'map-auth-failure' }).geocode({ address: 'fixture' }), 'MAP_UNAUTHENTICATED')
+    expect(unauthenticated.status).to.equal(401)
+  })
+
+  it('rejects invalid attachment uploads before creating a staging write', async () => {
+    const provider = new MockC311Provider({ role: 'public_visitor' })
+    const boundary = await provider.uploadPortalAttachment({ file: new Blob([new Uint8Array(PORTAL_ATTACHMENT_MAX_BYTES)]), filename: 'boundary.txt', media_type: 'text/plain' })
+    expect(boundary.size).to.equal(PORTAL_ATTACHMENT_MAX_BYTES)
+    await expectError(() => provider.uploadPortalAttachment({ file: new Blob([new Uint8Array(1)]), filename: 'x'.repeat(121), media_type: 'application/zip' as 'text/plain' }), 'VALIDATION_ERROR')
+    expect(provider.getWriteCount('portal_attachment_upload')).to.equal(1)
+  })
+
+  it('rejects invalid HTTP attachments before transport', async () => {
+    const requests: C311TransportRequest[] = []
+    const provider = new C311HttpProvider({
+      request: async <T> (request: C311TransportRequest): Promise<T> => {
+        requests.push(request)
+        return {} as T
+      },
+    })
+    const error = await expectError(() => provider.uploadPortalAttachment({ file: 'fixture', filename: '', media_type: 'text/plain' }), 'VALIDATION_ERROR')
+    expect(error.status).to.equal(422)
+    expect(requests).to.have.length(0)
   })
 
   it('exposes retryable and terminal portal submission failures', async () => {

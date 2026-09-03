@@ -50,7 +50,7 @@ import type {
   RequestRelationshipAudit,
   WorkflowDefinition,
 } from './types'
-import type { C311Provider, C311RequestOptions, PortalAttachmentUpload, ReportExportOptions, RequestTransition } from './provider'
+import { validatePortalAttachment, type C311Provider, type C311RequestOptions, type PortalAttachmentUpload, type ReportExportOptions, type RequestTransition } from './provider'
 
 export interface MockC311ProviderOptions {
   scenario?: C311Scenario
@@ -83,10 +83,18 @@ const statusByScenario: Partial<Record<C311Scenario, number>> = {
   'identity-claims-failure': 401,
   'account-disposition-conflict': 409,
   'account-disposition-failure': 500,
+  'attachment-retryable': 503,
+  'attachment-terminal': 500,
+  'map-retryable': 503,
+  'map-auth-failure': 401,
 }
 
 function copy<T> (value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function normalizeGeocodeAddress (value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').toLowerCase() : ''
 }
 
 function validMockProfileInput (input: ProfileUpdate): boolean {
@@ -120,6 +128,7 @@ export class MockC311Provider implements C311Provider {
   private readonly uploadedAttachmentTokens = new Set<string>()
   private readonly consumedAttachmentTokens = new Set<string>()
   private attachmentSerial = 0
+  private attachmentRetryFailures = 0
   private readonly writeCounts: Record<string, number> = {}
   private resetTokenSerial = 0
   private activeResetToken: string | null = null
@@ -612,24 +621,46 @@ export class MockC311Provider implements C311Provider {
     }
   }
 
-  async uploadPortalAttachment (_input: PortalAttachmentUpload): Promise<PortalAttachment> {
+  async uploadPortalAttachment (input: PortalAttachmentUpload): Promise<PortalAttachment> {
+    if (this.scenario === 'attachment-retryable' && this.attachmentRetryFailures++ === 0) {
+      throw new C311ApiError({ error: 'TEMPORARILY_UNAVAILABLE', message: 'The attachment service is temporarily unavailable.', retryable: true }, 503, { 'Retry-After': '30' })
+    }
+    if (this.scenario === 'attachment-terminal') this.failScenario('attachment-terminal')
     this.failIfNeeded(['validation', 'retryable', 'terminal'])
+    const size = typeof input.file === 'string' ? input.file.length : Number((input.file as Blob)?.size)
+    const validationErrors = validatePortalAttachment({ filename: input.filename, media_type: input.media_type, size })
+    if (validationErrors.length) {
+      throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'The attachment is not valid.', retryable: false, errors: validationErrors }, 422)
+    }
+    if (this.uploadedAttachmentTokens.size >= 5) {
+      throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'A request can include at most five attachments.', retryable: false, errors: [{ field: 'file', code: 'TOO_MANY_ITEMS' }] }, 422)
+    }
     this.attachmentSerial += 1
     const attachmentToken = `attachment-token-fixture-${String(this.attachmentSerial).padStart(3, '0')}`
     this.uploadedAttachmentTokens.add(attachmentToken)
     this.countWrite('portal_attachment_upload')
     return {
       attachment_token: attachmentToken,
-      filename: _input.filename,
-      media_type: _input.media_type,
-      size: 17,
+      filename: input.filename.split(/[\\/]/).pop() || input.filename,
+      media_type: input.media_type,
+      size,
       expires_at: '2026-01-15T16:00:00.000Z',
     }
   }
 
+  // Mock-only lifecycle helper used by the attachment picker when a staged file is removed.
+  // The real API has no client-side delete operation for an upload token.
+  removePortalAttachment (attachmentToken: string): void {
+    this.uploadedAttachmentTokens.delete(attachmentToken)
+  }
+
   async downloadAttachment (attachmentID: string): Promise<BinaryAttachment> {
+    this.requireCapability('attachment_download')
     this.failIfNeeded(['forbidden', 'not-found', 'validation'])
     const attachment = this.fixtures.attachments[attachmentID]
+    if (!attachment && this.uploadedAttachmentTokens.has(attachmentID)) {
+      return { content_type: 'text/plain', content_disposition: 'inline; filename="fixture.txt"', body: 'fixture attachment' }
+    }
     if (!attachment) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
     return copy(attachment)
   }
@@ -673,7 +704,10 @@ export class MockC311Provider implements C311Provider {
     }
     if (key) this.idempotentResponses.set(key, { fingerprint, response })
     for (const token of input.attachment_tokens || []) {
-      if (this.uploadedAttachmentTokens.has(token)) this.consumedAttachmentTokens.add(token)
+      if (this.uploadedAttachmentTokens.has(token)) {
+        this.consumedAttachmentTokens.add(token)
+        this.uploadedAttachmentTokens.delete(token)
+      }
     }
     return copy(response)
   }
@@ -842,6 +876,12 @@ export class MockC311Provider implements C311Provider {
   }
 
   async geocode (input: GeocodeRequest): Promise<GeocodeResponse> {
+    if (this.scenario === 'map-auth-failure') {
+      throw new C311ApiError({ error: 'MAP_UNAUTHENTICATED', message: 'The mapping service credentials are unavailable.', retryable: false }, 401)
+    }
+    if (this.scenario === 'map-retryable') {
+      throw new C311ApiError({ error: 'MAP_TEMPORARILY_UNAVAILABLE', message: 'The mapping service is temporarily unavailable.', retryable: true }, 503, { 'Retry-After': '30' })
+    }
     if (this.scenario === 'retryable') {
       throw new C311ApiError({ error: 'MAP_TEMPORARILY_UNAVAILABLE', message: 'The mapping service is temporarily unavailable.', retryable: true }, 503, { 'Retry-After': '30' })
     }
@@ -849,7 +889,8 @@ export class MockC311Provider implements C311Provider {
       throw new C311ApiError({ error: 'ADDRESS_NOT_FOUND', message: 'The address could not be found.', retryable: false }, 404)
     }
     this.failIfNeeded(['validation'])
-    const result = this.fixtures.geocodes[input.address]
+    const normalizedAddress = normalizeGeocodeAddress(input.address)
+    const result = Object.entries(this.fixtures.geocodes).find(([address]) => normalizeGeocodeAddress(address) === normalizedAddress)?.[1]
     if (!result) {
       throw new C311ApiError({ error: 'ADDRESS_NOT_FOUND', message: 'The address could not be found.', retryable: false }, 404)
     }

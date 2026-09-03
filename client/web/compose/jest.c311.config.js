@@ -11,6 +11,7 @@ module.exports = {
     '^corteza-webapp-compose/(.*)$': '<rootDir>/client/web/compose/$1',
     '^.+/libs/c311-i18n$': path.resolve(__dirname, '../c311-tests/i18n-test-stub.js'),
     '^axios$': path.resolve(__dirname, '../c311-tests/axios-stub.js'),
+    '^leaflet/dist/leaflet\\.css$': require.resolve('jest-transform-stub'),
   },
   transform: {
     '^.+\\.vue$': require.resolve('@vue/vue2-jest'),

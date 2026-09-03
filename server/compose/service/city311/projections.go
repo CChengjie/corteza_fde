@@ -97,7 +97,7 @@ func requestSnapshot(request *composeTypes.City311ServiceRequest) map[string]any
 
 func responseFor(request *composeTypes.City311ServiceRequest) *contract.ServiceRequestResponse {
 	return &contract.ServiceRequestResponse{
-		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: request.RequestNumber,
+		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: publishedRequestNumber(request),
 		Status: request.Status, Version: uint64(request.Version), CreatedAt: request.CreatedAt,
 		Links: contract.ResourceLinks{Self: "/api/v1/service-requests/" + strconv.FormatUint(request.ID, 10)},
 	}
@@ -121,7 +121,7 @@ func toContract(request *composeTypes.City311ServiceRequest) contract.ServiceReq
 		district = &value
 	}
 	return contract.ServiceRequest{
-		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: request.RequestNumber,
+		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: publishedRequestNumber(request),
 		Summary: request.Summary, Description: request.Description, ServiceType: request.ServiceType,
 		OwningDepartment: request.OwningDepartment, CouncilDistrict: district, SourceChannel: request.SourceChannel,
 		OriginClass: request.OriginClass, Status: request.Status, PrimaryRequester: requester, Location: location,
@@ -155,12 +155,19 @@ func stringifyIDs(values []uint64) []string {
 
 func queueItem(actor contract.Actor, request *composeTypes.City311ServiceRequest) contract.RequestQueueItem {
 	return contract.RequestQueueItem{
-		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: request.RequestNumber, Summary: request.Summary,
+		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: publishedRequestNumber(request), Summary: request.Summary,
 		ServiceType: request.ServiceType, Status: request.Status, OwningDepartment: request.OwningDepartment,
 		CouncilDistrict: request.CouncilDistrict, OriginClass: request.OriginClass, SourceChannel: request.SourceChannel,
 		PrimaryAssigneeID: optionalID(request.PrimaryAssigneeID), DuplicateGroupID: optionalString(request.DuplicateGroupID),
 		Version: uint64(request.Version), UpdatedAt: request.UpdatedAt, AvailableActions: availableActions(actor, request),
 	}
+}
+
+func publishedRequestNumber(request *composeTypes.City311ServiceRequest) string {
+	if request.Status == contract.ServiceRequestStatusDraft {
+		return ""
+	}
+	return request.RequestNumber
 }
 
 func availableActions(actor contract.Actor, request *composeTypes.City311ServiceRequest) []string {

@@ -2,6 +2,19 @@ package city311
 
 import "time"
 
+// PortalDraftWrite is a partial draft update. Missing fields preserve the
+// existing draft value; a draft may be created before any required submission
+// fields are complete.
+type PortalDraftWrite struct {
+	Summary          *string         `json:"summary,omitempty"`
+	Description      *string         `json:"description,omitempty"`
+	ServiceType      *ServiceType    `json:"service_type,omitempty"`
+	Requester        *RequesterInput `json:"requester,omitempty"`
+	Location         *LocationInput  `json:"location,omitempty"`
+	CustomFields     *map[string]any `json:"custom_fields,omitempty"`
+	AttachmentTokens *[]string       `json:"attachment_tokens,omitempty"`
+}
+
 // PortalServiceRequestSubmit is the public-portal submission DTO.
 type PortalServiceRequestSubmit struct {
 	Summary          string         `json:"summary"`

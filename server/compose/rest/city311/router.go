@@ -116,10 +116,13 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
+			r.Post("/service-requests/bulk", h.staffBulk)
 			r.Get(serviceRequestsRoute, h.staffList)
 			r.Get("/service-requests/{request_id}", h.staffDetail)
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
 			r.Post("/service-requests/{request_id}/assignment", h.staffReassign)
+			r.Post("/service-requests/{request_id}/duplicate-group", h.staffDuplicateGroupConfirm)
+			r.Delete("/service-requests/{request_id}/duplicate-group", h.staffDuplicateGroupRemove)
 			r.Put("/service-requests/{request_id}/collaborators/{staff_id}", h.staffCollaboratorAdd)
 			r.Delete("/service-requests/{request_id}/collaborators/{staff_id}", h.staffCollaboratorRemove)
 			r.Post("/service-requests/{request_id}/reminders", h.staffReminderCreate)
@@ -665,6 +668,64 @@ func (h *handler) staffReassign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.service.Reassign(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffDuplicateGroupConfirm(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.DuplicateGroupChange{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ConfirmDuplicateGroup(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffDuplicateGroupRemove(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.Reason{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.RemoveDuplicateGroup(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffBulk(w http.ResponseWriter, r *http.Request) {
+	input := contract.BulkRequest{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.Bulk(r.Context(), actor, input, r.Header.Get(contract.IdempotencyHeader))
 	writeResult(w, http.StatusOK, result, err)
 }
 

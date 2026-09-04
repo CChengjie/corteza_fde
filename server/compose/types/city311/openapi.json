@@ -200,6 +200,57 @@
         ],
         "type": "object"
       },
+      "audit_event_list_response": {
+        "properties": {
+          "applied_filters": {
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/audit_event"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-city311-opaque": true
+          },
+          "sort": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "next_page_token",
+          "total_count",
+          "applied_filters",
+          "sort"
+        ],
+        "type": "object"
+      },
       "audit_export": {
         "properties": {
           "filters": {
@@ -755,6 +806,57 @@
           "relationship_type",
           "portal_visible",
           "notify_status"
+        ],
+        "type": "object"
+      },
+      "constituent_list_response": {
+        "properties": {
+          "applied_filters": {
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/constituent"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-city311-opaque": true
+          },
+          "sort": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "next_page_token",
+          "total_count",
+          "applied_filters",
+          "sort"
         ],
         "type": "object"
       },
@@ -17209,6 +17311,85 @@
             "name": "filters",
             "required": false,
             "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "actor_id": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "actor_type": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_audit_actor_type",
+                    "x-city311-enum-ref": "audit_actor_type"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "entity_id": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "entity_type": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "event_type": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "occurred_from": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "occurred_to": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "request_id": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "source_channel": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_source_channel",
+                    "x-city311-enum-ref": "source_channel"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                }
+              },
               "type": "object"
             }
           },
@@ -17229,6 +17410,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "x-city311-binding": "operation, filters and sort; permission re-evaluated for every request",
               "x-city311-opaque": true
             }
           },
@@ -17237,7 +17419,17 @@
             "name": "sort",
             "required": false,
             "schema": {
+              "default": "-occurred_at",
               "type": "string",
+              "x-city311-allowed-fields": [
+                "occurred_at",
+                "entity_type",
+                "entity_id",
+                "event_type",
+                "actor_type",
+                "actor_id",
+                "source_channel"
+              ],
               "x-city311-maximum-fields": 3
             }
           }
@@ -17251,7 +17443,17 @@
                     "value": {
                       "applied_filters": {},
                       "items": [
-                        {}
+                        {
+                          "actor_id": "xxxxxx",
+                          "actor_type": "constituent",
+                          "after": {},
+                          "before": {},
+                          "entity_id": "xxxxxx",
+                          "entity_type": "xxxxxx",
+                          "event_type": "xxxxxx",
+                          "occurred_at": "2026-08-25T12:00:00Z",
+                          "source_channel": "PORTAL_ANONYMOUS"
+                        }
                       ],
                       "next_page_token": "xxxxxx",
                       "sort": [
@@ -17262,7 +17464,7 @@
                   }
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/list_response"
+                  "$ref": "#/components/schemas/audit_event_list_response"
                 }
               }
             },
@@ -17271,7 +17473,17 @@
               "body": {
                 "applied_filters": {},
                 "items": [
-                  {}
+                  {
+                    "actor_id": "xxxxxx",
+                    "actor_type": "constituent",
+                    "after": {},
+                    "before": {},
+                    "entity_id": "xxxxxx",
+                    "entity_type": "xxxxxx",
+                    "event_type": "xxxxxx",
+                    "occurred_at": "2026-08-25T12:00:00Z",
+                    "source_channel": "PORTAL_ANONYMOUS"
+                  }
                 ],
                 "next_page_token": "xxxxxx",
                 "sort": [
@@ -17966,6 +18178,119 @@
             "name": "filters",
             "required": false,
             "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "constituent_id": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "custom_fields": {
+                  "additionalProperties": {
+                    "items": {
+                      "maxLength": 254,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "type": "object"
+                },
+                "department": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_department_code",
+                    "x-city311-enum-ref": "department_code"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "display_name": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "district": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_district_code",
+                    "x-city311-enum-ref": "district_code"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "email": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "email_opt_out": {
+                  "items": {
+                    "enum": [
+                      "true",
+                      "false"
+                    ]
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "phone": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "preferred_language": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_language",
+                    "x-city311-enum-ref": "language"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "primary_category": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_contact_category",
+                    "x-city311-enum-ref": "contact_category"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "query": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                }
+              },
               "type": "object"
             }
           },
@@ -17986,6 +18311,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "x-city311-binding": "operation, filters and sort; permission re-evaluated for every request",
               "x-city311-opaque": true
             }
           },
@@ -17994,7 +18320,16 @@
             "name": "sort",
             "required": false,
             "schema": {
+              "default": "display_name,constituent_id",
               "type": "string",
+              "x-city311-allowed-fields": [
+                "constituent_id",
+                "display_name",
+                "primary_category",
+                "preferred_language",
+                "department",
+                "district"
+              ],
               "x-city311-maximum-fields": 3
             }
           }
@@ -18008,7 +18343,31 @@
                     "value": {
                       "applied_filters": {},
                       "items": [
-                        {}
+                        {
+                          "addresses": [
+                            {
+                              "city": "xxxxxx",
+                              "country": "xx",
+                              "line1": "xxxxxx",
+                              "postal_code": "xxxxxx",
+                              "region": "xxxxxx"
+                            }
+                          ],
+                          "constituent_id": "xxxxxx",
+                          "display_name": "xxxxxx",
+                          "email_opt_out": false,
+                          "emails": [
+                            "resident@example.test"
+                          ],
+                          "phone_numbers": [
+                            {
+                              "label": "MOBILE",
+                              "value": "xxxxxx"
+                            }
+                          ],
+                          "preferred_language": "EN",
+                          "primary_category": "RESIDENT"
+                        }
                       ],
                       "next_page_token": "xxxxxx",
                       "sort": [
@@ -18019,7 +18378,7 @@
                   }
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/list_response"
+                  "$ref": "#/components/schemas/constituent_list_response"
                 }
               }
             },
@@ -18028,7 +18387,31 @@
               "body": {
                 "applied_filters": {},
                 "items": [
-                  {}
+                  {
+                    "addresses": [
+                      {
+                        "city": "xxxxxx",
+                        "country": "xx",
+                        "line1": "xxxxxx",
+                        "postal_code": "xxxxxx",
+                        "region": "xxxxxx"
+                      }
+                    ],
+                    "constituent_id": "xxxxxx",
+                    "display_name": "xxxxxx",
+                    "email_opt_out": false,
+                    "emails": [
+                      "resident@example.test"
+                    ],
+                    "phone_numbers": [
+                      {
+                        "label": "MOBILE",
+                        "value": "xxxxxx"
+                      }
+                    ],
+                    "preferred_language": "EN",
+                    "primary_category": "RESIDENT"
+                  }
                 ],
                 "next_page_token": "xxxxxx",
                 "sort": [
@@ -18166,8 +18549,7 @@
                 "service_agent",
                 "supervisor",
                 "department_manager",
-                "platform_administrator",
-                "workflow_designer"
+                "platform_administrator"
               ],
               "record_scope_required": true
             }
@@ -18385,8 +18767,7 @@
                 "service_agent",
                 "supervisor",
                 "department_manager",
-                "platform_administrator",
-                "workflow_designer"
+                "platform_administrator"
               ],
               "record_scope_required": true
             }

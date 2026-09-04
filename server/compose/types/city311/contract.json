@@ -1236,7 +1236,7 @@
         ]
       },
       "required_capability": "audit_list",
-      "response_schema": "list_response",
+      "response_schema": "audit_event_list_response",
       "entity_response_schemas": {
         "items": "audit_event"
       },
@@ -1251,6 +1251,83 @@
       },
       "query_parameters": {
         "filters": {
+          "additional_properties": false,
+          "properties": {
+            "actor_id": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "actor_type": {
+              "items": {
+                "enum_ref": "audit_actor_type"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "entity_id": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "entity_type": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "event_type": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "occurred_from": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "occurred_to": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "request_id": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "source_channel": {
+              "items": {
+                "enum_ref": "source_channel"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            }
+          },
           "type": "object"
         },
         "page_size": {
@@ -1260,10 +1337,21 @@
           "type": "integer"
         },
         "page_token": {
+          "binding": "operation, filters and sort; permission re-evaluated for every request",
           "opaque": true,
           "type": "string"
         },
         "sort": {
+          "allowed_fields": [
+            "occurred_at",
+            "entity_type",
+            "entity_id",
+            "event_type",
+            "actor_type",
+            "actor_id",
+            "source_channel"
+          ],
+          "default": "-occurred_at",
           "maximum_fields": 3,
           "type": "string"
         }
@@ -2862,8 +2950,7 @@
               "service_agent",
               "supervisor",
               "department_manager",
-              "platform_administrator",
-              "workflow_designer"
+              "platform_administrator"
             ],
             "record_scope_required": true
           }
@@ -2937,15 +3024,14 @@
               "service_agent",
               "supervisor",
               "department_manager",
-              "platform_administrator",
-              "workflow_designer"
+              "platform_administrator"
             ],
             "record_scope_required": true
           }
         ]
       },
       "required_capability": "staff_constituent_search",
-      "response_schema": "list_response",
+      "response_schema": "constituent_list_response",
       "entity_response_schemas": {
         "items": "constituent"
       },
@@ -2960,6 +3046,115 @@
       },
       "query_parameters": {
         "filters": {
+          "additional_properties": false,
+          "properties": {
+            "constituent_id": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "custom_fields": {
+              "additional_properties": {
+                "items": {
+                  "max_length": 254,
+                  "min_length": 1,
+                  "type": "string"
+                },
+                "min_items": 1,
+                "type": "array",
+                "unique_items": true
+              },
+              "type": "object"
+            },
+            "department": {
+              "items": {
+                "enum_ref": "department_code"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "display_name": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "district": {
+              "items": {
+                "enum_ref": "district_code"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "email": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "email_opt_out": {
+              "items": {
+                "enum": [
+                  "true",
+                  "false"
+                ]
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "phone": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "preferred_language": {
+              "items": {
+                "enum_ref": "language"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "primary_category": {
+              "items": {
+                "enum_ref": "contact_category"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "query": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            }
+          },
           "type": "object"
         },
         "page_size": {
@@ -2969,10 +3164,20 @@
           "type": "integer"
         },
         "page_token": {
+          "binding": "operation, filters and sort; permission re-evaluated for every request",
           "opaque": true,
           "type": "string"
         },
         "sort": {
+          "allowed_fields": [
+            "constituent_id",
+            "display_name",
+            "primary_category",
+            "preferred_language",
+            "department",
+            "district"
+          ],
+          "default": "display_name,constituent_id",
           "maximum_fields": 3,
           "type": "string"
         }
@@ -4619,6 +4824,53 @@
       ],
       "type": "object"
     },
+    "audit_event_list_response": {
+      "properties": {
+        "applied_filters": {
+          "additional_properties": {
+            "one_of": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        "items": {
+          "items_ref": "audit_event",
+          "type": "array"
+        },
+        "next_page_token": {
+          "nullable": true,
+          "opaque": true,
+          "type": "string"
+        },
+        "sort": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "total_count": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "next_page_token",
+        "total_count",
+        "applied_filters",
+        "sort"
+      ],
+      "type": "object"
+    },
     "audit_export": {
       "properties": {
         "filters": {
@@ -5154,6 +5406,53 @@
         "relationship_type",
         "portal_visible",
         "notify_status"
+      ],
+      "type": "object"
+    },
+    "constituent_list_response": {
+      "properties": {
+        "applied_filters": {
+          "additional_properties": {
+            "one_of": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        "items": {
+          "items_ref": "constituent",
+          "type": "array"
+        },
+        "next_page_token": {
+          "nullable": true,
+          "opaque": true,
+          "type": "string"
+        },
+        "sort": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "total_count": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "next_page_token",
+        "total_count",
+        "applied_filters",
+        "sort"
       ],
       "type": "object"
     },

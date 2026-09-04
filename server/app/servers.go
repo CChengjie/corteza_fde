@@ -75,6 +75,7 @@ func (app *CortezaApp) mountHttpRoutes(r chi.Router) {
 
 	// Auth server
 	app.AuthService.MountHttpRoutes(ho.BaseUrl, r)
+	r.Route("/integrations", city311Rest.MountCivicWorksRoutes())
 
 	func() {
 		if !ho.ApiEnabled {
@@ -197,6 +198,17 @@ func (app *CortezaApp) healthz(w http.ResponseWriter, request *http.Request) {
 		_ = json.NewEncoder(w).Encode(city311Contract.APIError{
 			Error:   city311Contract.ErrorTemporarilyUnavailable,
 			Message: "A required City 311 mapping configuration is unavailable.", Retryable: true,
+		})
+		return
+	}
+	if err := city311Service.ValidateCivicWorksEnvironment(); err != nil {
+		if app.Log != nil {
+			app.Log.Error("City 311 CivicWorks configuration is unavailable", zap.Error(err))
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(city311Contract.APIError{
+			Error:   city311Contract.ErrorTemporarilyUnavailable,
+			Message: "A required City 311 CivicWorks configuration is unavailable.", Retryable: true,
 		})
 		return
 	}

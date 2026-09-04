@@ -1728,6 +1728,14 @@ var City311ServiceRequest = &dal.Model{
 		},
 
 		&dal.Attribute{
+			Ident: "ExternalWorkOrder",
+			Type: &dal.TypeJSON{
+				DefaultValue: "{}",
+			},
+			Store: &dal.CodecAlias{Ident: "external_work_order"},
+		},
+
+		&dal.Attribute{
 			Ident: "PrimaryAssigneeID", Sortable: true,
 			Type: &dal.TypeID{HasDefault: true,
 				DefaultValue: 0,

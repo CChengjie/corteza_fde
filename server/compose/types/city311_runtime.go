@@ -41,6 +41,8 @@ type (
 		PrimaryAssigneeID uint64                            `json:"primaryAssigneeID,string,omitempty"`
 		CollaboratorIDs   City311Uint64Set                  `json:"collaboratorIDs"`
 		DuplicateGroupID  string                            `json:"duplicateGroupID,omitempty"`
+		ScopeDepartment   *city311Types.DepartmentCode      `json:"-"`
+		ScopeDistricts    City311DistrictCodeSet            `json:"-"`
 		Version           int                               `json:"version"`
 		CreatedAt         time.Time                         `json:"createdAt"`
 		UpdatedAt         time.Time                         `json:"updatedAt"`

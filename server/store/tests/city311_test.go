@@ -321,17 +321,22 @@ func testCity311RequestSequences(t *testing.T, s store.City311RequestSequences) 
 func testCity311ServiceRequests(t *testing.T, s store.City311ServiceRequests) {
 	ctx := context.Background()
 	require.NoError(t, s.TruncateCity311ServiceRequests(ctx))
+	scopeDepartment := contract.DepartmentSanitation
 	request := &composeTypes.City311ServiceRequest{
 		ID: 301, RequestNumber: "SR-2026-00041", Summary: "Pothole on Example Street", Description: "A deep pothole blocks one traffic lane.",
 		ServiceType: contract.ServiceTypePothole, OwningDepartment: contract.DepartmentStreets, CouncilDistrict: contract.DistrictNorth,
 		SourceChannel: contract.SourceChannelAPI, OriginClass: contract.OriginClassExternal, Status: contract.ServiceRequestStatusSubmitted,
 		PrimaryRequester: composeTypes.City311JSON{"constituent_id": "C-301"}, Location: composeTypes.City311JSON{"address": "100 Example Street"},
-		CustomFields: composeTypes.City311JSON{}, CollaboratorIDs: composeTypes.City311Uint64Set{}, Version: 1, CreatedAt: *now(), UpdatedAt: *now(),
+		CustomFields: composeTypes.City311JSON{}, CollaboratorIDs: composeTypes.City311Uint64Set{},
+		ScopeDepartment: &scopeDepartment, ScopeDistricts: composeTypes.City311DistrictCodeSet{contract.DistrictSouth},
+		Version: 1, CreatedAt: *now(), UpdatedAt: *now(),
 	}
 	require.NoError(t, s.CreateCity311ServiceRequest(ctx, request))
 	fetched, err := s.LookupCity311ServiceRequestByRequestNumber(ctx, request.RequestNumber)
 	require.NoError(t, err)
 	require.Equal(t, "C-301", fetched.PrimaryRequester["constituent_id"])
+	require.Equal(t, contract.DepartmentSanitation, *fetched.ScopeDepartment)
+	require.Equal(t, composeTypes.City311DistrictCodeSet{contract.DistrictSouth}, fetched.ScopeDistricts)
 	set, _, err := s.SearchCity311ServiceRequests(ctx, composeTypes.City311ServiceRequestFilter{Status: string(contract.ServiceRequestStatusSubmitted)})
 	require.NoError(t, err)
 	require.Len(t, set, 1)

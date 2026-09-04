@@ -1624,6 +1624,18 @@ var City311ServiceRequest = &dal.Model{
 		},
 
 		&dal.Attribute{
+			Ident: "ScopeDepartment",
+			Type:  &dal.TypeText{Nullable: true, Length: 64},
+			Store: &dal.CodecAlias{Ident: "scope_department"},
+		},
+
+		&dal.Attribute{
+			Ident: "ScopeDistricts",
+			Type:  &dal.TypeJSON{Nullable: true},
+			Store: &dal.CodecAlias{Ident: "scope_districts"},
+		},
+
+		&dal.Attribute{
 			Ident: "Version", Sortable: true,
 			Type: &dal.TypeNumber{HasDefault: true,
 				DefaultValue: 1,

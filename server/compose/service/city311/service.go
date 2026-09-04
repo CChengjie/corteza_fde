@@ -1121,18 +1121,34 @@ func canRead(actor contract.Actor, request *composeTypes.City311ServiceRequest) 
 	if hasRole(actor, contract.ApplicationRolePlatformAdministrator) {
 		return true
 	}
-	if !canOperateRequest(actor) || actor.Department != request.OwningDepartment {
+	if !canOperateRequest(actor) {
 		return false
 	}
-	if hasRole(actor, contract.ApplicationRoleDepartmentManager) || request.CouncilDistrict == "" {
+	if actor.Department == request.OwningDepartment && canReadDistrict(actor, districtSet(request.CouncilDistrict)) {
 		return true
 	}
-	for _, district := range actor.Districts {
-		if district == request.CouncilDistrict {
-			return true
+	return request.ScopeDepartment != nil && actor.Department == *request.ScopeDepartment && canReadDistrict(actor, request.ScopeDistricts)
+}
+
+func canReadDistrict(actor contract.Actor, districts []contract.DistrictCode) bool {
+	if hasRole(actor, contract.ApplicationRoleDepartmentManager) || len(districts) == 0 {
+		return true
+	}
+	for _, allowed := range districts {
+		for _, district := range actor.Districts {
+			if district == allowed {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func districtSet(district contract.DistrictCode) []contract.DistrictCode {
+	if district == "" {
+		return nil
+	}
+	return []contract.DistrictCode{district}
 }
 
 func canReadConstituent(actor contract.Actor, constituent *composeTypes.City311Constituent) bool {

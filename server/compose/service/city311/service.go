@@ -48,6 +48,7 @@ type (
 		mailMu           sync.Mutex
 		workflowMu       sync.Mutex
 		presentationMu   sync.Mutex
+		reportMu         sync.Mutex
 		mailSender       MailSender
 		mailWait         func(context.Context, time.Duration) error
 		dataExportLimits map[uint64]dataExportLimit

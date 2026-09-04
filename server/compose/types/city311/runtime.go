@@ -554,6 +554,14 @@ type ListResponse struct {
 	Sort           []string           `json:"sort"`
 }
 
+type ConstituentList struct {
+	Items          []Constituent  `json:"items"`
+	NextPageToken  *string        `json:"next_page_token"`
+	TotalCount     int            `json:"total_count"`
+	AppliedFilters map[string]any `json:"applied_filters"`
+	Sort           []string       `json:"sort"`
+}
+
 type AccountRegistration struct {
 	DisplayName       string   `json:"display_name"`
 	Email             string   `json:"email"`

@@ -175,6 +175,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.With(requireConstituentSession).Post("/portal/service-requests/{request_id}/reopen", h.portalReopenRequest)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
+			r.Get("/constituents", h.staffConstituentSearch)
+			r.Get("/constituents/{constituent_id}", h.staffConstituentDetail)
 			r.Get("/audit-events", h.staffAuditList)
 			r.Post("/audit-events/export", h.staffAuditExport)
 			r.Post("/contact-email-export", h.contactEmailExport)

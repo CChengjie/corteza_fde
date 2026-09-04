@@ -204,6 +204,10 @@ func Initialize(ctx context.Context, log *zap.Logger, s store.Storer, c Config) 
 	city311Service.Default.StartAttachmentCleanup(ctx, func(err error) {
 		DefaultLogger.Error("could not clean up expired City 311 uploads", zap.Error(err))
 	})
+	city311Service.Default.SetReminderWorkerErrorHandler(func(err error) {
+		DefaultLogger.Error("City 311 reminder delivery worker failed", zap.Error(err))
+	})
+	city311Service.Default.StartReminderWorker(ctx)
 	if configErr := city311Service.DefaultIdentity.ConfigurationError(); configErr != nil {
 		DefaultLogger.Error("City 311 identity configuration is unavailable", zap.Error(configErr))
 	} else {

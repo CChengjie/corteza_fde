@@ -20,7 +20,10 @@ component: schema.#component & {
 		"city311-password-reset-token":  passwordResetToken
 		"city311-public-history-item":   publicHistoryItem
 		"city311-request-attachment":    requestAttachment
+		"city311-request-constituent":   requestConstituentLink
+		"city311-request-note":          requestNote
 		"city311-request-sequence":      requestSequence
+		"city311-reopen-request":        reopenRequest
 		"city311-service-request":       serviceRequest
 		"module":                        module
 		"module-field":                  moduleField

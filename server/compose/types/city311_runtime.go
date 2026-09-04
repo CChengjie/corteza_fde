@@ -17,6 +17,7 @@ type (
 	OriginClass          = city311Types.OriginClass
 	ServiceRequestStatus = city311Types.ServiceRequestStatus
 	AuditActorType       = city311Types.AuditActorType
+	RelationshipType     = city311Types.RelationshipType
 
 	City311Uint64Set          []uint64
 	City311ApplicationRoleSet []city311Types.ApplicationRole
@@ -151,6 +152,64 @@ type (
 		filter.Paging
 	}
 	City311RequestAttachmentSet []*City311RequestAttachment
+
+	City311RequestConstituent struct {
+		ID               uint64                        `json:"id,string"`
+		RequestID        uint64                        `json:"requestID,string"`
+		ConstituentID    string                        `json:"constituentID"`
+		RelationshipType city311Types.RelationshipType `json:"relationshipType"`
+		PortalVisible    bool                          `json:"portalVisible"`
+		NotifyStatus     bool                          `json:"notifyStatus"`
+		CreatedAt        time.Time                     `json:"createdAt"`
+		UpdatedAt        time.Time                     `json:"updatedAt"`
+	}
+	City311RequestConstituentFilter struct {
+		RequestID        uint64
+		ConstituentID    string
+		RelationshipType string
+		Check            func(*City311RequestConstituent) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311RequestConstituentSet []*City311RequestConstituent
+
+	City311RequestNote struct {
+		ID                  uint64                      `json:"id,string"`
+		RequestID           uint64                      `json:"requestID,string"`
+		AuthorType          city311Types.AuditActorType `json:"authorType"`
+		AuthorID            uint64                      `json:"authorID,string"`
+		AuthorConstituentID string                      `json:"authorConstituentID,omitempty"`
+		Body                string                      `json:"body"`
+		PortalVisible       bool                        `json:"portalVisible"`
+		CreatedAt           time.Time                   `json:"createdAt"`
+	}
+	City311RequestNoteFilter struct {
+		RequestID uint64
+		Check     func(*City311RequestNote) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311RequestNoteSet []*City311RequestNote
+
+	City311ReopenRequest struct {
+		ID             uint64     `json:"id,string"`
+		RequestID      uint64     `json:"requestID,string"`
+		RequestedBy    string     `json:"requestedBy"`
+		RequestReason  string     `json:"requestReason"`
+		Status         string     `json:"status"`
+		RequestedAt    time.Time  `json:"requestedAt"`
+		ApprovedBy     uint64     `json:"approvedBy,string,omitempty"`
+		ApprovalReason string     `json:"approvalReason,omitempty"`
+		ApprovedAt     *time.Time `json:"approvedAt,omitempty"`
+	}
+	City311ReopenRequestFilter struct {
+		RequestID uint64
+		Status    string
+		Check     func(*City311ReopenRequest) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311ReopenRequestSet []*City311ReopenRequest
 
 	City311PublicHistoryItem struct {
 		ID                    uint64                      `json:"id,string"`

@@ -45,6 +45,65 @@ type RequestTransition struct {
 	Reason   string               `json:"reason,omitempty"`
 }
 
+type AnonymousRequestLink struct {
+	RequestNumber string `json:"request_number"`
+	Email         string `json:"email"`
+}
+
+type ConstituentLink struct {
+	ConstituentID    string           `json:"constituent_id"`
+	RelationshipType RelationshipType `json:"relationship_type"`
+	PortalVisible    bool             `json:"portal_visible"`
+	NotifyStatus     bool             `json:"notify_status"`
+}
+
+type ConstituentUnlink struct {
+	Reason *string `json:"reason"`
+}
+
+type RequestNoteWrite struct {
+	Body          string `json:"body"`
+	PortalVisible *bool  `json:"portal_visible"`
+}
+
+type RequestNote struct {
+	NoteID              string         `json:"note_id"`
+	RequestID           string         `json:"request_id"`
+	AuthorType          AuditActorType `json:"author_type"`
+	AuthorID            string         `json:"author_id"`
+	AuthorConstituentID string         `json:"author_constituent_id,omitempty"`
+	Body                string         `json:"body"`
+	PortalVisible       bool           `json:"portal_visible"`
+	CreatedAt           time.Time      `json:"created_at"`
+}
+
+type ReopenRequest struct {
+	RequestID string `json:"request_id"`
+	Status    string `json:"status"`
+}
+
+type ReopenApproval struct {
+	Reason string `json:"reason"`
+}
+
+type PortalRequestSummary struct {
+	RequestID        string               `json:"request_id"`
+	RequestNumber    string               `json:"request_number"`
+	Summary          string               `json:"summary"`
+	ServiceType      ServiceType          `json:"service_type"`
+	Status           ServiceRequestStatus `json:"status"`
+	OwningDepartment DepartmentCode       `json:"owning_department"`
+	UpdatedAt        time.Time            `json:"updated_at"`
+}
+
+type PortalRequestList struct {
+	Items          []PortalRequestSummary `json:"items"`
+	NextPageToken  *string                `json:"next_page_token"`
+	TotalCount     int                    `json:"total_count"`
+	AppliedFilters map[string]any         `json:"applied_filters"`
+	Sort           []string               `json:"sort"`
+}
+
 type AuditEvent struct {
 	EntityType    string         `json:"entity_type"`
 	EntityID      string         `json:"entity_id"`
@@ -59,6 +118,8 @@ type AuditEvent struct {
 
 type StaffServiceRequestDetail struct {
 	Request           ServiceRequest      `json:"request"`
+	ConstituentLinks  []ConstituentLink   `json:"constituent_links,omitempty"`
+	Notes             []RequestNote       `json:"notes,omitempty"`
 	AvailableActions  []string            `json:"available_actions"`
 	PrimaryAssigneeID *string             `json:"primary_assignee_id"`
 	CollaboratorIDs   []string            `json:"collaborator_ids"`

@@ -318,6 +318,19 @@ type (
 		OccurredAt            time.Time                  `db:"occurred_at"`
 	}
 
+	// auxCity311ReopenRequest is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311ReopenRequest struct {
+		ID             uint64     `db:"id"`
+		RequestID      uint64     `db:"request_id"`
+		RequestedBy    string     `db:"requested_by"`
+		RequestReason  string     `db:"request_reason"`
+		Status         string     `db:"status"`
+		RequestedAt    time.Time  `db:"requested_at"`
+		ApprovedBy     uint64     `db:"approved_by"`
+		ApprovalReason string     `db:"approval_reason"`
+		ApprovedAt     *time.Time `db:"approved_at"`
+	}
+
 	// auxCity311RequestAttachment is an auxiliary structure used for transporting to/from RDBMS store
 	auxCity311RequestAttachment struct {
 		ID        uint64    `db:"id"`
@@ -327,6 +340,30 @@ type (
 		Size      uint64    `db:"size"`
 		Content   []byte    `db:"content"`
 		CreatedAt time.Time `db:"created_at"`
+	}
+
+	// auxCity311RequestConstituentLink is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311RequestConstituentLink struct {
+		ID               uint64                       `db:"id"`
+		RequestID        uint64                       `db:"request_id"`
+		ConstituentID    string                       `db:"constituent_id"`
+		RelationshipType composeType.RelationshipType `db:"relationship_type"`
+		PortalVisible    bool                         `db:"portal_visible"`
+		NotifyStatus     bool                         `db:"notify_status"`
+		CreatedAt        time.Time                    `db:"created_at"`
+		UpdatedAt        time.Time                    `db:"updated_at"`
+	}
+
+	// auxCity311RequestNote is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311RequestNote struct {
+		ID                  uint64                     `db:"id"`
+		RequestID           uint64                     `db:"request_id"`
+		AuthorType          composeType.AuditActorType `db:"author_type"`
+		AuthorID            uint64                     `db:"author_id"`
+		AuthorConstituentID string                     `db:"author_constituent_id"`
+		Body                string                     `db:"body"`
+		PortalVisible       bool                       `db:"portal_visible"`
+		CreatedAt           time.Time                  `db:"created_at"`
 	}
 
 	// auxCity311RequestSequence is an auxiliary structure used for transporting to/from RDBMS store
@@ -1945,6 +1982,56 @@ func (aux *auxCity311PublicHistoryItem) scan(row scanner) error {
 	)
 }
 
+// encodes City311ReopenRequest to auxCity311ReopenRequest
+//
+// This function is auto-generated
+func (aux *auxCity311ReopenRequest) encode(res *composeType.City311ReopenRequest) (_ error) {
+	aux.ID = res.ID
+	aux.RequestID = res.RequestID
+	aux.RequestedBy = res.RequestedBy
+	aux.RequestReason = res.RequestReason
+	aux.Status = res.Status
+	aux.RequestedAt = res.RequestedAt
+	aux.ApprovedBy = res.ApprovedBy
+	aux.ApprovalReason = res.ApprovalReason
+	aux.ApprovedAt = res.ApprovedAt
+	return
+}
+
+// decodes City311ReopenRequest from auxCity311ReopenRequest
+//
+// This function is auto-generated
+func (aux auxCity311ReopenRequest) decode() (res *composeType.City311ReopenRequest, _ error) {
+	res = new(composeType.City311ReopenRequest)
+	res.ID = aux.ID
+	res.RequestID = aux.RequestID
+	res.RequestedBy = aux.RequestedBy
+	res.RequestReason = aux.RequestReason
+	res.Status = aux.Status
+	res.RequestedAt = aux.RequestedAt
+	res.ApprovedBy = aux.ApprovedBy
+	res.ApprovalReason = aux.ApprovalReason
+	res.ApprovedAt = aux.ApprovedAt
+	return
+}
+
+// scans row and fills auxCity311ReopenRequest fields
+//
+// This function is auto-generated
+func (aux *auxCity311ReopenRequest) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.RequestID,
+		&aux.RequestedBy,
+		&aux.RequestReason,
+		&aux.Status,
+		&aux.RequestedAt,
+		&aux.ApprovedBy,
+		&aux.ApprovalReason,
+		&aux.ApprovedAt,
+	)
+}
+
 // encodes City311RequestAttachment to auxCity311RequestAttachment
 //
 // This function is auto-generated
@@ -1985,6 +2072,100 @@ func (aux *auxCity311RequestAttachment) scan(row scanner) error {
 		&aux.MediaType,
 		&aux.Size,
 		&aux.Content,
+		&aux.CreatedAt,
+	)
+}
+
+// encodes City311RequestConstituentLink to auxCity311RequestConstituentLink
+//
+// This function is auto-generated
+func (aux *auxCity311RequestConstituentLink) encode(res *composeType.City311RequestConstituent) (_ error) {
+	aux.ID = res.ID
+	aux.RequestID = res.RequestID
+	aux.ConstituentID = res.ConstituentID
+	aux.RelationshipType = res.RelationshipType
+	aux.PortalVisible = res.PortalVisible
+	aux.NotifyStatus = res.NotifyStatus
+	aux.CreatedAt = res.CreatedAt
+	aux.UpdatedAt = res.UpdatedAt
+	return
+}
+
+// decodes City311RequestConstituentLink from auxCity311RequestConstituentLink
+//
+// This function is auto-generated
+func (aux auxCity311RequestConstituentLink) decode() (res *composeType.City311RequestConstituent, _ error) {
+	res = new(composeType.City311RequestConstituent)
+	res.ID = aux.ID
+	res.RequestID = aux.RequestID
+	res.ConstituentID = aux.ConstituentID
+	res.RelationshipType = aux.RelationshipType
+	res.PortalVisible = aux.PortalVisible
+	res.NotifyStatus = aux.NotifyStatus
+	res.CreatedAt = aux.CreatedAt
+	res.UpdatedAt = aux.UpdatedAt
+	return
+}
+
+// scans row and fills auxCity311RequestConstituentLink fields
+//
+// This function is auto-generated
+func (aux *auxCity311RequestConstituentLink) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.RequestID,
+		&aux.ConstituentID,
+		&aux.RelationshipType,
+		&aux.PortalVisible,
+		&aux.NotifyStatus,
+		&aux.CreatedAt,
+		&aux.UpdatedAt,
+	)
+}
+
+// encodes City311RequestNote to auxCity311RequestNote
+//
+// This function is auto-generated
+func (aux *auxCity311RequestNote) encode(res *composeType.City311RequestNote) (_ error) {
+	aux.ID = res.ID
+	aux.RequestID = res.RequestID
+	aux.AuthorType = res.AuthorType
+	aux.AuthorID = res.AuthorID
+	aux.AuthorConstituentID = res.AuthorConstituentID
+	aux.Body = res.Body
+	aux.PortalVisible = res.PortalVisible
+	aux.CreatedAt = res.CreatedAt
+	return
+}
+
+// decodes City311RequestNote from auxCity311RequestNote
+//
+// This function is auto-generated
+func (aux auxCity311RequestNote) decode() (res *composeType.City311RequestNote, _ error) {
+	res = new(composeType.City311RequestNote)
+	res.ID = aux.ID
+	res.RequestID = aux.RequestID
+	res.AuthorType = aux.AuthorType
+	res.AuthorID = aux.AuthorID
+	res.AuthorConstituentID = aux.AuthorConstituentID
+	res.Body = aux.Body
+	res.PortalVisible = aux.PortalVisible
+	res.CreatedAt = aux.CreatedAt
+	return
+}
+
+// scans row and fills auxCity311RequestNote fields
+//
+// This function is auto-generated
+func (aux *auxCity311RequestNote) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.RequestID,
+		&aux.AuthorType,
+		&aux.AuthorID,
+		&aux.AuthorConstituentID,
+		&aux.Body,
+		&aux.PortalVisible,
 		&aux.CreatedAt,
 	)
 }

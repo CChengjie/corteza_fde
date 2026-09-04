@@ -93,8 +93,17 @@ type (
 		// optional city311PublicHistoryItem filter function called after the generated function
 		City311PublicHistoryItem func(*Store, composeType.City311PublicHistoryItemFilter) ([]goqu.Expression, composeType.City311PublicHistoryItemFilter, error)
 
+		// optional city311ReopenRequest filter function called after the generated function
+		City311ReopenRequest func(*Store, composeType.City311ReopenRequestFilter) ([]goqu.Expression, composeType.City311ReopenRequestFilter, error)
+
 		// optional city311RequestAttachment filter function called after the generated function
 		City311RequestAttachment func(*Store, composeType.City311RequestAttachmentFilter) ([]goqu.Expression, composeType.City311RequestAttachmentFilter, error)
+
+		// optional city311RequestConstituentLink filter function called after the generated function
+		City311RequestConstituentLink func(*Store, composeType.City311RequestConstituentFilter) ([]goqu.Expression, composeType.City311RequestConstituentFilter, error)
+
+		// optional city311RequestNote filter function called after the generated function
+		City311RequestNote func(*Store, composeType.City311RequestNoteFilter) ([]goqu.Expression, composeType.City311RequestNoteFilter, error)
 
 		// optional city311RequestSequence filter function called after the generated function
 		City311RequestSequence func(*Store, composeType.City311RequestSequenceFilter) ([]goqu.Expression, composeType.City311RequestSequenceFilter, error)
@@ -713,6 +722,26 @@ func City311PublicHistoryItemFilter(d drivers.Dialect, f composeType.City311Publ
 	return ee, f, err
 }
 
+// City311ReopenRequestFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311ReopenRequests() and can be extended
+// by setting Store.Filters.City311ReopenRequest. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311ReopenRequestFilter(d drivers.Dialect, f composeType.City311ReopenRequestFilter) (ee []goqu.Expression, _ composeType.City311ReopenRequestFilter, err error) {
+
+	if f.RequestID > 0 {
+		ee = append(ee, goqu.C("request_id").Eq(f.RequestID))
+	}
+
+	if val := strings.TrimSpace(f.Status); len(val) > 0 {
+		ee = append(ee, goqu.C("status").Eq(f.Status))
+	}
+
+	return ee, f, err
+}
+
 // City311RequestAttachmentFilter returns logical expressions
 //
 // This function is called from Store.QueryCity311RequestAttachments() and can be extended
@@ -721,6 +750,46 @@ func City311PublicHistoryItemFilter(d drivers.Dialect, f composeType.City311Publ
 //
 // This function is auto-generated
 func City311RequestAttachmentFilter(d drivers.Dialect, f composeType.City311RequestAttachmentFilter) (ee []goqu.Expression, _ composeType.City311RequestAttachmentFilter, err error) {
+
+	if f.RequestID > 0 {
+		ee = append(ee, goqu.C("request_id").Eq(f.RequestID))
+	}
+
+	return ee, f, err
+}
+
+// City311RequestConstituentLinkFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311RequestConstituentLinks() and can be extended
+// by setting Store.Filters.City311RequestConstituentLink. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311RequestConstituentLinkFilter(d drivers.Dialect, f composeType.City311RequestConstituentFilter) (ee []goqu.Expression, _ composeType.City311RequestConstituentFilter, err error) {
+
+	if f.RequestID > 0 {
+		ee = append(ee, goqu.C("request_id").Eq(f.RequestID))
+	}
+
+	if val := strings.TrimSpace(f.ConstituentID); len(val) > 0 {
+		ee = append(ee, goqu.C("constituent_id").Eq(f.ConstituentID))
+	}
+
+	if val := strings.TrimSpace(f.RelationshipType); len(val) > 0 {
+		ee = append(ee, goqu.C("relationship_type").Eq(f.RelationshipType))
+	}
+
+	return ee, f, err
+}
+
+// City311RequestNoteFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311RequestNotes() and can be extended
+// by setting Store.Filters.City311RequestNote. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311RequestNoteFilter(d drivers.Dialect, f composeType.City311RequestNoteFilter) (ee []goqu.Expression, _ composeType.City311RequestNoteFilter, err error) {
 
 	if f.RequestID > 0 {
 		ee = append(ee, goqu.C("request_id").Eq(f.RequestID))

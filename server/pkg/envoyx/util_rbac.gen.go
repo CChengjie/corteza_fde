@@ -545,6 +545,19 @@ func SplitResourceIdentifier(ref string) (out map[string]Ref) {
 			Scope:        scope,
 		}
 
+	case "corteza::compose:city311-request-constituent":
+		scope := Scope{}
+
+		if gRef(pp, 0) == "" {
+			return
+		}
+
+		out["Path.0"] = Ref{
+			ResourceType: "corteza::compose:city311-request-constituent",
+			Identifiers:  MakeIdentifiers(gRef(pp, 0)),
+			Scope:        scope,
+		}
+
 	case "corteza::compose:city311-request-sequence":
 		scope := Scope{}
 
@@ -567,6 +580,19 @@ func SplitResourceIdentifier(ref string) (out map[string]Ref) {
 
 		out["Path.0"] = Ref{
 			ResourceType: "corteza::compose:city311-service-request",
+			Identifiers:  MakeIdentifiers(gRef(pp, 0)),
+			Scope:        scope,
+		}
+
+	case "corteza::compose:city311-staged-attachment":
+		scope := Scope{}
+
+		if gRef(pp, 0) == "" {
+			return
+		}
+
+		out["Path.0"] = Ref{
+			ResourceType: "corteza::compose:city311-staged-attachment",
 			Identifiers:  MakeIdentifiers(gRef(pp, 0)),
 			Scope:        scope,
 		}

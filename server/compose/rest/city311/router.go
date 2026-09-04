@@ -100,12 +100,14 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Post("/portal/service-requests", h.portalSubmit)
 		r.With(requireConstituentSession).Get("/portal/service-requests", h.portalMyRequests)
 		r.With(requireConstituentSession).Post("/portal/service-requests/link", h.portalLinkAnonymousRequest)
+		r.With(requireConstituentSession).Post("/portal/service-requests/{request_id}/notes", h.portalNoteCreate)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
 			r.Get(serviceRequestsRoute, h.staffList)
 			r.Get("/service-requests/{request_id}", h.staffDetail)
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
+			r.Post("/service-requests/{request_id}/notes", h.staffNoteCreate)
 			r.Post("/service-requests/{request_id}/constituents", h.staffConstituentLink)
 			r.Delete("/service-requests/{request_id}/constituents/{constituent_id}", h.staffConstituentUnlink)
 		})
@@ -339,6 +341,20 @@ func (h *handler) portalLinkAnonymousRequest(w http.ResponseWriter, r *http.Requ
 	resolved := identitySessionFromContext(r.Context())
 	result, err := h.service.LinkAnonymousRequest(r.Context(), resolved.User.ID, input)
 	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) portalNoteCreate(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	input := contract.RequestNoteWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	resolved := identitySessionFromContext(r.Context())
+	result, err := h.service.CreatePortalNote(r.Context(), resolved.User.ID, requestID, input)
+	writeResult(w, http.StatusCreated, result, err)
 }
 
 func (h *handler) staffSubmit(w http.ResponseWriter, r *http.Request) {
@@ -602,6 +618,24 @@ func (h *handler) staffTransition(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.Transition(r.Context(), actor, requestID, expectedVersion, input)
 	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffNoteCreate(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	input := contract.RequestNoteWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.CreateStaffNote(r.Context(), actor, requestID, input)
+	writeResult(w, http.StatusCreated, result, err)
 }
 
 func (h *handler) staffConstituentLink(w http.ResponseWriter, r *http.Request) {

@@ -1290,6 +1290,93 @@ var City311RequestConstituent = &dal.Model{
 	},
 }
 
+var City311RequestNote = &dal.Model{
+	Ident:        "compose_city311_request_note",
+	ResourceType: types.City311RequestNoteResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "RequestID", Sortable: true,
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "request_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "AuthorType",
+			Type:  &dal.TypeText{Length: 32},
+			Store: &dal.CodecAlias{Ident: "author_type"},
+		},
+
+		&dal.Attribute{
+			Ident: "AuthorID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "author_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "AuthorConstituentID",
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "author_constituent_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "Body",
+			Type:  &dal.TypeText{Length: 2000},
+			Store: &dal.CodecAlias{Ident: "body"},
+		},
+
+		&dal.Attribute{
+			Ident: "PortalVisible",
+			Type: &dal.TypeBoolean{HasDefault: true,
+				DefaultValue: false,
+			},
+			Store: &dal.CodecAlias{Ident: "portal_visible"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_request_note_request",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "RequestID",
+				},
+
+				{
+					AttributeIdent: "CreatedAt",
+				},
+			},
+		},
+	},
+}
+
 var City311RequestSequence = &dal.Model{
 	Ident:        "compose_city311_request_sequence",
 	ResourceType: types.City311RequestSequenceResourceType,
@@ -2480,6 +2567,7 @@ func init() {
 		City311PublicHistoryItem,
 		City311RequestAttachment,
 		City311RequestConstituent,
+		City311RequestNote,
 		City311RequestSequence,
 		City311ServiceRequest,
 		Module,

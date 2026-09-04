@@ -20,6 +20,7 @@ const (
 	City311PublicHistoryItemResourceType    = "corteza::compose:city311-public-history-item"
 	City311RequestAttachmentResourceType    = "corteza::compose:city311-request-attachment"
 	City311RequestConstituentResourceType   = "corteza::compose:city311-request-constituent"
+	City311RequestNoteResourceType          = "corteza::compose:city311-request-note"
 	City311RequestSequenceResourceType      = "corteza::compose:city311-request-sequence"
 	City311ServiceRequestResourceType       = "corteza::compose:city311-service-request"
 	ModuleResourceType                      = "corteza::compose:module"

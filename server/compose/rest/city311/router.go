@@ -112,6 +112,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.With(requireConstituentSession).Get("/portal/service-requests", h.portalMyRequests)
 		r.With(requireConstituentSession).Post("/portal/service-requests/link", h.portalLinkAnonymousRequest)
 		r.With(requireConstituentSession).Post("/portal/service-requests/{request_id}/notes", h.portalNoteCreate)
+		r.With(requireConstituentSession).Post("/portal/service-requests/{request_id}/reopen", h.portalReopenRequest)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
@@ -119,6 +120,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Get("/service-requests/{request_id}", h.staffDetail)
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
 			r.Post("/service-requests/{request_id}/notes", h.staffNoteCreate)
+			r.Post("/service-requests/{request_id}/reopen/approve", h.staffReopenApprove)
 			r.Post("/service-requests/{request_id}/constituents", h.staffConstituentLink)
 			r.Delete("/service-requests/{request_id}/constituents/{constituent_id}", h.staffConstituentUnlink)
 		})
@@ -363,6 +365,20 @@ func (h *handler) portalNoteCreate(w http.ResponseWriter, r *http.Request) {
 	resolved := identitySessionFromContext(r.Context())
 	result, err := h.service.CreatePortalNote(r.Context(), resolved.User.ID, requestID, input)
 	writeResult(w, http.StatusCreated, result, err)
+}
+
+func (h *handler) portalReopenRequest(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	input := contract.ReopenApproval{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	resolved := identitySessionFromContext(r.Context())
+	result, err := h.service.RequestReopen(r.Context(), resolved.User.ID, requestID, input)
+	writeResult(w, http.StatusAccepted, result, err)
 }
 
 func (h *handler) staffSubmit(w http.ResponseWriter, r *http.Request) {
@@ -641,6 +657,29 @@ func (h *handler) staffNoteCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.CreateStaffNote(r.Context(), actor, requestID, input)
 	writeResult(w, http.StatusCreated, result, err)
+}
+
+func (h *handler) staffReopenApprove(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, err := parseIfMatch(r.Header.Get(contract.IfMatchHeader))
+	if err != nil {
+		writeResult(w, 0, nil, &city311Service.ServiceError{Status: 428, Payload: contract.APIError{Error: contract.ErrorExpectedVersionRequired, Message: "If-Match must identify the expected record version.", Retryable: false}})
+		return
+	}
+	input := contract.ReopenApproval{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ApproveReopen(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
 }
 
 func (h *handler) staffConstituentLink(w http.ResponseWriter, r *http.Request) {

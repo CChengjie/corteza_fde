@@ -166,6 +166,42 @@ requestNote: {
 	store: {ident: "city311RequestNote", api: lookups: [{fields: ["id"]}]}
 }
 
+reopenRequest: {
+	model: {
+		ident:            "compose_city311_reopen_request"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			request_id: {ident: "requestID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			requested_by: {goType: "string", dal: {type: "Text", length: 64}}
+			request_reason: {goType: "string", dal: {type: "Text", length: 2000}}
+			status: {goType: "string", sortable: true, dal: {type: "Text", length: 32}}
+			requested_at: schema.SortableTimestampNowField
+			approved_by: {ident: "approvedBy", goType: "uint64", dal: {type: "ID", default: 0}}
+			approval_reason: {goType: "string", dal: {type: "Text", length: 2000, default: ""}}
+			approved_at: schema.SortableTimestampNilField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			request: {attributes: ["request_id", "requested_at"]}
+			unique_pending: {
+				attribute: "request_id"
+				predicate: "status = 'PENDING_APPROVAL'"
+			}
+		}
+	}
+	filter: {
+		struct: {
+			request_id: {ident: "requestID", goType: "uint64"}
+			status: {goType: "string"}
+		}
+		byValue: ["request_id", "status"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {ident: "city311ReopenRequest", api: lookups: [{fields: ["id"]}]}
+}
+
 requestSequence: {
 	model: {
 		ident:            "compose_city311_request_sequence"

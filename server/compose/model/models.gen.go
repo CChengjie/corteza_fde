@@ -1073,6 +1073,111 @@ var City311PublicHistoryItem = &dal.Model{
 	},
 }
 
+var City311ReopenRequest = &dal.Model{
+	Ident:        "compose_city311_reopen_request",
+	ResourceType: types.City311ReopenRequestResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "RequestID", Sortable: true,
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "request_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "RequestedBy",
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "requested_by"},
+		},
+
+		&dal.Attribute{
+			Ident: "RequestReason",
+			Type:  &dal.TypeText{Length: 2000},
+			Store: &dal.CodecAlias{Ident: "request_reason"},
+		},
+
+		&dal.Attribute{
+			Ident: "Status", Sortable: true,
+			Type:  &dal.TypeText{Length: 32},
+			Store: &dal.CodecAlias{Ident: "status"},
+		},
+
+		&dal.Attribute{
+			Ident: "RequestedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "requested_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "ApprovedBy",
+			Type: &dal.TypeID{HasDefault: true,
+				DefaultValue: 0,
+			},
+			Store: &dal.CodecAlias{Ident: "approved_by"},
+		},
+
+		&dal.Attribute{
+			Ident: "ApprovalReason",
+			Type:  &dal.TypeText{Length: 2000},
+			Store: &dal.CodecAlias{Ident: "approval_reason"},
+		},
+
+		&dal.Attribute{
+			Ident: "ApprovedAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Nullable: true, Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "approved_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_reopen_request_request",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "RequestID",
+				},
+
+				{
+					AttributeIdent: "RequestedAt",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:     "compose_city311_reopen_request_uniquePending",
+			Type:      "BTREE",
+			Unique:    true,
+			Predicate: "status = 'PENDING_APPROVAL'",
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "RequestID",
+				},
+			},
+		},
+	},
+}
+
 var City311RequestAttachment = &dal.Model{
 	Ident:        "compose_city311_request_attachment",
 	ResourceType: types.City311RequestAttachmentResourceType,
@@ -2658,6 +2763,7 @@ func init() {
 		City311LocalAccount,
 		City311PasswordResetToken,
 		City311PublicHistoryItem,
+		City311ReopenRequest,
 		City311RequestAttachment,
 		City311RequestConstituent,
 		City311RequestNote,

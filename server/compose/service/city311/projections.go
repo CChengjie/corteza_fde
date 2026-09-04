@@ -184,9 +184,9 @@ func availableActions(actor contract.Actor, request *composeTypes.City311Service
 	case contract.ServiceRequestStatusInProgress:
 		return []string{"RESOLVE"}
 	case contract.ServiceRequestStatusResolved:
-		return []string{"CLOSE", "REQUEST_REOPEN"}
+		return []string{"CLOSE"}
 	case contract.ServiceRequestStatusClosed:
-		return []string{"REQUEST_REOPEN"}
+		return []string{}
 	default:
 		return []string{}
 	}

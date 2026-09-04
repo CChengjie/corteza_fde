@@ -45,6 +45,9 @@ type (
 		now              func() time.Time
 		nextID           func() uint64
 		mu               sync.Mutex
+		mailMu           sync.Mutex
+		mailSender       MailSender
+		mailWait         func(context.Context, time.Duration) error
 		dataExportLimits map[uint64]dataExportLimit
 	}
 
@@ -117,7 +120,7 @@ func (e *ServiceError) Error() string { return e.Payload.Message }
 func New(s store.Storer) *Service {
 	return &Service{
 		store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next,
-		dataExportLimits: make(map[uint64]dataExportLimit),
+		mailSender: smtpMailSender{dial: dialSMTP}, mailWait: waitForMailRetry, dataExportLimits: make(map[uint64]dataExportLimit),
 	}
 }
 
@@ -1180,6 +1183,10 @@ func canReadConstituent(actor contract.Actor, constituent *composeTypes.City311C
 
 func canOperateRequest(actor contract.Actor) bool {
 	return hasRole(actor, contract.ApplicationRoleServiceAgent) || hasRole(actor, contract.ApplicationRoleSupervisor) || hasRole(actor, contract.ApplicationRoleDepartmentManager) || hasRole(actor, contract.ApplicationRolePlatformAdministrator)
+}
+
+func isStaff(actor contract.Actor) bool {
+	return canOperateRequest(actor)
 }
 
 func hasRole(actor contract.Actor, role contract.ApplicationRole) bool {

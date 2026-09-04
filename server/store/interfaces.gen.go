@@ -58,6 +58,7 @@ type (
 		AutomationWorkflows
 		City311ActorProfiles
 		City311AuditEvents
+		City311ConfigurationRevisions
 		City311Constituents
 		City311IdempotencyRecords
 		City311IdentityNotifications
@@ -293,6 +294,18 @@ type (
 		DeleteCity311AuditEventByID(ctx context.Context, id uint64) error
 		TruncateCity311AuditEvents(ctx context.Context) error
 		LookupCity311AuditEventByID(ctx context.Context, id uint64) (*composeType.City311AuditEvent, error)
+	}
+
+	City311ConfigurationRevisions interface {
+		SearchCity311ConfigurationRevisions(ctx context.Context, f composeType.City311ConfigurationRevisionFilter) (composeType.City311ConfigurationRevisionSet, composeType.City311ConfigurationRevisionFilter, error)
+		CreateCity311ConfigurationRevision(ctx context.Context, rr ...*composeType.City311ConfigurationRevision) error
+		UpdateCity311ConfigurationRevision(ctx context.Context, rr ...*composeType.City311ConfigurationRevision) error
+		UpsertCity311ConfigurationRevision(ctx context.Context, rr ...*composeType.City311ConfigurationRevision) error
+		DeleteCity311ConfigurationRevision(ctx context.Context, rr ...*composeType.City311ConfigurationRevision) error
+
+		DeleteCity311ConfigurationRevisionByID(ctx context.Context, id uint64) error
+		TruncateCity311ConfigurationRevisions(ctx context.Context) error
+		LookupCity311ConfigurationRevisionByID(ctx context.Context, id uint64) (*composeType.City311ConfigurationRevision, error)
 	}
 
 	City311Constituents interface {
@@ -1855,6 +1868,62 @@ func TruncateCity311AuditEvents(ctx context.Context, s City311AuditEvents) error
 // This function is auto-generated
 func LookupCity311AuditEventByID(ctx context.Context, s City311AuditEvents, id uint64) (*composeType.City311AuditEvent, error) {
 	return s.LookupCity311AuditEventByID(ctx, id)
+}
+
+// SearchCity311ConfigurationRevisions returns all matching City311ConfigurationRevisions from store
+//
+// This function is auto-generated
+func SearchCity311ConfigurationRevisions(ctx context.Context, s City311ConfigurationRevisions, f composeType.City311ConfigurationRevisionFilter) (composeType.City311ConfigurationRevisionSet, composeType.City311ConfigurationRevisionFilter, error) {
+	return s.SearchCity311ConfigurationRevisions(ctx, f)
+}
+
+// CreateCity311ConfigurationRevision creates one or more City311ConfigurationRevisions in store
+//
+// This function is auto-generated
+func CreateCity311ConfigurationRevision(ctx context.Context, s City311ConfigurationRevisions, rr ...*composeType.City311ConfigurationRevision) error {
+	return s.CreateCity311ConfigurationRevision(ctx, rr...)
+}
+
+// UpdateCity311ConfigurationRevision updates one or more (existing) City311ConfigurationRevisions in store
+//
+// This function is auto-generated
+func UpdateCity311ConfigurationRevision(ctx context.Context, s City311ConfigurationRevisions, rr ...*composeType.City311ConfigurationRevision) error {
+	return s.UpdateCity311ConfigurationRevision(ctx, rr...)
+}
+
+// UpsertCity311ConfigurationRevision creates new or updates existing one or more City311ConfigurationRevisions in store
+//
+// This function is auto-generated
+func UpsertCity311ConfigurationRevision(ctx context.Context, s City311ConfigurationRevisions, rr ...*composeType.City311ConfigurationRevision) error {
+	return s.UpsertCity311ConfigurationRevision(ctx, rr...)
+}
+
+// DeleteCity311ConfigurationRevision deletes one or more City311ConfigurationRevisions from store
+//
+// This function is auto-generated
+func DeleteCity311ConfigurationRevision(ctx context.Context, s City311ConfigurationRevisions, rr ...*composeType.City311ConfigurationRevision) error {
+	return s.DeleteCity311ConfigurationRevision(ctx, rr...)
+}
+
+// DeleteCity311ConfigurationRevisionByID deletes one or more City311ConfigurationRevisions from store
+//
+// This function is auto-generated
+func DeleteCity311ConfigurationRevisionByID(ctx context.Context, s City311ConfigurationRevisions, id uint64) error {
+	return s.DeleteCity311ConfigurationRevisionByID(ctx, id)
+}
+
+// TruncateCity311ConfigurationRevisions Deletes all City311ConfigurationRevisions from store
+//
+// This function is auto-generated
+func TruncateCity311ConfigurationRevisions(ctx context.Context, s City311ConfigurationRevisions) error {
+	return s.TruncateCity311ConfigurationRevisions(ctx)
+}
+
+// LookupCity311ConfigurationRevisionByID
+//
+// This function is auto-generated
+func LookupCity311ConfigurationRevisionByID(ctx context.Context, s City311ConfigurationRevisions, id uint64) (*composeType.City311ConfigurationRevision, error) {
+	return s.LookupCity311ConfigurationRevisionByID(ctx, id)
 }
 
 // SearchCity311Constituents returns all matching City311Constituents from store

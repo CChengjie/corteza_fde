@@ -1236,7 +1236,7 @@
         ]
       },
       "required_capability": "audit_list",
-      "response_schema": "list_response",
+      "response_schema": "audit_event_list_response",
       "entity_response_schemas": {
         "items": "audit_event"
       },
@@ -1251,6 +1251,41 @@
       },
       "query_parameters": {
         "filters": {
+          "additional_properties": false,
+          "properties": {
+            "actor_id": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "entity_id": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "entity_type": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "event_type": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "from": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "request_id": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "source_channel": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "to": {
+              "max_length": 500,
+              "type": "string"
+            }
+          },
           "type": "object"
         },
         "page_size": {
@@ -1260,10 +1295,19 @@
           "type": "integer"
         },
         "page_token": {
+          "binding": "operation, actor/record scope, filters and sort; re-evaluate permission before each page",
           "opaque": true,
           "type": "string"
         },
         "sort": {
+          "allowed_fields": [
+            "occurred_at",
+            "entity_type",
+            "entity_id",
+            "event_type",
+            "actor_id"
+          ],
+          "default": "occurred_at",
           "maximum_fields": 3,
           "type": "string"
         }
@@ -2862,8 +2906,7 @@
               "service_agent",
               "supervisor",
               "department_manager",
-              "platform_administrator",
-              "workflow_designer"
+              "platform_administrator"
             ],
             "record_scope_required": true
           }
@@ -2937,15 +2980,14 @@
               "service_agent",
               "supervisor",
               "department_manager",
-              "platform_administrator",
-              "workflow_designer"
+              "platform_administrator"
             ],
             "record_scope_required": true
           }
         ]
       },
       "required_capability": "staff_constituent_search",
-      "response_schema": "list_response",
+      "response_schema": "constituent_list_response",
       "entity_response_schemas": {
         "items": "constituent"
       },
@@ -2960,6 +3002,29 @@
       },
       "query_parameters": {
         "filters": {
+          "additional_properties": false,
+          "properties": {
+            "category": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "department": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "district": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "email": {
+              "max_length": 500,
+              "type": "string"
+            },
+            "q": {
+              "max_length": 500,
+              "type": "string"
+            }
+          },
           "type": "object"
         },
         "page_size": {
@@ -2969,10 +3034,18 @@
           "type": "integer"
         },
         "page_token": {
+          "binding": "operation, actor/record scope, filters and sort; re-evaluate permission before each page",
           "opaque": true,
           "type": "string"
         },
         "sort": {
+          "allowed_fields": [
+            "constituent_id",
+            "display_name",
+            "primary_category",
+            "updated_at"
+          ],
+          "default": "constituent_id",
           "maximum_fields": 3,
           "type": "string"
         }
@@ -4619,6 +4692,43 @@
       ],
       "type": "object"
     },
+    "audit_event_list_response": {
+      "properties": {
+        "applied_filters": {
+          "additional_properties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "items": {
+          "items_ref": "audit_event",
+          "type": "array"
+        },
+        "next_page_token": {
+          "nullable": true,
+          "opaque": true,
+          "type": "string"
+        },
+        "sort": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "total_count": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "next_page_token",
+        "total_count",
+        "applied_filters",
+        "sort"
+      ],
+      "type": "object"
+    },
     "audit_export": {
       "properties": {
         "filters": {
@@ -5154,6 +5264,43 @@
         "relationship_type",
         "portal_visible",
         "notify_status"
+      ],
+      "type": "object"
+    },
+    "constituent_list_response": {
+      "properties": {
+        "applied_filters": {
+          "additional_properties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "items": {
+          "items_ref": "constituent",
+          "type": "array"
+        },
+        "next_page_token": {
+          "nullable": true,
+          "opaque": true,
+          "type": "string"
+        },
+        "sort": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "total_count": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "next_page_token",
+        "total_count",
+        "applied_filters",
+        "sort"
       ],
       "type": "object"
     },

@@ -49,6 +49,9 @@ type (
 		mailSender       MailSender
 		mailWait         func(context.Context, time.Duration) error
 		dataExportLimits map[uint64]dataExportLimit
+		civicWorksClient CivicWorksClient
+		civicWorksSecret string
+		civicWorksConfig error
 	}
 
 	dataExportLimit struct {
@@ -118,10 +121,12 @@ var Default *Service
 func (e *ServiceError) Error() string { return e.Payload.Message }
 
 func New(s store.Storer) *Service {
-	return &Service{
+	svc := &Service{
 		store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next,
 		mailSender: smtpMailSender{dial: dialSMTP}, mailWait: waitForMailRetry, dataExportLimits: make(map[uint64]dataExportLimit),
 	}
+	svc.civicWorksClient, svc.civicWorksSecret, svc.civicWorksConfig = NewCivicWorksFromEnvironment(nil)
+	return svc
 }
 
 func (svc *Service) Store() store.Storer { return svc.store }
@@ -659,6 +664,9 @@ func (svc *Service) Transition(ctx context.Context, actor contract.Actor, reques
 	if err := validateTransitionInput(expectedVersion, input); err != nil {
 		return nil, err
 	}
+	if input.ToStatus == contract.ServiceRequestStatusAssigned {
+		return svc.AssignCivicWorks(ctx, actor, requestID, expectedVersion)
+	}
 
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -1104,7 +1112,7 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 	primaryAssignee := optionalID(stored.PrimaryAssigneeID)
 	result := &contract.StaffServiceRequestDetail{
 		Request: toContract(stored), ConstituentLinks: make([]contract.ConstituentLink, 0, len(links)), Notes: notes, AvailableActions: actions, PrimaryAssigneeID: primaryAssignee,
-		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: reminders, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: nil,
+		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: reminders, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: projectCivicWorksWorkOrder(stored.ExternalWorkOrder),
 	}
 	result.Request.Attachments, err = svc.attachmentMetadata(ctx, stored.ID)
 	if err != nil {

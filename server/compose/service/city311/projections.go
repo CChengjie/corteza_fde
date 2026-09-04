@@ -21,6 +21,13 @@ func cloneMap(input map[string]any) map[string]any {
 	return out
 }
 
+func cloneOptionalMap(input map[string]any) map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	return cloneMap(input)
+}
+
 func mapFrom(value any) (map[string]any, error) {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -92,6 +99,9 @@ func locationMap(input *contract.LocationInput) map[string]any {
 
 func requestSnapshot(request *composeTypes.City311ServiceRequest) map[string]any {
 	out, _ := mapFrom(toContract(request))
+	if len(request.ExternalWorkOrder) > 0 {
+		out["external_work_order"] = cloneMap(request.ExternalWorkOrder)
+	}
 	return out
 }
 

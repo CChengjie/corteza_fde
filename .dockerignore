@@ -1,0 +1,14 @@
+.git
+.github
+.idea
+.vscode
+**/.DS_Store
+**/node_modules
+**/build
+**/dist
+!server/webconsole/dist
+!server/webconsole/dist/.placeholder
+**/.cover.out
+client
+lib
+webapp

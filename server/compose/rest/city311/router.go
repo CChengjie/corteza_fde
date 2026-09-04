@@ -84,8 +84,11 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Delete(sessionRoute, h.sessionSignOut)
 		r.Post("/auth/password-reset/request", h.passwordResetRequest)
 		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
+		r.Patch("/preferences/language", h.languageUpdate)
 		r.Route("/account", func(r chi.Router) {
 			r.Use(requireCityIdentitySession)
+			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
+			r.With(requireProfileConstituent).Patch("/profile", h.profileUpdate)
 			r.Post("/password", h.passwordChange)
 			r.Post("/login-identifier", h.loginIdentifierChange)
 		})

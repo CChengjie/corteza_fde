@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	IdentitySessionCookie = "city311_session"
+	IdentitySessionCookie = contract.SessionCookieName
 
 	identitySessionIdleLifetime     = 30 * time.Minute
 	identitySessionAbsoluteLifetime = 8 * time.Hour
@@ -767,11 +767,10 @@ func (svc *IdentityService) ChangeLoginIdentifier(ctx context.Context, resolved 
 	if err != nil {
 		return nil, err
 	}
-	oldIdentifier := resolved.Account.LoginIdentifier
 	var account *composeTypes.City311LocalAccount
 	var user *systemTypes.User
 	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
-		account, user, _, err = svc.persistLoginIdentifierChange(ctx, tx, resolved, identifier, oldIdentifier)
+		account, user, _, err = svc.persistLoginIdentifierChange(ctx, tx, resolved, identifier)
 		return err
 	})
 	if err != nil {
@@ -816,11 +815,15 @@ func ensureLoginIdentifierAvailable(ctx context.Context, s store.Storer, identif
 	return nil
 }
 
-func (svc *IdentityService) persistLoginIdentifierChange(ctx context.Context, tx store.Storer, resolved *ResolvedSession, identifier, oldIdentifier string) (*composeTypes.City311LocalAccount, *systemTypes.User, *composeTypes.City311IdentityNotification, error) {
+func (svc *IdentityService) persistLoginIdentifierChange(ctx context.Context, tx store.Storer, resolved *ResolvedSession, identifier string) (*composeTypes.City311LocalAccount, *systemTypes.User, *composeTypes.City311IdentityNotification, error) {
+	if err := store.LockCity311LocalAccount(ctx, tx, resolved.User.ID); err != nil {
+		return nil, nil, nil, err
+	}
 	account, err := store.LookupCity311LocalAccountByID(ctx, tx, resolved.User.ID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	oldIdentifier := account.LoginIdentifier
 	if err = ensureLoginIdentifierAvailable(ctx, tx, identifier, account.ID); err != nil {
 		return nil, nil, nil, err
 	}
@@ -866,6 +869,11 @@ func (svc *IdentityService) updateLoginIdentifierProjections(ctx context.Context
 	constituent, err := store.LookupCity311ConstituentByConstituentID(ctx, tx, constituentID)
 	if err != nil {
 		return nil, err
+	}
+	if constituent.Profile["login_identifier"] != identifier {
+		if err = advanceProfileVersion(constituent); err != nil {
+			return nil, err
+		}
 	}
 	constituent.Profile["login_identifier"] = identifier
 	constituent.UpdatedAt = now

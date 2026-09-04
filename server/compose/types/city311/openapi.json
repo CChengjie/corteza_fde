@@ -3727,7 +3727,7 @@
       },
       "sessionCookie": {
         "in": "cookie",
-        "name": "corteza_session",
+        "name": "city311_session",
         "type": "apiKey"
       }
     }
@@ -4076,29 +4076,32 @@
             "content": {
               "application/json": {
                 "examples": {
-                  "success": {
+                  "profile_loaded": {
                     "value": {
-                      "addresses": [
-                        {
-                          "city": "xxxxxx",
-                          "country": "xx",
-                          "line1": "xxxxxx",
-                          "postal_code": "xxxxxx",
-                          "region": "xxxxxx"
-                        }
-                      ],
-                      "constituent_id": "xxxxxx",
-                      "display_name": "xxxxxx",
+                      "addresses": [],
+                      "constituent_id": "C-1",
+                      "display_name": "Alex Resident",
                       "email_opt_out": false,
                       "emails": [
-                        "resident@example.test"
+                        "alex@example.invalid"
                       ],
-                      "phone_numbers": [
-                        {
-                          "label": "MOBILE",
-                          "value": "xxxxxx"
-                        }
+                      "login_identifier": "alex.resident",
+                      "phone_numbers": [],
+                      "preferred_language": "EN",
+                      "primary_category": "RESIDENT"
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "addresses": [],
+                      "constituent_id": "C-1",
+                      "display_name": "Alex Resident",
+                      "email_opt_out": false,
+                      "emails": [
+                        "alex@example.invalid"
                       ],
+                      "login_identifier": "alex.resident",
+                      "phone_numbers": [],
                       "preferred_language": "EN",
                       "primary_category": "RESIDENT"
                     }
@@ -4110,29 +4113,28 @@
               }
             },
             "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal profile revision; send unchanged as If-Match on profile_update",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
             "x-city311-example": {
               "body": {
-                "addresses": [
-                  {
-                    "city": "xxxxxx",
-                    "country": "xx",
-                    "line1": "xxxxxx",
-                    "postal_code": "xxxxxx",
-                    "region": "xxxxxx"
-                  }
-                ],
-                "constituent_id": "xxxxxx",
-                "display_name": "xxxxxx",
+                "addresses": [],
+                "constituent_id": "C-1",
+                "display_name": "Alex Resident",
                 "email_opt_out": false,
                 "emails": [
-                  "resident@example.test"
+                  "alex@example.invalid"
                 ],
-                "phone_numbers": [
-                  {
-                    "label": "MOBILE",
-                    "value": "xxxxxx"
-                  }
-                ],
+                "login_identifier": "alex.resident",
+                "phone_numbers": [],
                 "preferred_language": "EN",
                 "primary_category": "RESIDENT"
               },
@@ -4298,30 +4300,33 @@
             "content": {
               "application/json": {
                 "examples": {
-                  "success": {
+                  "profile_saved": {
                     "value": {
-                      "addresses": [
-                        {
-                          "city": "xxxxxx",
-                          "country": "xx",
-                          "line1": "xxxxxx",
-                          "postal_code": "xxxxxx",
-                          "region": "xxxxxx"
-                        }
-                      ],
-                      "constituent_id": "xxxxxx",
-                      "display_name": "xxxxxx",
+                      "addresses": [],
+                      "constituent_id": "C-1",
+                      "display_name": "Alex Resident",
                       "email_opt_out": false,
                       "emails": [
-                        "resident@example.test"
+                        "alex@example.invalid"
                       ],
-                      "phone_numbers": [
-                        {
-                          "label": "MOBILE",
-                          "value": "xxxxxx"
-                        }
+                      "login_identifier": "alex.resident",
+                      "phone_numbers": [],
+                      "preferred_language": "ES",
+                      "primary_category": "RESIDENT"
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "addresses": [],
+                      "constituent_id": "C-1",
+                      "display_name": "Alex Resident",
+                      "email_opt_out": false,
+                      "emails": [
+                        "alex@example.invalid"
                       ],
-                      "preferred_language": "EN",
+                      "login_identifier": "alex.resident",
+                      "phone_numbers": [],
+                      "preferred_language": "ES",
                       "primary_category": "RESIDENT"
                     }
                   }
@@ -4332,30 +4337,29 @@
               }
             },
             "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal profile revision; send unchanged as If-Match on profile_update",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
             "x-city311-example": {
               "body": {
-                "addresses": [
-                  {
-                    "city": "xxxxxx",
-                    "country": "xx",
-                    "line1": "xxxxxx",
-                    "postal_code": "xxxxxx",
-                    "region": "xxxxxx"
-                  }
-                ],
-                "constituent_id": "xxxxxx",
-                "display_name": "xxxxxx",
+                "addresses": [],
+                "constituent_id": "C-1",
+                "display_name": "Alex Resident",
                 "email_opt_out": false,
                 "emails": [
-                  "resident@example.test"
+                  "alex@example.invalid"
                 ],
-                "phone_numbers": [
-                  {
-                    "label": "MOBILE",
-                    "value": "xxxxxx"
-                  }
-                ],
-                "preferred_language": "EN",
+                "login_identifier": "alex.resident",
+                "phone_numbers": [],
+                "preferred_language": "ES",
                 "primary_category": "RESIDENT"
               },
               "status": 200
@@ -4446,10 +4450,19 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "profile_version_conflict": {
+                    "value": {
+                      "current_version": 2,
+                      "error": "VERSION_CONFLICT",
+                      "message": "The profile has changed. Reload before saving.",
+                      "retryable": false
+                    }
+                  },
                   "version_conflict": {
                     "value": {
+                      "current_version": 2,
                       "error": "VERSION_CONFLICT",
-                      "message": "version conflict.",
+                      "message": "The profile has changed. Reload before saving.",
                       "retryable": false
                     }
                   }
@@ -4462,8 +4475,9 @@
             "description": "VERSION CONFLICT",
             "x-city311-example": {
               "body": {
+                "current_version": 2,
                 "error": "VERSION_CONFLICT",
-                "message": "version conflict.",
+                "message": "The profile has changed. Reload before saving.",
                 "retryable": false
               },
               "status": 409
@@ -4503,7 +4517,14 @@
                   "expected_version_required": {
                     "value": {
                       "error": "EXPECTED_VERSION_REQUIRED",
-                      "message": "expected version required.",
+                      "message": "A quoted current profile version is required.",
+                      "retryable": false
+                    }
+                  },
+                  "profile_version_required": {
+                    "value": {
+                      "error": "EXPECTED_VERSION_REQUIRED",
+                      "message": "A quoted current profile version is required.",
                       "retryable": false
                     }
                   }
@@ -4517,7 +4538,7 @@
             "x-city311-example": {
               "body": {
                 "error": "EXPECTED_VERSION_REQUIRED",
-                "message": "expected version required.",
+                "message": "A quoted current profile version is required.",
                 "retryable": false
               },
               "status": 428

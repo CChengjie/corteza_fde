@@ -332,7 +332,8 @@
         "branding",
         "content",
         "help",
-        "custom_field"
+        "custom_field",
+        "profile"
       ],
       "missing_error": "EXPECTED_VERSION_REQUIRED",
       "missing_status": 428,
@@ -2331,6 +2332,9 @@
         "NOT_FOUND": 404,
         "UNAUTHENTICATED": 401,
         "VALIDATION_ERROR": 422
+      },
+      "response_headers": {
+        "ETag": "success response: quoted decimal profile revision; send unchanged as If-Match on profile_update"
       }
     },
     "profile_update": {
@@ -2357,6 +2361,9 @@
         "UNAUTHENTICATED": 401,
         "VALIDATION_ERROR": 422,
         "VERSION_CONFLICT": 409
+      },
+      "response_headers": {
+        "ETag": "success response: quoted decimal profile revision; send unchanged as If-Match on profile_update"
       }
     },
     "public_branding_get": {
@@ -7826,6 +7833,69 @@
         "links": {
           "self": "/api/v1/service-requests/case-7c58d2"
         }
+      }
+    },
+    "profile_loaded": {
+      "endpoint": "profile_get",
+      "role": "response",
+      "http_status": 200,
+      "headers": {
+        "ETag": "\"1\""
+      },
+      "body": {
+        "constituent_id": "C-1",
+        "display_name": "Alex Resident",
+        "login_identifier": "alex.resident",
+        "emails": [
+          "alex@example.invalid"
+        ],
+        "phone_numbers": [],
+        "addresses": [],
+        "primary_category": "RESIDENT",
+        "preferred_language": "EN",
+        "email_opt_out": false
+      }
+    },
+    "profile_saved": {
+      "endpoint": "profile_update",
+      "role": "response",
+      "http_status": 200,
+      "headers": {
+        "ETag": "\"2\""
+      },
+      "body": {
+        "constituent_id": "C-1",
+        "display_name": "Alex Resident",
+        "login_identifier": "alex.resident",
+        "emails": [
+          "alex@example.invalid"
+        ],
+        "phone_numbers": [],
+        "addresses": [],
+        "primary_category": "RESIDENT",
+        "preferred_language": "ES",
+        "email_opt_out": false
+      }
+    },
+    "profile_version_conflict": {
+      "endpoint": "profile_update",
+      "role": "response",
+      "http_status": 409,
+      "body": {
+        "error": "VERSION_CONFLICT",
+        "message": "The profile has changed. Reload before saving.",
+        "retryable": false,
+        "current_version": 2
+      }
+    },
+    "profile_version_required": {
+      "endpoint": "profile_update",
+      "role": "response",
+      "http_status": 428,
+      "body": {
+        "error": "EXPECTED_VERSION_REQUIRED",
+        "message": "A quoted current profile version is required.",
+        "retryable": false
       }
     },
     "public_branding": {

@@ -97,6 +97,11 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Post("/portal/service-requests", h.portalSubmit)
 		r.Post("/portal/attachments", h.attachmentUpload)
 		r.With(requireIdentity).Get("/attachments/{attachment_id}", h.attachmentDownload)
+		r.With(requireConstituentIdentitySession).Post("/portal/service-request-drafts", h.draftCreate)
+		r.With(requireConstituentIdentitySession).Get("/portal/service-request-drafts/{request_id}", h.draftGet)
+		r.With(requireConstituentIdentitySession).Patch("/portal/service-request-drafts/{request_id}", h.draftUpdate)
+		r.With(requireConstituentIdentitySession).Delete("/portal/service-request-drafts/{request_id}", h.draftDelete)
+		r.With(requireConstituentIdentitySession).Post("/portal/service-request-drafts/{request_id}/submit", h.draftSubmit)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
 			r.Post(serviceRequestsRoute, h.staffSubmit)

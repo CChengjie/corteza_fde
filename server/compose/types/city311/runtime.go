@@ -424,6 +424,54 @@ type CustomFieldDefinitionList struct {
 	Sort           []string                `json:"sort"`
 }
 
+type ReportCatalogueItem struct {
+	ReportKey         string   `json:"report_key"`
+	Name              string   `json:"name"`
+	SupportedFilters  []string `json:"supported_filters"`
+	SupportedGrouping []string `json:"supported_grouping"`
+	SupportedSort     []string `json:"supported_sort"`
+}
+
+type ReportCatalogueList struct {
+	Items          []ReportCatalogueItem `json:"items"`
+	NextPageToken  *string               `json:"next_page_token"`
+	TotalCount     int                   `json:"total_count"`
+	AppliedFilters map[string]any        `json:"applied_filters"`
+	Sort           []string              `json:"sort"`
+}
+
+type ReportDefinition struct {
+	ReportID  string         `json:"report_id"`
+	Name      string         `json:"name"`
+	Entity    string         `json:"entity"`
+	Columns   []string       `json:"columns"`
+	Filters   map[string]any `json:"filters"`
+	Grouping  *string        `json:"grouping,omitempty"`
+	Sort      []string       `json:"sort"`
+	Version   uint64         `json:"version"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+type ReportDefinitionList struct {
+	Items          []ReportDefinition `json:"items"`
+	NextPageToken  *string            `json:"next_page_token"`
+	TotalCount     int                `json:"total_count"`
+	AppliedFilters map[string]any     `json:"applied_filters"`
+	Sort           []string           `json:"sort"`
+}
+
+type ReportRun struct {
+	Definition ReportDefinition `json:"definition"`
+}
+
+type ReportShare struct {
+	Roles []ApplicationRole `json:"roles"`
+}
+
+type ReportExport struct {
+	Format string `json:"format"`
+}
+
 type Rollback struct {
 	TargetVersion uint64 `json:"target_version"`
 }

@@ -345,3 +345,32 @@ func testCity311ServiceRequests(t *testing.T, s store.City311ServiceRequests) {
 	require.NoError(t, s.UpdateCity311ServiceRequest(ctx, fetched))
 	require.NoError(t, s.DeleteCity311ServiceRequestByID(ctx, request.ID))
 }
+
+func testCity311Operations(t *testing.T, s store.City311Operations) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311Operations(ctx))
+	createdAt := *now()
+	operation := &composeTypes.City311Operation{
+		ID: 302, Kind: "AUDIT_EXPORT", Status: "PENDING", ActorID: 41,
+		Result: composeTypes.City311JSON{}, Error: composeTypes.City311JSON{}, CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	require.NoError(t, s.CreateCity311Operation(ctx, operation))
+	fetched, err := s.LookupCity311OperationByID(ctx, operation.ID)
+	require.NoError(t, err)
+	require.Equal(t, "PENDING", fetched.Status)
+	completedAt := createdAt.Add(time.Second)
+	fetched.Status = "SUCCEEDED"
+	fetched.Progress = 100
+	fetched.Result = composeTypes.City311JSON{"download_url": "/api/v1/operations/op-302/result"}
+	fetched.Content = []byte("header\r\nvalue\r\n")
+	fetched.ContentType = "text/csv; charset=utf-8"
+	fetched.Filename = "audit-events.csv"
+	fetched.CompletedAt = &completedAt
+	fetched.UpdatedAt = completedAt
+	require.NoError(t, s.UpdateCity311Operation(ctx, fetched))
+	set, _, err := s.SearchCity311Operations(ctx, composeTypes.City311OperationFilter{ActorID: 41, Status: "SUCCEEDED"})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	require.Equal(t, []byte("header\r\nvalue\r\n"), set[0].Content)
+	require.NoError(t, s.DeleteCity311OperationByID(ctx, operation.ID))
+}

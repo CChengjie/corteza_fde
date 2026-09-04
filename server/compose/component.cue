@@ -17,6 +17,7 @@ component: schema.#component & {
 		"city311-identity-notification": identityNotification
 		"city311-identity-session":      identitySession
 		"city311-local-account":         localAccount
+		"city311-operation":             operation
 		"city311-password-reset-token":  passwordResetToken
 		"city311-public-history-item":   publicHistoryItem
 		"city311-request-attachment":    requestAttachment

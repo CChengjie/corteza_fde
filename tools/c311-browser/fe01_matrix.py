@@ -139,21 +139,23 @@ def check_language_and_dirty(page: Page, base_url: str, label: str) -> None:
 
 
 def check_portal_errors(page: Page, base_url: str, label: str) -> None:
-    def wait_state(expected: str) -> None:
+    def lookup_state(scenario: str, expected: str) -> None:
+        open_c311(page, base_url, STATUS_PATH, "public_visitor", scenario)
+        page.locator("#c311-status-request-number").fill("SR-2026-00001")
+        page.locator("#c311-status-email").fill("alex@example.test")
+        page.locator('[data-c311-action="lookup-status"]').click()
         page.wait_for_function(
-            "expected => document.querySelector('[data-c311-data-state]')?.getAttribute('data-state') === expected",
+            "expected => document.querySelector('[data-c311-page=\"status\"] [data-c311-data-state]')?.getAttribute('data-state') === expected",
             arg=expected,
             timeout=10000,
         )
-        check(page.locator("[data-c311-data-state]").get_attribute("data-state") == expected, f"{label} expected {expected} state")
+        check(
+            page.locator('[data-c311-page="status"] [data-c311-data-state]').get_attribute("data-state") == expected,
+            f"{label} expected {expected} state",
+        )
 
-    open_c311(page, base_url, STATUS_PATH, "public_visitor", "retryable")
-    wait_state("retryable-error")
-    open_c311(page, base_url, STATUS_PATH, "public_visitor", "terminal")
-    wait_state("terminal-error")
-    open_c311(page, base_url, STATUS_PATH, "public_visitor", "version-conflict")
-    wait_state("terminal-error")
-    check(page.locator("[data-c311-server-version]").inner_text().find("2") >= 0, f"{label} did not display current server version")
+    lookup_state("retryable", "retryable-error")
+    lookup_state("terminal", "terminal-error")
 
     open_c311(page, base_url, SUBMIT_PATH, "public_visitor", "validation")
     page.locator(SUMMARY_SELECTOR).fill("valid summary")

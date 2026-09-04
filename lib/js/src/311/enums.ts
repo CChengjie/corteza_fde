@@ -232,6 +232,8 @@ export const C311_SCENARIOS = [
   'successful-registration',
   'successful-reset',
   'account-loading',
+  'account-disposition-conflict',
+  'account-disposition-failure',
   'attachment-retryable',
   'attachment-terminal',
   'map-retryable',

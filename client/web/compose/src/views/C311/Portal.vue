@@ -14,6 +14,36 @@
       </template>
     </c311-data-state>
 
+    <section v-if="showStatusLookup" class="mt-4 c311-status-page" data-c311-page="status">
+      <h2 id="status-heading" class="h4">{{ t('portal.status.title', 'Check request status') }}</h2>
+      <c311-error-summary :errors="statusErrors" :field-targets="statusFieldTargets" :title="t('error.review', 'Review your information')" />
+      <form @submit.prevent="lookupStatus">
+        <div class="form-group">
+          <label for="c311-status-request-number">{{ t('field.requestNumber', 'Request number') }}</label>
+          <input id="c311-status-request-number" v-model.trim="statusLookup.request_number" class="form-control" autocomplete="off" :aria-invalid="hasStatusError('request_number') ? 'true' : 'false'" @input="statusErrors = []">
+        </div>
+        <div class="form-group">
+          <label for="c311-status-email">{{ t('field.email', 'Email') }}</label>
+          <input id="c311-status-email" v-model.trim="statusLookup.email" class="form-control" type="email" autocomplete="email" :aria-invalid="hasStatusError('email') ? 'true' : 'false'" @input="statusErrors = []">
+        </div>
+        <button class="btn btn-primary" type="submit" data-c311-action="lookup-status" :disabled="statusBusy">
+          {{ statusBusy ? t('action.working', 'Working…') : t('action.lookupStatus', 'Check status') }}
+        </button>
+      </form>
+      <c311-data-state v-if="statusResultState !== 'populated'" :state="statusResultState" :error="statusError" @retry="lookupStatus" />
+      <article v-else-if="statusResult" class="mt-4" data-c311-status-result>
+        <h3>{{ t('portal.status.result', 'Request status') }}</h3>
+        <p><strong>{{ t('field.requestNumber', 'Request number') }}:</strong> {{ statusResult.request_number }}</p>
+        <p><strong>{{ t('field.status', 'Status') }}:</strong> <span data-c311-status-value>{{ statusResult.status }}</span> <span data-c311-status-label>({{ statusLabel(statusResult.status) }})</span></p>
+        <p><strong>{{ t('field.summary', 'Summary') }}:</strong> {{ statusResult.summary }}</p>
+        <p><strong>{{ t('field.department', 'Department') }}:</strong> {{ statusResult.owning_department }}</p>
+        <h4>{{ t('portal.status.history', 'Public history') }}</h4>
+        <ol data-c311-status-history>
+          <li v-for="entry in statusResult.history" :key="`${entry.action}-${entry.occurred_at}`">{{ entry.action }} · {{ formatDate(entry.occurred_at) }} · {{ entry.responsible_department }}</li>
+        </ol>
+      </article>
+    </section>
+
     <section v-if="isRequestFormRoute" aria-labelledby="submit-heading" class="mt-4 c311-request-page">
       <h2 id="submit-heading" class="h4">{{ isStaffAssistRoute ? t('portal.submit.staffTitle', 'Submit a request for a resident') : t('portal.submit.title', 'Submit a service request') }}</h2>
       <p v-if="isStaffAssistRoute" class="text-muted">{{ t('portal.submit.staffDescription', 'This request will be created using your staff permissions.') }}</p>
@@ -172,6 +202,19 @@ function stableSerialize (value) {
   return JSON.stringify(value)
 }
 
+function normalizeError (error) {
+  if (!error || typeof error !== 'object') return { message: String(error || 'The operation could not be completed.') }
+  return {
+    status: error.status,
+    code: error.code || error.error,
+    error: error.error || error.code,
+    message: error.message || 'The operation could not be completed.',
+    retryable: error.retryable === true,
+    errors: Array.isArray(error.errors) ? error.errors : (Array.isArray(error.fieldErrors) ? error.fieldErrors : []),
+    current_version: error.current_version,
+  }
+}
+
 export default {
   name: 'C311Portal',
   components: { C311AppShell, C311DataState, C311ErrorSummary, C311CapabilityAction, C311HelpDrawer, C311LanguageSelector, C311MainNav, C311ResponsiveData, C311AttachmentPicker, C311LocationPicker },
@@ -184,6 +227,13 @@ export default {
     statusMessage: '',
     successMessage: '',
     formErrors: [],
+    statusLookup: { request_number: '', email: '' },
+    statusErrors: [],
+    statusBusy: false,
+    statusResult: null,
+    statusResultState: 'empty',
+    statusError: null,
+    statusStorageKey: 'c311.public.status.lookup',
     submitting: false,
     draftSaving: false,
     draftID: '',
@@ -228,7 +278,9 @@ export default {
     isSubmitRoute () { return this.$route?.name === 'c311.submit' },
     isStaffAssistRoute () { return this.$route?.name === 'c311.staff.submit' },
     isRequestFormRoute () { return this.isSubmitRoute || this.isStaffAssistRoute },
-    showRequestList () { return this.$route?.name === 'c311.status' },
+    showStatusLookup () { return this.$route?.name === 'c311.status' && typeof this.provider?.getPublicStatus === 'function' },
+    showRequestList () { return this.$route?.name === 'c311.status' && !this.showStatusLookup },
+    statusFieldTargets () { return { request_number: 'c311-status-request-number', email: 'c311-status-email' } },
     canCapability () {
       return capability => {
         if (typeof this.$C311?.can === 'function') return this.$C311.can(capability)
@@ -268,6 +320,7 @@ export default {
   },
   watch: {
     form: { deep: true, handler () { if (this.isRequestFormRoute && this.c311Dirty) this.c311SaveDirtyDraft(this.draftStorageValue()) } },
+    statusLookup: { deep: true, handler (value) { if (this.showStatusLookup) this.saveStatusLookup(value) } },
     $route: {
       deep: true,
       handler (to, from) {
@@ -294,6 +347,7 @@ export default {
     this.closeAttachmentPreview?.()
   },
   methods: {
+    formatDate (value) { return formatDate(value) },
     t (key, fallback, params = {}) {
       const translated = this.$t?.(`c311:${key}`)
       const value = translated && translated !== `c311:${key}` && translated !== key ? translated : fallback
@@ -396,8 +450,14 @@ export default {
     async load () {
       const generation = ++this.loadGeneration
       this.state = 'loading'; this.dataError = null; this.formErrors = []; this.successMessage = ''; this.submissionResult = null
+      this.statusErrors = []; this.statusResult = null; this.statusResultState = 'empty'; this.statusError = null
       if (this.isRequestFormRoute) {
         await this.loadRequestForm(generation)
+        return
+      }
+      if (this.showStatusLookup) {
+        this.statusLookup = this.readStatusLookup()
+        this.state = 'populated'
         return
       }
       if (this.showRequestList) {
@@ -406,9 +466,57 @@ export default {
       }
       if (this.isCurrentLoad(generation)) this.state = 'populated'
     },
+    hasStatusError (field) { return this.statusErrors.some(error => error.field === field || error.field === `/${field}`) },
+    readStatusLookup () {
+      if (typeof window === 'undefined' || !window.sessionStorage) return { request_number: '', email: '' }
+      try {
+        const raw = window.sessionStorage.getItem(this.statusStorageKey)
+        const value = raw ? JSON.parse(raw) : {}
+        return { request_number: typeof value.request_number === 'string' ? value.request_number : '', email: typeof value.email === 'string' ? value.email : '' }
+      } catch (_error) {
+        return { request_number: '', email: '' }
+      }
+    },
+    saveStatusLookup (value = this.statusLookup) {
+      if (typeof window === 'undefined' || !window.sessionStorage) return
+      try {
+        window.sessionStorage.setItem(this.statusStorageKey, JSON.stringify({ request_number: String(value?.request_number || '').trim(), email: String(value?.email || '').trim() }))
+      } catch (_error) {}
+    },
+    statusLabel (status) { return this.t(`status.value.${String(status || '').toLowerCase()}`, String(status || '')) },
+    async lookupStatus () {
+      if (this.statusBusy) return
+      const generation = this.loadGeneration
+      this.statusErrors = []
+      this.statusError = null
+      this.statusResult = null
+      const errors = []
+      if (!/^SR-[0-9]{4}-[0-9]{5}$/.test(this.statusLookup.request_number)) errors.push({ field: 'request_number', code: 'INVALID_FORMAT', message: this.t('error.requestNumber', 'Enter a valid request number.') })
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.statusLookup.email)) errors.push({ field: 'email', code: 'INVALID_FORMAT', message: this.t('error.email', 'Enter a valid email address.') })
+      if (errors.length) {
+        this.statusErrors = errors
+        this.statusResultState = 'validation-error'
+        return
+      }
+      this.statusBusy = true
+      this.statusResultState = 'loading'
+      try {
+        const response = await this.provider.getPublicStatus({ ...this.statusLookup })
+        if (!this.isCurrentLoad(generation)) return
+        this.statusResult = response?.request_detail || null
+        this.statusResultState = this.statusResult ? 'populated' : 'not-found'
+        if (!this.statusResult) this.statusError = { status: 404, error: 'NOT_FOUND', message: this.t('status.not-found.message', 'The requested information could not be found.') }
+      } catch (error) {
+        if (!this.isCurrentLoad(generation)) return
+        this.statusError = normalizeError(error)
+        this.statusResultState = c311StateForError?.(this.statusError) || (this.statusError.retryable ? 'retryable-error' : 'terminal-error')
+      } finally {
+        this.statusBusy = false
+      }
+    },
     setDataError (error) {
-      this.dataError = error
-      this.state = c311StateForError?.(error) || (error?.retryable ? 'retryable-error' : 'terminal-error')
+      this.dataError = normalizeError(error)
+      this.state = c311StateForError?.(this.dataError) || (this.dataError.retryable ? 'retryable-error' : 'terminal-error')
     },
     async loadRequestForm (generation) {
       this.state = 'populated'

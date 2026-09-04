@@ -321,9 +321,147 @@ describe('C311 shared components', () => {
     expect(wrapper.text()).toContain('Request')
   })
 
+  it('exposes an accessible request selection action in both responsive views', async () => {
+    const wrapper = mount(C311ResponsiveData, {
+      propsData: { items: [{ id: 'request-1', name: 'Request' }], columns: [{ key: 'id', label: 'ID' }], selectable: true, actionLabel: 'View request' },
+    })
+    expect(wrapper.find('[data-c311-action="view-request-request-1"]').exists()).toBe(true)
+    await wrapper.find('[data-c311-action="view-request-request-1"]').trigger('click')
+    expect(wrapper.emitted('select')).toBeTruthy()
+    expect(wrapper.emitted('select')[0][0]).toEqual({ id: 'request-1', name: 'Request' })
+  })
+
   it('formats instants in the fixed New York timezone with EST/EDT', () => {
     expect(mockFormatC311DateTime('2026-01-15T15:00:00.000Z', 'en-US')).toBe('01/15/2026 10:00 AM EST')
     expect(mockFormatC311DateTime('2026-07-15T15:00:00.000Z', 'en-US')).toBe('07/15/2026 11:00 AM EDT')
+  })
+
+  it('looks up anonymous status with a stable status value, history, and privacy-safe misses', async () => {
+    const provider = {
+      getPublicStatus: jest.fn()
+        .mockResolvedValueOnce({ request_detail: { request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED', owning_department: 'STREETS', history: [] } })
+        .mockResolvedValueOnce({ request_detail: null }),
+    }
+    const route = { name: 'c311.status', path: '/c311/status', query: {} }
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: route, $C311: { provider, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-capability-action': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    wrapper.vm.statusLookup = { request_number: 'SR-2026-00001', email: 'alex@example.test' }
+    await wrapper.vm.lookupStatus()
+    expect(provider.getPublicStatus).toHaveBeenCalledWith(wrapper.vm.statusLookup)
+    expect(wrapper.vm.statusResult.status).toBe('SUBMITTED')
+    expect(wrapper.vm.statusLabel('SUBMITTED')).toBe('SUBMITTED')
+    await wrapper.vm.lookupStatus()
+    expect(wrapper.vm.statusResult).toBe(null)
+    expect(wrapper.vm.statusResultState).toBe('not-found')
+  })
+
+  it('maps status validation links to the actual request number and email controls', async () => {
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: { name: 'c311.status', path: '/c311/status', query: {} }, $C311: { provider: { getPublicStatus: jest.fn() }, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-capability-action': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    expect(wrapper.vm.statusFieldTargets).toEqual({ request_number: 'c311-status-request-number', email: 'c311-status-email' })
+    wrapper.vm.statusErrors = [{ field: 'request_number', code: 'INVALID_FORMAT', message: 'Invalid request number' }]
+    await Vue.nextTick()
+    expect(wrapper.vm.statusFieldTargets.request_number).toBe(wrapper.find('#c311-status-request-number').attributes('id'))
+  })
+
+  it('restores valid anonymous status lookup input after a page refresh', async () => {
+    sessionStorage.setItem('c311.public.status.lookup', JSON.stringify({ request_number: 'SR-2026-00001', email: 'alex@example.test' }))
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: { name: 'c311.status', path: '/c311/status', query: {} }, $C311: { provider: { getPublicStatus: jest.fn() }, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-capability-action': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    expect(wrapper.vm.statusLookup).toEqual({ request_number: 'SR-2026-00001', email: 'alex@example.test' })
+  })
+
+  it('loads my requests, opens the public detail projection, and requests a reopen', async () => {
+    const provider = {
+      listPortalRequests: jest.fn().mockResolvedValue({ items: [{ request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Pothole', status: 'RESOLVED', updated_at: '2026-01-15T15:00:00.000Z' }] }),
+      getProfile: jest.fn().mockResolvedValue({ emails: ['alex@example.test'] }),
+      getPublicStatus: jest.fn().mockResolvedValue({ request_detail: { request_number: 'SR-2026-00001', summary: 'Pothole', status: 'RESOLVED', owning_department: 'STREETS', history: [{ action: 'RESOLVED', occurred_at: '2026-01-15T15:00:00.000Z', responsible_department: 'STREETS' }] } }),
+      reopenPortalRequest: jest.fn().mockResolvedValue({ request_id: 'request-fixture-001', status: 'PENDING_APPROVAL' }),
+    }
+    const capabilities = ['portal_my_requests', 'portal_reopen_request']
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.requests', query: {} }, $C311: { provider, session: { authenticated: true, actor: { actor_id: 'actor-1', capabilities } }, can: capability => capabilities.includes(capability) } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    expect(wrapper.vm.items).toHaveLength(1)
+    expect(wrapper.vm.requestColumns[2].format('RESOLVED')).toBe('RESOLVED (RESOLVED)')
+    await wrapper.vm.selectRequest(wrapper.vm.items[0])
+    expect(provider.getPublicStatus).toHaveBeenCalledWith({ request_number: 'SR-2026-00001', email: 'alex@example.test' })
+    expect(wrapper.vm.requestDetail.history).toHaveLength(1)
+    wrapper.vm.reopenReason = 'The issue is still present.'
+    await wrapper.vm.reopenRequest()
+    expect(provider.reopenPortalRequest).toHaveBeenCalledWith('request-fixture-001', 'The issue is still present.')
+    expect(wrapper.vm.reopenMessage).toContain('PENDING_APPROVAL')
+  })
+
+  it('uses the associated constituent profile when opening a related request', async () => {
+    const provider = {
+      listPortalRequests: jest.fn().mockResolvedValue({ items: [{ request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED' }] }),
+      getProfile: jest.fn().mockResolvedValue({ constituent_id: 'constituent-related', emails: ['', 'related@example.test'] }),
+      getPublicStatus: jest.fn().mockResolvedValue({ request_detail: { request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED', owning_department: 'STREETS', history: [] } }),
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.requests', query: {} }, $C311: { provider, session: { authenticated: true, actor: { actor_id: 'actor-related', capabilities: ['portal_my_requests'] } }, can: () => true } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    await wrapper.vm.selectRequest(wrapper.vm.items[0])
+    expect(provider.getPublicStatus).toHaveBeenCalledWith({ request_number: 'SR-2026-00001', email: 'related@example.test' })
+    expect(wrapper.vm.requestDetail.request_number).toBe('SR-2026-00001')
+  })
+
+  it('passes the contract page token and appends the next request page', async () => {
+    const provider = {
+      listPortalRequests: jest.fn().mockResolvedValue({ items: [{ request_id: 'request-1' }], next_page_token: 'page-2' }),
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.requests', query: {} }, $C311: { provider, session: { authenticated: true, actor: { capabilities: ['portal_my_requests'] } }, can: () => true } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    expect(provider.listPortalRequests).toHaveBeenCalledWith({ page_size: 50 })
+    expect(wrapper.vm.requestNextPageToken).toBe('page-2')
+    provider.listPortalRequests.mockResolvedValueOnce({ items: [{ request_id: 'request-2' }], next_page_token: null })
+    await wrapper.vm.loadMoreRequests()
+    expect(provider.listPortalRequests).toHaveBeenLastCalledWith({ page_token: 'page-2', page_size: 50 })
+    expect(wrapper.vm.items.map(item => item.request_id)).toEqual(['request-1', 'request-2'])
+  })
+
+  it('does not let an older request detail response replace the current selection', async () => {
+    let resolveFirst
+    let resolveSecond
+    const firstResponse = new Promise(resolve => { resolveFirst = resolve })
+    const secondResponse = new Promise(resolve => { resolveSecond = resolve })
+    const requests = [
+      { request_id: 'request-1', request_number: 'SR-2026-00001', status: 'SUBMITTED' },
+      { request_id: 'request-2', request_number: 'SR-2026-00002', status: 'SUBMITTED' },
+    ]
+    const provider = {
+      listPortalRequests: jest.fn().mockResolvedValue({ items: requests }),
+      getProfile: jest.fn().mockResolvedValue({ emails: ['alex@example.test'] }),
+      getPublicStatus: jest.fn().mockImplementation(({ request_number: requestNumber }) => requestNumber.endsWith('001') ? firstResponse : secondResponse),
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.requests', query: {} }, $C311: { provider, session: { authenticated: true, actor: { capabilities: ['portal_my_requests'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    const firstSelection = wrapper.vm.selectRequest(requests[0])
+    const secondSelection = wrapper.vm.selectRequest(requests[1])
+    resolveSecond({ request_detail: { request_number: 'SR-2026-00002', summary: 'Second', status: 'SUBMITTED', history: [] } })
+    await secondSelection
+    resolveFirst({ request_detail: { request_number: 'SR-2026-00001', summary: 'First', status: 'SUBMITTED', history: [] } })
+    await firstSelection
+    expect(wrapper.vm.selectedRequest.request_id).toBe('request-2')
+    expect(wrapper.vm.requestDetail.summary).toBe('Second')
   })
 
   it('covers public portal loading, validation, submit success, and provider errors', async () => {
@@ -404,6 +542,47 @@ describe('C311 shared components', () => {
     await wrapper.vm.load()
     expect(wrapper.vm.state).toBe('terminal-error')
     expect(wrapper.vm.dataError.message).toBe('unavailable')
+  })
+
+  it('loads staff relationships and appends notes through the contract provider', async () => {
+    const request = { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', version: 1 }
+    const provider = {
+      listStaffRequests: jest.fn().mockResolvedValue({ items: [request] }),
+      getStaffRequest: jest.fn().mockResolvedValue({ request, relationships: [{ constituent_id: 'constituent-fixture-001', relationship_type: 'PRIMARY_REQUESTER', portal_visible: true, notify_status: false, notification_target: null, notification_result: 'NOT_REQUESTED', audit: [{ audit_id: 'audit-primary', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }] }], audit: [{ audit_id: 'audit-primary', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }], notes: [] }),
+      linkStaffConstituent: jest.fn().mockResolvedValue({ request: { ...request, version: 2 }, relationships: [{ constituent_id: 'constituent-fixture-001', relationship_type: 'PRIMARY_REQUESTER', portal_visible: true, notify_status: false, notification_target: null, notification_result: 'NOT_REQUESTED', audit: [{ audit_id: 'audit-primary', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }] }, { constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT', portal_visible: true, notify_status: true, notification_target: 'constituent-2', notification_result: 'SENT', audit: [{ audit_id: 'audit-link', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }] }], audit: [{ audit_id: 'audit-primary', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }, { audit_id: 'audit-link', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }] }),
+      unlinkStaffConstituent: jest.fn().mockResolvedValue({ request: { ...request, version: 3 }, relationships: [{ constituent_id: 'constituent-fixture-001', relationship_type: 'PRIMARY_REQUESTER', portal_visible: true, notify_status: false, notification_target: null, notification_result: 'NOT_REQUESTED', audit: [{ audit_id: 'audit-primary', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }] }], audit: [{ audit_id: 'audit-primary', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }, { audit_id: 'audit-link', action: 'LINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }, { audit_id: 'audit-unlink', action: 'UNLINKED', actor_id: 'staff-1', occurred_at: '2026-01-15T15:00:00.000Z' }] }),
+      createStaffNote: jest.fn().mockResolvedValue({ note_id: 'note-1', body: 'Resident called back', portal_visible: true, created_at: '2026-01-15T15:00:00.000Z' }),
+    }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff' }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_queue', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_note_create'] } }, can: capability => ['staff_constituent_link', 'staff_constituent_unlink', 'staff_note_create'].includes(capability) } },
+      stubs: {
+        'c311-app-shell': AppShellStub,
+        'c311-data-state': DataStateStub,
+        'c311-help-drawer': ChildStub,
+        'c311-language-selector': ChildStub,
+        'c311-main-nav': ChildStub,
+        'c311-responsive-data': ChildStub,
+      },
+    })
+    await wrapper.vm.load()
+    await wrapper.vm.selectRequest(request)
+    expect(wrapper.vm.relationships).toHaveLength(1)
+    expect(wrapper.find('[data-c311-relationship-notification-result]').text()).toContain('NOT_REQUESTED')
+    wrapper.vm.relationshipForm.constituent_id = 'constituent-2'
+    wrapper.vm.relationshipForm.notify_status = true
+    await wrapper.vm.linkConstituent()
+    expect(provider.linkStaffConstituent).toHaveBeenCalledWith('request-fixture-001', expect.objectContaining({ constituent_id: 'constituent-2', portal_visible: true, notify_status: true }), { expectedVersion: 1 })
+    expect(wrapper.vm.relationships).toHaveLength(2)
+    expect(wrapper.find('[data-c311-relationship-notification-target]').text()).toContain('constituent-2')
+    expect(wrapper.findAll('[data-c311-relationship-notification-result]').wrappers.map(item => item.text()).join(' ')).toContain('SENT')
+    expect(wrapper.findAll('[data-c311-relationship-audit]').length).toBeGreaterThanOrEqual(2)
+    await wrapper.vm.unlinkConstituent(wrapper.vm.relationships[1])
+    expect(provider.unlinkStaffConstituent).toHaveBeenCalledWith('request-fixture-001', 'constituent-2', expect.any(Object), { expectedVersion: 2 })
+    expect(wrapper.find('[data-c311-relationship-audit-events]').text()).toContain('UNLINKED')
+    wrapper.vm.noteForm = { body: 'Resident called back', portal_visible: true }
+    await wrapper.vm.createNote()
+    expect(provider.createStaffNote).toHaveBeenCalledWith('request-fixture-001', { body: 'Resident called back', portal_visible: true })
+    expect(wrapper.vm.notes).toHaveLength(1)
   })
 
   it('defines public portal and guarded staff routes with mock interaction gating', () => {
@@ -668,6 +847,27 @@ describe('C311 shared components', () => {
     await wrapper.vm.changePassword()
     expect(provider.changePassword).toHaveBeenCalledWith({ current_password: 'Current-password-1!', new_password: 'ValidPassword1!' })
     expect(wrapper.vm.forms.account.new_password).toBe('')
+  })
+
+  it('keeps account input and selected language when the account page reloads', async () => {
+    const profile = { display_name: 'Alex Example', preferred_language: 'EN', login_identifier: 'alex', version: 1, phone_numbers: [], addresses: [] }
+    const provider = {
+      getSession: jest.fn().mockResolvedValue({ authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['profile_get'] }, preferred_language: 'EN' }),
+      getProfile: jest.fn().mockResolvedValue(profile),
+      updateLanguage: jest.fn().mockResolvedValue({ language: 'ES' }),
+    }
+    const route = { name: 'c311.account', query: {} }
+    const i18n = { locale: 'en', i18next: { changeLanguage: jest.fn().mockResolvedValue(undefined) } }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: route, $C311: { provider, session: { authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['profile_get'] } } }, $i18n: i18n },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    wrapper.vm.forms.account.display_name = 'Edited name'
+    await wrapper.vm.languageChanged('ES')
+    expect(provider.updateLanguage).toHaveBeenCalledWith('ES')
+    expect(wrapper.vm.forms.account.preferred_language).toBe('ES')
+    expect(wrapper.vm.forms.account.display_name).toBe('Edited name')
   })
 
   it('routes callback pending-link confirmation through server state', async () => {
@@ -1087,6 +1287,114 @@ describe('C311 shared components', () => {
     await Vue.nextTick()
     expect(provider.uploadPortalAttachment).toHaveBeenCalledTimes(2)
     expect(wrapper.vm.form.attachment_tokens).toEqual(['opaque-retry-token'])
+  })
+
+  it('renders only portal-visible relationships and notes with actor and local time', async () => {
+    const provider = {
+      listPortalRequests: jest.fn().mockResolvedValue({ items: [{ request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED' }] }),
+      getProfile: jest.fn().mockResolvedValue({ emails: ['alex@example.test'] }),
+      getPublicStatus: jest.fn().mockResolvedValue({ request_detail: {
+        request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED', owning_department: 'STREETS', history: [],
+        relationships: [{ constituent_id: 'constituent-fixture-001', relationship_type: 'PRIMARY_REQUESTER', portal_visible: true, notify_status: true, notification_target: 'constituent-fixture-001', notification_result: 'SENT', audit: [{ audit_id: 'audit-1', action: 'LINKED', actor_id: 'actor-fixture-agent', occurred_at: '2026-01-15T15:00:00.000Z' }] }, { constituent_id: 'hidden-constituent', relationship_type: 'REPORTER', portal_visible: false, notify_status: false }],
+        notes: [{ note_id: 'note-public', author_constituent_id: 'actor-fixture-agent', body: 'Public update', portal_visible: true, created_at: '2026-01-15T15:00:00.000Z' }, { note_id: 'note-private', author_constituent_id: 'actor-fixture-agent', body: 'Internal update', portal_visible: false, created_at: '2026-01-15T15:00:00.000Z' }],
+      } }),
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.requests', query: {} }, $C311: { provider, session: { authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['portal_my_requests'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    await wrapper.vm.selectRequest(wrapper.vm.items[0])
+    expect(wrapper.find('[data-c311-public-relationships]').text()).toContain('PRIMARY_REQUESTER')
+    expect(wrapper.find('[data-c311-public-relationships]').text()).toContain('notify status')
+    expect(wrapper.find('[data-c311-public-notification-target]').text()).toContain('constituent-fixture-001')
+    expect(wrapper.find('[data-c311-public-notification-result]').text()).toContain('SENT')
+    expect(wrapper.find('[data-c311-public-relationship-audit]').text()).toContain('actor-fixture-agent')
+    expect(wrapper.find('[data-c311-public-relationships]').text()).not.toContain('hidden-constituent')
+    expect(wrapper.find('[data-c311-public-notes]').text()).toContain('Public update')
+    expect(wrapper.find('[data-c311-public-notes]').text()).toContain('actor-fixture-agent')
+    expect(wrapper.find('[data-c311-public-notes]').text()).toContain('01/15/2026 10:00 AM EST')
+    expect(wrapper.find('[data-c311-public-notes]').text()).not.toContain('Internal update')
+  })
+
+  it('allows an authenticated constituent to append a public note and keeps the projection visible', async () => {
+    const note = { note_id: 'note-added', request_id: 'request-fixture-001', author_constituent_id: 'actor-1', body: 'Resident follow-up', portal_visible: true, created_at: '2026-01-15T15:00:00.000Z' }
+    const provider = {
+      listPortalRequests: jest.fn().mockResolvedValue({ items: [{ request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED' }] }),
+      getProfile: jest.fn().mockResolvedValue({ emails: ['alex@example.test'] }),
+      getPublicStatus: jest.fn().mockResolvedValue({ request_detail: { request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED', owning_department: 'STREETS', history: [], relationships: [], notes: [] } }),
+      createPortalNote: jest.fn().mockResolvedValue(note),
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.requests', query: {} }, $C311: { provider, session: { authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['portal_my_requests'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    await wrapper.vm.selectRequest(wrapper.vm.items[0])
+    await Vue.nextTick()
+    expect(wrapper.find('[data-c311-form="public-note"]').exists()).toBe(true)
+    await wrapper.find('#c311-public-note-body').setValue('Resident follow-up')
+    await wrapper.vm.appendPublicNote()
+    expect(provider.createPortalNote).toHaveBeenCalledWith('request-fixture-001', { body: 'Resident follow-up', portal_visible: true })
+    expect(wrapper.vm.publicNoteDraft).toBe('')
+    expect(wrapper.find('[data-c311-public-notes]').text()).toContain('Resident follow-up')
+  })
+
+  it('keeps a public note draft when the provider rejects the append', async () => {
+    const provider = {
+      listPortalRequests: jest.fn().mockResolvedValue({ items: [{ request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED' }] }),
+      getProfile: jest.fn().mockResolvedValue({ emails: ['alex@example.test'] }),
+      getPublicStatus: jest.fn().mockResolvedValue({ request_detail: { request_number: 'SR-2026-00001', summary: 'Pothole', status: 'SUBMITTED', owning_department: 'STREETS', history: [], relationships: [], notes: [] } }),
+      createPortalNote: jest.fn().mockRejectedValue({ status: 503, error: 'TEMPORARILY_UNAVAILABLE', message: 'Try again.', retryable: true }),
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.requests', query: {} }, $C311: { provider, session: { authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['portal_my_requests'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    await wrapper.vm.selectRequest(wrapper.vm.items[0])
+    wrapper.vm.publicNoteDraft = 'Keep this text'
+    await wrapper.vm.appendPublicNote()
+    expect(wrapper.vm.publicNoteDraft).toBe('Keep this text')
+    expect(wrapper.vm.publicNoteError.message).toBe('Try again.')
+  })
+
+  it('requires explicit confirmation and clears the session after mock account disposition', async () => {
+    const session = { authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['profile_get'] } }
+    const runtime = { provider: { getProfile: jest.fn().mockResolvedValue({ display_name: 'Alex', preferred_language: 'EN', login_identifier: 'alex' }), deleteOrAnonymizeAccount: jest.fn().mockResolvedValue({ status: 'ANONYMIZED', message: 'Account anonymized.' }) }, session, clearSession: jest.fn(() => { runtime.session = { authenticated: false, actor: null } }) }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.account', query: {} }, $C311: runtime },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    wrapper.vm.accountDispositionConfirmation = 'wrong'
+    await wrapper.vm.updateAccountDisposition()
+    expect(runtime.provider.deleteOrAnonymizeAccount).not.toHaveBeenCalled()
+    wrapper.vm.accountDispositionConfirmation = 'ANONYMIZE'
+    await wrapper.vm.updateAccountDisposition()
+    expect(runtime.provider.deleteOrAnonymizeAccount).toHaveBeenCalledWith({ mode: 'ANONYMIZE', confirmation: 'ANONYMIZE' })
+    expect(runtime.clearSession).toHaveBeenCalledTimes(1)
+    expect(wrapper.vm.accountDispositionResult.status).toBe('ANONYMIZED')
+    expect(wrapper.find('[data-c311-account-disposition-result]').text()).toContain('ANONYMIZED')
+  })
+
+  it('preserves account input and session when account disposition conflicts', async () => {
+    const session = { authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['profile_get'] } }
+    const provider = { getProfile: jest.fn().mockResolvedValue({ display_name: 'Alex', preferred_language: 'EN', login_identifier: 'alex' }), deleteOrAnonymizeAccount: jest.fn().mockRejectedValue({ status: 409, error: 'VERSION_CONFLICT', message: 'Account changed.' }) }
+    const runtime = { provider, session, clearSession: jest.fn() }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.account', query: {} }, $C311: runtime },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    wrapper.vm.forms.account.display_name = 'Edited name'
+    wrapper.vm.accountDispositionConfirmation = 'DELETE'
+    wrapper.vm.accountDispositionMode = 'DELETE'
+    await wrapper.vm.updateAccountDisposition()
+    expect(wrapper.vm.forms.account.display_name).toBe('Edited name')
+    expect(runtime.clearSession).not.toHaveBeenCalled()
+    expect(wrapper.vm.accountDispositionResult).toBe(null)
+    expect(wrapper.vm.formErrors[0].code).toBe('VERSION_CONFLICT')
   })
 
   it('renders attachment metadata, progress, retry and the five-file limit', async () => {

@@ -90,7 +90,7 @@
 
     <section v-else-if="page === 'account'" data-c311-page="account" class="c311-public-page">
       <c311-data-state v-if="state !== 'populated'" :state="state" :error="dataError" @retry="load" />
-      <template v-else>
+      <template v-else-if="!accountDispositionResult">
       <c311-error-summary :errors="formErrors" :field-targets="fieldTargets" :title="t('error.review', 'Review your information')" />
         <form @submit.prevent="updateAccount">
           <div class="form-group"><label for="c311-account-name">{{ t('field.displayName', 'Name') }}</label><input id="c311-account-name" v-model.trim="forms.account.display_name" class="form-control" autocomplete="name" aria-describedby="c311-error-summary" aria-errormessage="c311-error-summary" :aria-invalid="hasError('display_name') ? 'true' : 'false'" @input="markDirty"></div>
@@ -113,14 +113,86 @@
           <div class="form-group"><label for="c311-account-new-password">{{ t('field.newPassword', 'New password') }}</label><input id="c311-account-new-password" v-model="forms.account.new_password" class="form-control" type="password" autocomplete="new-password" aria-describedby="c311-error-summary" aria-errormessage="c311-error-summary" :aria-invalid="hasError('new_password') ? 'true' : 'false'"><small class="form-text text-muted">{{ passwordRuleText }}</small></div>
           <button class="btn btn-primary" type="submit" data-c311-action="change-password" :disabled="busy.password">{{ busy.password ? t('action.working', 'Working…') : t('action.changePassword', 'Save password') }}</button>
         </form>
+        <section v-if="canManageAccount" class="mt-4" data-c311-account-disposition aria-labelledby="c311-account-disposition-heading">
+          <h2 id="c311-account-disposition-heading">{{ t('account.disposition.title', 'Delete or anonymize account') }}</h2>
+          <p class="text-muted">{{ t('account.disposition.description', 'This mock-only action permanently changes this account. Type the action name to confirm.') }}</p>
+          <label for="c311-account-disposition-mode">{{ t('account.disposition.mode', 'Action') }}</label>
+          <select id="c311-account-disposition-mode" v-model="accountDispositionMode" class="form-control" :disabled="busy.accountDisposition">
+            <option value="ANONYMIZE">{{ t('account.disposition.anonymize', 'Anonymize account') }}</option>
+            <option value="DELETE">{{ t('account.disposition.delete', 'Delete account') }}</option>
+          </select>
+          <label class="mt-2" for="c311-account-disposition-confirm">{{ t('account.disposition.confirmLabel', 'Type the action name to confirm') }}</label>
+          <input id="c311-account-disposition-confirm" v-model.trim="accountDispositionConfirmation" class="form-control" autocomplete="off" :aria-invalid="hasError('confirmation') ? 'true' : 'false'">
+          <button class="btn btn-outline-danger mt-2" type="button" data-c311-action="account-disposition" :disabled="busy.accountDisposition" @click="updateAccountDisposition">{{ busy.accountDisposition ? t('action.working', 'Working…') : t('account.disposition.submit', 'Confirm account action') }}</button>
+        </section>
         <p v-if="successMessage" class="alert alert-success mt-3" role="status">{{ successMessage }}</p>
       </template>
+      <section v-if="accountDispositionResult" class="alert alert-success mt-3" role="status" data-c311-account-disposition-result>
+        <strong>{{ accountDispositionResult.status }}</strong>
+        <span class="d-block">{{ accountDispositionResult.message }}</span>
+      </section>
     </section>
 
     <section v-else-if="page === 'requests'" data-c311-page="requests" class="c311-public-page">
       <c311-data-state :state="state" :error="dataError" @retry="load">
-        <template #populated><c311-responsive-data :items="items" :columns="requestColumns" row-key="request_id" :label="t('portal.myRequests', 'My requests')" /></template>
+        <template #populated>
+          <c311-responsive-data :items="items" :columns="requestColumns" row-key="request_id" :label="t('portal.myRequests', 'My requests')" selectable :action-label="t('action.viewRequest', 'View request')" @select="selectRequest" />
+          <div v-if="requestNextPageToken" class="mt-3">
+            <button type="button" class="btn btn-outline-primary" data-c311-action="load-more-requests" :disabled="requestLoadingMore" @click="loadMoreRequests">
+              {{ requestLoadingMore ? t('action.working', 'Working…') : t('action.loadMore', 'Load more') }}
+            </button>
+          </div>
+        </template>
       </c311-data-state>
+      <section v-if="selectedRequest" class="mt-4" data-c311-request-detail aria-labelledby="c311-request-detail-heading">
+        <h2 id="c311-request-detail-heading">{{ t('portal.requestDetail', 'Request details') }}</h2>
+        <c311-data-state v-if="requestDetailState !== 'populated'" :state="requestDetailState" :error="requestDetailError" @retry="selectRequest(selectedRequest)" />
+        <template v-else-if="requestDetail">
+          <p><strong>{{ t('field.requestNumber', 'Request number') }}:</strong> {{ requestDetail.request_number }}</p>
+          <p><strong>{{ t('field.status', 'Status') }}:</strong> {{ requestDetail.status }} ({{ statusLabel(requestDetail.status) }})</p>
+          <p><strong>{{ t('field.summary', 'Summary') }}:</strong> {{ requestDetail.summary }}</p>
+          <p><strong>{{ t('field.department', 'Department') }}:</strong> {{ requestDetail.owning_department }}</p>
+          <h3>{{ t('portal.status.history', 'Public history') }}</h3>
+          <ol data-c311-request-history>
+            <li v-for="entry in requestDetail.history" :key="`${entry.action}-${entry.occurred_at}`">{{ entry.action }} · {{ formatDate(entry.occurred_at) }} · {{ entry.responsible_department }}</li>
+          </ol>
+          <section class="mt-3" data-c311-public-relationships aria-labelledby="c311-public-relationships-heading">
+            <h3 id="c311-public-relationships-heading">{{ t('portal.publicRelationships', 'Public relationships') }}</h3>
+            <p class="text-muted small" data-c311-public-relationship-permission>{{ t('portal.publicRelationshipsPermission', 'Only relationships marked visible in the portal are shown.') }}</p>
+            <ul v-if="publicRelationships.length" class="list-unstyled">
+              <li v-for="relationship in publicRelationships" :key="`${relationship.constituent_id}-${relationship.relationship_type}`" data-c311-public-relationship>
+                <span>{{ relationship.constituent_id }} · {{ relationship.relationship_type }} · {{ relationship.notify_status ? t('staff.notifyStatus', 'notify status') : t('staff.noNotifyStatus', 'do not notify') }}</span>
+                <small v-if="relationship.notification_target" class="d-block" data-c311-public-notification-target>{{ t('portal.notificationTarget', 'Notification target') }}: {{ relationship.notification_target }}</small>
+                <small v-if="relationship.notification_result" class="d-block" data-c311-public-notification-result>{{ t('portal.notificationResult', 'Notification result') }}: {{ relationship.notification_result }}</small>
+                <small v-if="relationship.audit && relationship.audit.length" class="d-block" data-c311-public-relationship-audit>{{ t('portal.relationshipAudit', 'Relationship audit') }}: {{ relationship.audit[0].action }} · {{ relationship.audit[0].actor_id }} · {{ formatDate(relationship.audit[0].occurred_at) }}</small>
+              </li>
+            </ul>
+            <p v-else class="text-muted">{{ t('portal.publicRelationshipsEmpty', 'No public relationships are available.') }}</p>
+          </section>
+          <section class="mt-3" data-c311-public-notes aria-labelledby="c311-public-notes-heading">
+            <h3 id="c311-public-notes-heading">{{ t('portal.publicNotes', 'Public updates') }}</h3>
+            <ol v-if="publicNotes.length" class="list-unstyled">
+              <li v-for="note in publicNotes" :key="note.note_id || `${note.created_at}-${note.body}`" data-c311-public-note>
+                <span class="d-block">{{ note.body }}</span>
+                <small class="text-muted">{{ t('portal.noteAuthor', 'By') }} {{ note.author_constituent_id || t('portal.noteSystemAuthor', 'City 311') }} · {{ note.portal_visible ? t('staff.portalVisible', 'portal visible') : t('staff.internalOnly', 'internal only') }} · {{ formatDate(note.created_at) }}</small>
+              </li>
+            </ol>
+            <p v-else class="text-muted">{{ t('portal.publicNotesEmpty', 'No public updates are available.') }}</p>
+            <form v-if="canAppendPublicNote" class="mt-3" data-c311-form="public-note" @submit.prevent="appendPublicNote">
+              <label for="c311-public-note-body">{{ t('portal.publicNoteInput', 'Add a public update') }}</label>
+              <textarea id="c311-public-note-body" v-model.trim="publicNoteDraft" class="form-control" maxlength="2000" required :aria-invalid="publicNoteError ? 'true' : 'false'" />
+              <button class="btn btn-outline-primary mt-2" type="submit" data-c311-action="append-public-note" :disabled="publicNoteBusy || !publicNoteDraft">{{ publicNoteBusy ? t('action.working', 'Working…') : t('action.addPublicNote', 'Add update') }}</button>
+              <p v-if="publicNoteError" class="alert alert-danger mt-2" role="alert" data-c311-public-note-error>{{ publicNoteError.message }}</p>
+            </form>
+          </section>
+          <form v-if="canReopenRequest" class="mt-3" @submit.prevent="reopenRequest">
+            <label for="c311-reopen-reason">{{ t('field.reopenReason', 'Reason for reopening') }}</label>
+            <textarea id="c311-reopen-reason" v-model.trim="reopenReason" class="form-control" required :aria-invalid="hasError('reason') ? 'true' : 'false'" />
+            <button class="btn btn-primary mt-2" type="submit" data-c311-action="reopen-request" :disabled="reopenBusy">{{ reopenBusy ? t('action.working', 'Working…') : t('action.reopenRequest', 'Request reopen') }}</button>
+          </form>
+          <p v-if="reopenMessage" class="alert alert-info mt-2" role="status">{{ reopenMessage }}</p>
+        </template>
+      </section>
     </section>
 
     <section v-else-if="page === 'auth-callback'" data-c311-page="auth-callback" class="c311-public-page">
@@ -220,12 +292,28 @@ export default {
     formErrors: [],
     linkState: 'idle',
     profile: null,
+    selectedRequest: null,
+    requestDetail: null,
+    requestDetailState: 'empty',
+    requestDetailError: null,
+    publicNoteDraft: '',
+    publicNoteBusy: false,
+    publicNoteError: null,
+    reopenReason: '',
+    reopenBusy: false,
+    reopenMessage: '',
+    requestNextPageToken: null,
+    requestLoadingMore: false,
+    requestPageSize: 50,
     resetToken: '',
     loadGeneration: 0,
     sessionRevision: 0,
     restoredDraftFields: [],
     activeAccountAction: '',
-    busy: { signIn: false, register: false, forgot: false, reset: false, federated: false, account: false, loginIdentifier: false, password: false, link: false },
+    accountDispositionMode: 'ANONYMIZE',
+    accountDispositionConfirmation: '',
+    accountDispositionResult: null,
+    busy: { signIn: false, register: false, forgot: false, reset: false, federated: false, account: false, loginIdentifier: false, password: false, link: false, accountDisposition: false },
     forms: {
       signIn: { login_identifier: '', password: '' },
       register: { display_name: '', email: '', login_identifier: '', password: '', preferred_language: 'EN' },
@@ -309,7 +397,16 @@ export default {
       else items.push({ route: '/c311/sign-in', label: this.t('navigation.signIn', 'Sign in') }, { route: '/c311/register', label: this.t('navigation.register', 'Register') })
       return items
     },
-    requestColumns () { return [{ key: 'request_number', label: this.t('field.requestNumber', 'Request number') }, { key: 'summary', label: this.t('field.summary', 'Summary') }, { key: 'status', label: this.t('field.status', 'Status') }, { key: 'updated_at', label: this.t('field.updated', 'Updated'), format: formatDate }] },
+    requestColumns () { return [{ key: 'request_number', label: this.t('field.requestNumber', 'Request number') }, { key: 'summary', label: this.t('field.summary', 'Summary') }, { key: 'status', label: this.t('field.status', 'Status'), format: value => `${value} (${this.statusLabel(value)})` }, { key: 'updated_at', label: this.t('field.updated', 'Updated'), format: formatDate }] },
+    publicRelationships () { return Array.isArray(this.requestDetail?.relationships) ? this.requestDetail.relationships.filter(relationship => relationship.portal_visible) : [] },
+    publicNotes () { return Array.isArray(this.requestDetail?.notes) ? this.requestDetail.notes.filter(note => note.portal_visible) : [] },
+    canAppendPublicNote () {
+      return !!this.selectedRequest?.request_id && this.isAuthenticated && this.canCapability('portal_my_requests') && typeof this.provider?.createPortalNote === 'function'
+    },
+    canReopenRequest () {
+      return !!this.selectedRequest && ['RESOLVED', 'CLOSED'].includes(this.selectedRequest.status) && this.canCapability('portal_reopen_request')
+    },
+    canManageAccount () { return this.isAuthenticated && this.canCapability('profile_get') && typeof this.provider?.deleteOrAnonymizeAccount === 'function' },
     passwordRuleText () { return this.t('password.rules', 'Use 12–128 characters with at least three of uppercase, lowercase, number, and symbol.') },
     dataErrorState () { return stateForError?.(this.dataError || {}) || 'terminal-error' },
   },
@@ -334,6 +431,7 @@ export default {
   methods: {
     t (key, fallback) { const value = this.$t?.(`c311:${key}`); return value && value !== `c311:${key}` && value !== key ? value : fallback },
     formatDate (value) { return formatDate(value) },
+    statusLabel (status) { return this.t(`status.value.${String(status || '').toLowerCase()}`, String(status || '')) },
     canCapability (capability) {
       if (typeof this.$C311?.can === 'function') return this.$C311.can(capability)
       return !!this.$C311?.session?.actor?.capabilities?.includes(capability)
@@ -364,9 +462,22 @@ export default {
       this.helpBody = ''
       this.branding = null
       this.items = []
+      this.selectedRequest = null
+      this.requestDetail = null
+      this.requestDetailState = 'empty'
+      this.requestDetailError = null
+      this.publicNoteDraft = ''
+      this.publicNoteBusy = false
+      this.publicNoteError = null
+      this.reopenReason = ''
+      this.reopenBusy = false
+      this.requestNextPageToken = null
+      this.requestLoadingMore = false
       this.formErrors = []
       this.profile = null
       this.linkState = 'idle'
+      this.accountDispositionResult = null
+      this.accountDispositionConfirmation = ''
     },
     normalizeField (field) { return String(field || '').replace(/^#/, '').replace(/^\//, '').replace(/\//g, '/') },
     hasError (field) {
@@ -387,6 +498,68 @@ export default {
       this.formErrors = fieldErrors.length
         ? fieldErrors
         : [{ field: 'form', code: normalized.code || normalized.error || 'OPERATION_FAILED', message: normalized.message || this.t('error.operationFailed', 'The operation could not be completed.') }]
+    },
+    async selectRequest (request) {
+      if (!request || !this.provider?.getPublicStatus) return
+      const generation = this.loadGeneration
+      const requestID = request.request_id
+      this.selectedRequest = request
+      this.requestDetail = null
+      this.requestDetailError = null
+      this.requestDetailState = 'loading'
+      try {
+        const profile = this.profile || await this.provider?.getProfile?.()
+        if (generation !== this.loadGeneration || this.selectedRequest?.request_id !== requestID) return
+        if (profile && !this.profile) this.profile = profile
+        const email = Array.isArray(profile?.emails)
+          ? profile.emails.find(value => typeof value === 'string' && value.trim())?.trim()
+          : ''
+        if (!email) throw new Error(this.t('error.requestEmailUnavailable', 'A verified email is required to view this request.'))
+        const result = await this.provider.getPublicStatus({ request_number: request.request_number, email })
+        if (generation !== this.loadGeneration || this.selectedRequest?.request_id !== requestID) return
+        this.requestDetail = result?.request_detail || null
+        this.requestDetailState = this.requestDetail ? 'populated' : 'not-found'
+        if (!this.requestDetail) this.requestDetailError = { status: 404, error: 'NOT_FOUND', message: this.t('status.not-found.message', 'The requested information could not be found.') }
+      } catch (error) {
+        if (generation !== this.loadGeneration || this.selectedRequest?.request_id !== requestID) return
+        this.requestDetailError = error
+        this.requestDetailState = stateForError?.(error) || (error?.retryable ? 'retryable-error' : 'terminal-error')
+      }
+    },
+    async appendPublicNote () {
+      if (!this.canAppendPublicNote || this.publicNoteBusy || !this.selectedRequest || !this.publicNoteDraft) return
+      this.publicNoteBusy = true
+      this.publicNoteError = null
+      this.formErrors = []
+      try {
+        const note = await this.provider.createPortalNote(this.selectedRequest.request_id, { body: this.publicNoteDraft, portal_visible: true })
+        this.requestDetail = { ...this.requestDetail, notes: [...(this.requestDetail?.notes || []), note] }
+        this.publicNoteDraft = ''
+        this.statusMessage = this.t('status.publicNoteAdded', 'Public update added.')
+      } catch (error) {
+        this.publicNoteError = displayError(error)
+        this.setError(error)
+      } finally {
+        this.publicNoteBusy = false
+      }
+    },
+    async reopenRequest () {
+      if (!this.canReopenRequest || this.reopenBusy) return
+      this.formErrors = []
+      this.reopenMessage = ''
+      if (!this.reopenReason) {
+        this.formErrors = [{ field: 'reason', code: 'REQUIRED', message: this.t('error.reopenReason', 'A reason is required.') }]
+        return
+      }
+      this.reopenBusy = true
+      try {
+        const result = await this.provider.reopenPortalRequest(this.selectedRequest.request_id, this.reopenReason)
+        this.reopenMessage = `${result?.status || 'PENDING_APPROVAL'}: ${this.t('status.reopenPending', 'Reopen request submitted for approval.')}`
+      } catch (error) {
+        this.setError(error)
+      } finally {
+        this.reopenBusy = false
+      }
     },
     async runBusy (name, task) {
       if (this.busy[name]) return
@@ -436,9 +609,10 @@ export default {
           this.state = 'populated'; return
         }
         if (this.page === 'requests') {
-          const response = await this.provider?.listPortalRequests?.()
+          const response = await this.provider?.listPortalRequests?.({ page_size: this.requestPageSize })
           if (!isCurrent()) return
           this.items = response?.items || []
+          this.requestNextPageToken = response?.next_page_token || null
           this.state = this.items.length ? 'populated' : 'empty'
           return
         }
@@ -485,6 +659,22 @@ export default {
         this.dataError = normalized
         this.contentState = stateForError?.(normalized) || (normalized.retryable ? 'retryable-error' : 'terminal-error')
         this.state = this.contentState
+      }
+    },
+    async loadMoreRequests () {
+      if (this.requestLoadingMore || !this.requestNextPageToken || this.page !== 'requests') return
+      const generation = this.loadGeneration
+      this.requestLoadingMore = true
+      try {
+        const response = await this.provider?.listPortalRequests?.({ page_token: this.requestNextPageToken, page_size: this.requestPageSize })
+        if (generation !== this.loadGeneration) return
+        this.items = this.items.concat(response?.items || [])
+        this.requestNextPageToken = response?.next_page_token || null
+        this.state = this.items.length ? 'populated' : 'empty'
+      } catch (error) {
+        this.setError(error)
+      } finally {
+        this.requestLoadingMore = false
       }
     },
     async signIn () {
@@ -596,6 +786,11 @@ export default {
         this.formErrors = []
         try {
           const phoneNumbers = this.forms.account.phone_numbers.filter(phone => phone.value?.trim())
+          const invalidPhone = phoneNumbers.findIndex(phone => !/^\+[1-9]\d{1,14}$/.test(phone.value))
+          if (invalidPhone >= 0) {
+            this.formErrors = [{ field: `phone_numbers/${invalidPhone}/value`, code: 'INVALID_FORMAT', message: this.t('error.phone', 'Enter a phone number in international format.') }]
+            return
+          }
           const addresses = this.forms.account.addresses.filter(address => Object.entries(address).some(([key, value]) => key !== 'primary' && String(value || '').trim()))
           const requiredAddressFields = ['line1', 'city', 'region', 'postal_code', 'country']
           const incompleteIndex = addresses.findIndex(address => requiredAddressFields.some(field => !String(address[field] || '').trim()))
@@ -643,8 +838,30 @@ export default {
         try { await this.provider?.changePassword?.({ current_password: this.forms.account.current_password, new_password: this.forms.account.new_password }); this.forms.account.new_password = ''; this.c311ClearDirtyDraft?.(); this.successMessage = this.t('account.password.saved', 'Password changed.') } catch (error) { this.setError(error) }
       })
     },
+    async updateAccountDisposition () {
+      return this.runBusy('accountDisposition', async () => {
+        this.formErrors = []
+        const mode = String(this.accountDispositionMode || '').toUpperCase()
+        if (!['DELETE', 'ANONYMIZE'].includes(mode) || this.accountDispositionConfirmation !== mode) {
+          this.formErrors = [{ field: 'confirmation', code: 'INVALID_VALUE', message: this.t('error.accountDispositionConfirmation', 'Type the selected action name to confirm.') }]
+          return
+        }
+        try {
+          const result = await this.provider?.deleteOrAnonymizeAccount?.({ mode, confirmation: this.accountDispositionConfirmation })
+          this.accountDispositionResult = result
+          this.c311ClearDirtyDraft?.()
+          this.$C311?.clearSession?.()
+          this.sessionRevision++
+          this.statusMessage = this.t('status.accountDispositionComplete', 'Account action completed. You are now signed out.')
+        } catch (error) {
+          this.setError(error)
+        }
+      })
+    },
     async languageChanged (language) {
       language = String(language || 'en').toUpperCase()
+      const accountDraft = this.page === 'account' ? { ...this.forms.account, phone_numbers: this.forms.account.phone_numbers.map(phone => ({ ...phone })), addresses: this.forms.account.addresses.map(address => ({ ...address })) } : null
+      const routeBefore = this.$route?.fullPath || `${this.$route?.name || ''}|${JSON.stringify(this.$route?.query || {})}`
       this.forms.account.preferred_language = language
       this.markDirty()
       const locale = language.toLowerCase()
@@ -653,6 +870,9 @@ export default {
         if (this.$i18n?.i18next?.changeLanguage) await this.$i18n.i18next.changeLanguage(locale)
         if (this.isAuthenticated) await this.provider?.updateLanguage?.(language)
         await this.load()
+        if (accountDraft && routeBefore === (this.$route?.fullPath || `${this.$route?.name || ''}|${JSON.stringify(this.$route?.query || {})}`)) {
+          this.forms.account = { ...accountDraft, preferred_language: language }
+        }
       } catch (error) { this.setError(error) }
     },
     addPhone () {

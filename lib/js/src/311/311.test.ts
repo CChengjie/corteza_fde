@@ -22,7 +22,7 @@ async function expectError (action: () => Promise<unknown>, code: string): Promi
 
 describe('City 311 frontend contract', () => {
   it('returns contract-v1 fixture data with wire-compatible fields', async () => {
-    const fixtures = createDefaultFixtureSet()
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
     const page = await new MockC311Provider().listPortalRequests()
 
     expect(fixtures.fixture_id).to.equal('contract-v1')
@@ -34,7 +34,7 @@ describe('City 311 frontend contract', () => {
   })
 
   it('keeps the empty response shape stable', async () => {
-    const page = await new MockC311Provider({ scenario: 'empty' }).listStaffRequests()
+    const page = await new MockC311Provider({ role: 'service_agent', scenario: 'empty' }).listStaffRequests()
 
     expect(page.items).to.deep.equal([])
     expect(page.total_count).to.equal(0)
@@ -43,7 +43,11 @@ describe('City 311 frontend contract', () => {
   })
 
   it('keeps anonymous lookup privacy and reopen response shapes', async () => {
-    const provider = new MockC311Provider()
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.requests[0].status = 'RESOLVED'
+    fixtures.details['request-fixture-001'].request.status = 'RESOLVED'
+    fixtures.public_details['SR-2026-00001'].status = 'RESOLVED'
+    const provider = new MockC311Provider({ fixtures })
     expect(await provider.getPublicStatus({ request_number: 'SR-2026-99999', email: 'unknown@example.test' })).to.deep.equal({ request_detail: null })
     expect(await provider.getPublicStatus({ request_number: 'SR-2026-00001', email: 'wrong@example.test' })).to.deep.equal({ request_detail: null })
     expect((await provider.getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' })).request_detail?.request_number).to.equal('SR-2026-00001')
@@ -52,6 +56,79 @@ describe('City 311 frontend contract', () => {
       request_id: 'request-fixture-001',
       status: 'PENDING_APPROVAL',
     })
+    expect((await provider.getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' })).request_detail?.status).to.equal('REOPENED')
+  })
+
+  it('allows an associated constituent to open a request through the portal projection', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.relationships!['request-fixture-001'] = [{ constituent_id: 'constituent-related', relationship_type: 'AFFECTED_RESIDENT', portal_visible: true, notify_status: false }]
+    fixtures.public_relationships = fixtures.relationships
+    const profile = { ...fixtures.requests[0].primary_requester, constituent_id: 'constituent-related', emails: ['related@example.test'] }
+    const provider = new MockC311Provider({ role: 'constituent', fixtures, profile })
+
+    expect((await provider.listPortalRequests()).items).to.have.length(1)
+    expect((await provider.getPublicStatus({ request_number: 'SR-2026-00001', email: 'related@example.test' })).request_detail).to.not.equal(null)
+    expect((await provider.getPublicStatus({ request_number: 'SR-2026-00001', email: 'other@example.test' })).request_detail).to.equal(null)
+  })
+
+  it('rejects reopening requests that are not resolved or closed', async () => {
+    const provider = new MockC311Provider({ role: 'constituent' })
+    const error = await expectError(() => provider.reopenPortalRequest('request-fixture-001', 'Too early'), 'VALIDATION_ERROR')
+    expect(error.status).to.equal(422)
+    expect((await provider.getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' })).request_detail?.status).to.equal('SUBMITTED')
+  })
+
+  it('projects only portal-visible relationships and notes for public status', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.relationships!['request-fixture-001'] = [
+      ...(fixtures.relationships?.['request-fixture-001'] || []),
+      { constituent_id: 'constituent-hidden', relationship_type: 'AFFECTED_RESIDENT', portal_visible: false, notify_status: true },
+    ]
+    fixtures.notes!['request-fixture-001'] = [
+      { note_id: 'note-public', request_id: 'request-fixture-001', author_constituent_id: 'actor-fixture-agent', body: 'Public update', portal_visible: true, created_at: '2026-01-15T15:00:00.000Z' },
+      { note_id: 'note-private', request_id: 'request-fixture-001', author_constituent_id: 'actor-fixture-agent', body: 'Internal update', portal_visible: false, created_at: '2026-01-15T15:00:00.000Z' },
+    ]
+    fixtures.public_relationships = fixtures.relationships
+    fixtures.public_notes = fixtures.notes
+    const detail = (await new MockC311Provider({ fixtures }).getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' })).request_detail
+    expect(detail?.relationships?.find(item => item.constituent_id === 'constituent-fixture-001')).to.deep.include({ constituent_id: 'constituent-fixture-001', relationship_type: 'PRIMARY_REQUESTER', portal_visible: true, notify_status: false })
+    expect(detail?.notes).to.deep.equal([{ note_id: 'note-public', request_id: 'request-fixture-001', author_constituent_id: 'actor-fixture-agent', body: 'Public update', portal_visible: true, created_at: '2026-01-15T15:00:00.000Z' }])
+  })
+
+  it('appends a public voter note in Mock mode without exposing it to anonymous users', async () => {
+    const provider = new MockC311Provider({ role: 'constituent' })
+    const note = await provider.createPortalNote('request-fixture-001', { body: 'Resident follow-up', portal_visible: true })
+    expect(note).to.deep.include({ request_id: 'request-fixture-001', author_constituent_id: 'actor-fixture-001', body: 'Resident follow-up', portal_visible: true })
+    expect(note.created_at).to.equal('2026-01-15T15:00:00.000Z')
+    expect(provider.getWriteCount('portal_note_create')).to.equal(1)
+    const status = await provider.getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' })
+    expect(status.request_detail?.notes).to.deep.include(note)
+    await expectError(() => new MockC311Provider({ role: 'public_visitor' }).createPortalNote('request-fixture-001', { body: 'Not allowed', portal_visible: true }), 'UNAUTHENTICATED')
+  })
+
+  it('supports mock-only account deletion and anonymization with explicit confirmation', async () => {
+    const provider = new MockC311Provider({ role: 'constituent' })
+    await expectError(() => provider.deleteOrAnonymizeAccount({ mode: 'ANONYMIZE', confirmation: 'wrong' }), 'VALIDATION_ERROR')
+    const result = await provider.deleteOrAnonymizeAccount({ mode: 'ANONYMIZE', confirmation: 'ANONYMIZE' })
+    expect(result).to.deep.include({ status: 'ANONYMIZED' })
+    expect((await provider.getSession()).authenticated).to.equal(false)
+    expect(provider.getWriteCount('account_disposition')).to.equal(1)
+  })
+
+  it('keeps the mock session and write count unchanged when account disposition fails', async () => {
+    const provider = new MockC311Provider({ role: 'constituent', scenario: 'account-disposition-conflict' })
+    const before = await provider.getSession()
+    await expectError(() => provider.deleteOrAnonymizeAccount({ mode: 'DELETE', confirmation: 'DELETE' }), 'VERSION_CONFLICT')
+    expect(await provider.getSession()).to.deep.equal(before)
+    expect(provider.getWriteCount('account_disposition')).to.equal(0)
+  })
+
+  it('keeps account disposition HTTP side-effect free until a backend operation exists', async () => {
+    const requests: C311TransportRequest[] = []
+    const provider = new C311HttpProvider({ request: async <T> (request: C311TransportRequest): Promise<T> => { requests.push(request); return {} as T } })
+    const error = await expectError(() => provider.deleteOrAnonymizeAccount({ mode: 'DELETE', confirmation: 'DELETE' }), 'OPERATION_FAILED')
+    expect(error.status).to.equal(501)
+    expect(requests).to.deep.equal([])
   })
 
   it('provides complete role and session-expiry fixtures for route checks', () => {
@@ -168,7 +245,7 @@ describe('City 311 frontend contract', () => {
     const portalInput = {} as PortalServiceRequestCreate
     const scenarios: Array<[string, () => Promise<unknown>, string, boolean]> = [
       ['forbidden', () => new MockC311Provider({ scenario: 'forbidden' }).listStaffRequests(), 'FORBIDDEN', false],
-      ['not-found', () => new MockC311Provider({ scenario: 'not-found' }).getStaffRequest('missing'), 'NOT_FOUND', false],
+      ['not-found', () => new MockC311Provider({ role: 'service_agent', scenario: 'not-found' }).getStaffRequest('missing'), 'NOT_FOUND', false],
       ['validation', () => new MockC311Provider({ scenario: 'validation' }).submitPortalRequest(portalInput), 'VALIDATION_ERROR', false],
       ['retryable', () => new MockC311Provider({ scenario: 'retryable' }).geocode({ address: 'fixture' }), 'MAP_TEMPORARILY_UNAVAILABLE', true],
       ['version-conflict', () => new MockC311Provider({ scenario: 'version-conflict' }).updateDraft('draft-fixture-001', {}, { expectedVersion: 1 }), 'VERSION_CONFLICT', false],
@@ -784,5 +861,115 @@ describe('City 311 frontend contract', () => {
     const terminal = await expectError(() => new MockC311Provider({ scenario: 'terminal' }).submitPortalRequest(input), 'OPERATION_FAILED')
     expect(terminal.status).to.equal(500)
     expect(terminal.retryable).to.equal(false)
+  })
+
+  it('enforces portal query and account capabilities while keeping anonymous lookup public', async () => {
+    await expectError(() => new MockC311Provider({ role: 'public_visitor' }).listPortalRequests(), 'UNAUTHENTICATED')
+    await expectError(() => new MockC311Provider({ role: 'service_agent' }).listPortalRequests(), 'FORBIDDEN')
+    await expectError(() => new MockC311Provider({ role: 'public_visitor' }).listStaffRequests(), 'UNAUTHENTICATED')
+    await expectError(() => new MockC311Provider({ role: 'constituent' }).listStaffRequests(), 'FORBIDDEN')
+    await expectError(() => new MockC311Provider({ role: 'public_visitor' }).getStaffRequest('request-fixture-001'), 'UNAUTHENTICATED')
+    await expectError(() => new MockC311Provider({ role: 'constituent' }).getStaffRequest('request-fixture-001'), 'FORBIDDEN')
+    await expectError(() => new MockC311Provider({ role: 'service_agent' }).getProfile(), 'FORBIDDEN')
+    await expectError(() => new MockC311Provider({ role: 'public_visitor' }).changeLoginIdentifier({ current_password: 'fixture', login_identifier: 'alex.new' }), 'UNAUTHENTICATED')
+    await expectError(() => new MockC311Provider({ role: 'service_agent' }).changePassword({ current_password: 'fixture', new_password: 'Fixture-password-2!' }), 'FORBIDDEN')
+    await expectError(() => new MockC311Provider({ role: 'constituent', sessionVariant: 'expired' }).getProfile(), 'UNAUTHENTICATED')
+    const anonymous = await new MockC311Provider({ role: 'public_visitor' }).getPublicStatus({ request_number: 'SR-2026-00001', email: 'wrong@example.test' })
+    expect(anonymous).to.deep.equal({ request_detail: null })
+    const page = await new MockC311Provider({ role: 'constituent' }).listPortalRequests({ page_size: 1, page_token: 'opaque-page' })
+    expect(page.items).to.have.length(1)
+    expect(page.applied_filters).to.deep.equal({})
+  })
+
+  it('requires a visible constituent relationship for portal request operations', async () => {
+    const noRelationFixtures = cloneFixtureSet(createDefaultFixtureSet())
+    noRelationFixtures.relationships!['request-fixture-001'] = [{ constituent_id: 'constituent-other', relationship_type: 'REPORTER', portal_visible: true, notify_status: false }]
+    noRelationFixtures.public_relationships = noRelationFixtures.relationships
+    const noRelation = new MockC311Provider({ role: 'constituent', fixtures: noRelationFixtures })
+    await expectError(() => noRelation.listPortalRequests(), 'FORBIDDEN')
+    await expectError(() => noRelation.createPortalNote('request-fixture-001', { body: 'Not allowed', portal_visible: true }), 'FORBIDDEN')
+    await expectError(() => noRelation.reopenPortalRequest('request-fixture-001', 'Not allowed'), 'FORBIDDEN')
+
+    const hiddenFixtures = cloneFixtureSet(createDefaultFixtureSet())
+    hiddenFixtures.relationships!['request-fixture-001']![0].portal_visible = false
+    hiddenFixtures.public_relationships = hiddenFixtures.relationships
+    await expectError(() => new MockC311Provider({ role: 'constituent', fixtures: hiddenFixtures }).listPortalRequests(), 'FORBIDDEN')
+
+    const visibleFixtures = cloneFixtureSet(createDefaultFixtureSet())
+    visibleFixtures.requests[0].status = 'RESOLVED'
+    visibleFixtures.details['request-fixture-001'].request.status = 'RESOLVED'
+    visibleFixtures.public_details['SR-2026-00001'].status = 'RESOLVED'
+    visibleFixtures.relationships!['request-fixture-001'] = [{ constituent_id: 'constituent-fixture-001', relationship_type: 'REPORTER', portal_visible: true, notify_status: true }]
+    visibleFixtures.public_relationships = visibleFixtures.relationships
+    const visible = new MockC311Provider({ role: 'constituent', fixtures: visibleFixtures })
+    expect((await visible.listPortalRequests()).items).to.have.length(1)
+    await visible.createPortalNote('request-fixture-001', { body: 'Visible follow-up', portal_visible: true })
+    expect((await visible.reopenPortalRequest('request-fixture-001', 'Visible follow-up')).status).to.equal('PENDING_APPROVAL')
+  })
+
+  it('maps public status retryable and terminal failures without exposing a record', async () => {
+    const retryable = await expectError(() => new MockC311Provider({ scenario: 'retryable' }).getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' }), 'TEMPORARILY_UNAVAILABLE')
+    expect(retryable.status).to.equal(503)
+    const terminal = await expectError(() => new MockC311Provider({ scenario: 'terminal' }).getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' }), 'OPERATION_FAILED')
+    expect(terminal.status).to.equal(500)
+  })
+
+  it('maps constituent relationship and note operations to the frozen staff contract', async () => {
+    const requests: C311TransportRequest[] = []
+    const provider = new C311HttpProvider({
+      request: async <T> (request: C311TransportRequest): Promise<T> => {
+        requests.push(request)
+        if (request.path.endsWith('/notes')) return { note_id: 'note-1', body: 'Fixture note', portal_visible: true } as T
+        return { request: { request_id: 'request-fixture-001', version: 1 }, relationships: [] } as T
+      },
+    })
+    await provider.linkStaffConstituent('request-fixture-001', { constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT', portal_visible: true, notify_status: false }, { expectedVersion: 1 })
+    await provider.unlinkStaffConstituent('request-fixture-001', 'constituent-2', { reason: 'No longer affected.' }, { expectedVersion: 1 })
+    await provider.createStaffNote('request-fixture-001', { body: 'Fixture note', portal_visible: true })
+    expect(requests[0]).to.deep.include({ method: 'POST', path: '/api/v1/staff/service-requests/request-fixture-001/constituents', headers: { 'If-Match': '"1"' } })
+    expect(requests[0].body).to.deep.equal({ constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT', portal_visible: true, notify_status: false })
+    expect(requests[1]).to.deep.include({ method: 'DELETE', path: '/api/v1/staff/service-requests/request-fixture-001/constituents/constituent-2', headers: { 'If-Match': '"1"' } })
+    expect(requests[1].body).to.deep.equal({ reason: 'No longer affected.' })
+    expect(requests[2]).to.deep.include({ method: 'POST', path: '/api/v1/staff/service-requests/request-fixture-001/notes' })
+  })
+
+  it('enforces relationship capabilities, primary uniqueness, and append-only notes in the mock', async () => {
+    const input = { constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT' as const, portal_visible: true, notify_status: true }
+    await expectError(() => new MockC311Provider({ role: 'public_visitor' }).linkStaffConstituent('request-fixture-001', input, { expectedVersion: 1 }), 'UNAUTHENTICATED')
+    await expectError(() => new MockC311Provider({ role: 'constituent' }).linkStaffConstituent('request-fixture-001', input, { expectedVersion: 1 }), 'FORBIDDEN')
+
+    const agent = new MockC311Provider({ role: 'service_agent' })
+    const initial = await agent.getStaffRequest('request-fixture-001')
+    expect(initial.relationships?.find(item => item.constituent_id === 'constituent-fixture-001')).to.deep.include({ constituent_id: 'constituent-fixture-001', relationship_type: 'PRIMARY_REQUESTER', portal_visible: true, notify_status: false })
+    const linked = await agent.linkStaffConstituent('request-fixture-001', input, { expectedVersion: initial.request.version })
+    expect(linked.relationships?.find(item => item.constituent_id === input.constituent_id)).to.deep.include(input)
+    expect(linked.request.version).to.equal(initial.request.version + 1)
+    expect(linked.relationships?.find(item => item.constituent_id === 'constituent-2')).to.deep.include({ notification_target: 'constituent-2', notification_result: 'SENT' })
+    expect(linked.relationships?.find(item => item.constituent_id === 'constituent-2')?.audit?.[0]).to.deep.include({ action: 'LINKED', actor_id: 'actor-fixture-agent' })
+    expect(linked.relationships?.find(item => item.constituent_id === 'constituent-2')?.audit?.[0].audit_id).to.not.equal(initial.relationships?.find(item => item.constituent_id === 'constituent-fixture-001')?.audit?.[0].audit_id)
+    expect(agent.getWriteCount('staff_constituent_link')).to.equal(1)
+    await expectError(() => agent.linkStaffConstituent('request-fixture-001', input, { expectedVersion: initial.request.version }), 'VERSION_CONFLICT')
+    await expectError(() => agent.linkStaffConstituent('request-fixture-001', { ...input, relationship_type: 'PRIMARY_REQUESTER' }, { expectedVersion: initial.request.version + 1 }), 'VALIDATION_ERROR')
+    const unlinked = await agent.unlinkStaffConstituent('request-fixture-001', 'constituent-2', { reason: 'Fixture cleanup.' }, { expectedVersion: linked.request.version })
+    expect(unlinked.relationships).to.have.length(1)
+    expect(unlinked.request.version).to.equal(linked.request.version + 1)
+    expect(unlinked.audit.some(event => event.action === 'UNLINKED' && event.actor_id === 'actor-fixture-agent')).to.equal(true)
+    await expectError(() => agent.unlinkStaffConstituent('request-fixture-001', 'constituent-fixture-001', { reason: 'Cannot remove primary.' }, { expectedVersion: unlinked.request.version }), 'VALIDATION_ERROR')
+
+    const firstNote = await agent.createStaffNote('request-fixture-001', { body: 'First fixture note', portal_visible: true })
+    const secondNote = await agent.createStaffNote('request-fixture-001', { body: 'Second fixture note', portal_visible: false })
+    expect(firstNote.note_id).not.to.equal(secondNote.note_id)
+    expect((await agent.getStaffRequest('request-fixture-001')).notes).to.have.length(2)
+    expect(agent.getWriteCount('staff_note_create')).to.equal(2)
+  })
+
+  it('refreshes the public relationship and note projection after staff writes', async () => {
+    const agent = new MockC311Provider({ role: 'service_agent' })
+    const initial = await agent.getStaffRequest('request-fixture-001')
+    await agent.linkStaffConstituent('request-fixture-001', { constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT', portal_visible: true, notify_status: true }, { expectedVersion: initial.request.version })
+    await agent.createStaffNote('request-fixture-001', { body: 'Public staff update', portal_visible: true })
+    const detail = (await agent.getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' })).request_detail
+    expect(detail?.relationships?.find(item => item.constituent_id === 'constituent-2')).to.deep.include({ constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT', portal_visible: true, notify_status: true, notification_target: 'constituent-2', notification_result: 'SENT' })
+    expect(detail?.notes?.some(note => note.body === 'Public staff update')).to.equal(true)
   })
 })

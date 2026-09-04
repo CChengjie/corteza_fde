@@ -55,7 +55,7 @@ export default [
     name: 'c311.status',
     path: '/c311/status',
     component: () => import('./C311/Portal.vue'),
-    meta: { c311: { public: true } },
+    meta: { c311: { public: true, route: 'anonymous_status_lookup' } },
   },
   {
     name: 'c311.portal',
@@ -109,7 +109,7 @@ export default [
     name: 'c311.requests',
     path: '/c311/requests',
     component: () => import('./C311/PublicPortal.vue'),
-    meta: { c311: { public: true, requiresAuth: true, route: 'portal_my_requests', capabilities: ['portal_my_requests'], scopes: ['service_requests.write'] } },
+    meta: { c311: { public: true, requiresAuth: true, route: 'portal_my_requests', capabilities: ['portal_my_requests'] } },
   },
   {
     name: 'c311.auth.callback',

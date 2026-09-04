@@ -376,6 +376,54 @@ type HelpWrite struct {
 	Body     string   `json:"body"`
 }
 
+// Category is an administrator-managed contact-category vocabulary item.
+// Code is immutable after creation; updates create a new persisted revision.
+type Category struct {
+	Code      string            `json:"code"`
+	Active    bool              `json:"active"`
+	Labels    map[string]string `json:"labels"`
+	Version   uint64            `json:"version"`
+	UpdatedAt time.Time         `json:"updated_at"`
+}
+
+type CategoryWrite struct {
+	Code   string            `json:"code"`
+	Active bool              `json:"active"`
+	Labels map[string]string `json:"labels"`
+}
+
+type CategoryList struct {
+	Items          []Category     `json:"items"`
+	NextPageToken  *string        `json:"next_page_token"`
+	TotalCount     int            `json:"total_count"`
+	AppliedFilters map[string]any `json:"applied_filters"`
+	Sort           []string       `json:"sort"`
+}
+
+// CustomFieldDefinition describes a field made available to forms, filters,
+// workflows, reports, and exports for the selected entity.
+type CustomFieldDefinition struct {
+	Key          string            `json:"key"`
+	Labels       map[string]string `json:"labels"`
+	Entity       string            `json:"entity"`
+	FieldType    CustomFieldType   `json:"field_type"`
+	Required     bool              `json:"required"`
+	Default      any               `json:"default,omitempty"`
+	Active       bool              `json:"active"`
+	Validation   map[string]any    `json:"validation,omitempty"`
+	ChoiceValues []string          `json:"choice_values,omitempty"`
+	Version      uint64            `json:"version"`
+	UpdatedAt    time.Time         `json:"updated_at"`
+}
+
+type CustomFieldDefinitionList struct {
+	Items          []CustomFieldDefinition `json:"items"`
+	NextPageToken  *string                 `json:"next_page_token"`
+	TotalCount     int                     `json:"total_count"`
+	AppliedFilters map[string]any          `json:"applied_filters"`
+	Sort           []string                `json:"sort"`
+}
+
 type Rollback struct {
 	TargetVersion uint64 `json:"target_version"`
 }

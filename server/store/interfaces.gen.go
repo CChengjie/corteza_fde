@@ -65,6 +65,7 @@ type (
 		City311LocalAccounts
 		City311PasswordResetTokens
 		City311PublicHistoryItems
+		City311ReopenRequests
 		City311RequestAttachments
 		City311RequestConstituentLinks
 		City311RequestNotes
@@ -379,6 +380,18 @@ type (
 		DeleteCity311PublicHistoryItemByID(ctx context.Context, id uint64) error
 		TruncateCity311PublicHistoryItems(ctx context.Context) error
 		LookupCity311PublicHistoryItemByID(ctx context.Context, id uint64) (*composeType.City311PublicHistoryItem, error)
+	}
+
+	City311ReopenRequests interface {
+		SearchCity311ReopenRequests(ctx context.Context, f composeType.City311ReopenRequestFilter) (composeType.City311ReopenRequestSet, composeType.City311ReopenRequestFilter, error)
+		CreateCity311ReopenRequest(ctx context.Context, rr ...*composeType.City311ReopenRequest) error
+		UpdateCity311ReopenRequest(ctx context.Context, rr ...*composeType.City311ReopenRequest) error
+		UpsertCity311ReopenRequest(ctx context.Context, rr ...*composeType.City311ReopenRequest) error
+		DeleteCity311ReopenRequest(ctx context.Context, rr ...*composeType.City311ReopenRequest) error
+
+		DeleteCity311ReopenRequestByID(ctx context.Context, id uint64) error
+		TruncateCity311ReopenRequests(ctx context.Context) error
+		LookupCity311ReopenRequestByID(ctx context.Context, id uint64) (*composeType.City311ReopenRequest, error)
 	}
 
 	City311RequestAttachments interface {
@@ -2235,6 +2248,62 @@ func TruncateCity311PublicHistoryItems(ctx context.Context, s City311PublicHisto
 // This function is auto-generated
 func LookupCity311PublicHistoryItemByID(ctx context.Context, s City311PublicHistoryItems, id uint64) (*composeType.City311PublicHistoryItem, error) {
 	return s.LookupCity311PublicHistoryItemByID(ctx, id)
+}
+
+// SearchCity311ReopenRequests returns all matching City311ReopenRequests from store
+//
+// This function is auto-generated
+func SearchCity311ReopenRequests(ctx context.Context, s City311ReopenRequests, f composeType.City311ReopenRequestFilter) (composeType.City311ReopenRequestSet, composeType.City311ReopenRequestFilter, error) {
+	return s.SearchCity311ReopenRequests(ctx, f)
+}
+
+// CreateCity311ReopenRequest creates one or more City311ReopenRequests in store
+//
+// This function is auto-generated
+func CreateCity311ReopenRequest(ctx context.Context, s City311ReopenRequests, rr ...*composeType.City311ReopenRequest) error {
+	return s.CreateCity311ReopenRequest(ctx, rr...)
+}
+
+// UpdateCity311ReopenRequest updates one or more (existing) City311ReopenRequests in store
+//
+// This function is auto-generated
+func UpdateCity311ReopenRequest(ctx context.Context, s City311ReopenRequests, rr ...*composeType.City311ReopenRequest) error {
+	return s.UpdateCity311ReopenRequest(ctx, rr...)
+}
+
+// UpsertCity311ReopenRequest creates new or updates existing one or more City311ReopenRequests in store
+//
+// This function is auto-generated
+func UpsertCity311ReopenRequest(ctx context.Context, s City311ReopenRequests, rr ...*composeType.City311ReopenRequest) error {
+	return s.UpsertCity311ReopenRequest(ctx, rr...)
+}
+
+// DeleteCity311ReopenRequest deletes one or more City311ReopenRequests from store
+//
+// This function is auto-generated
+func DeleteCity311ReopenRequest(ctx context.Context, s City311ReopenRequests, rr ...*composeType.City311ReopenRequest) error {
+	return s.DeleteCity311ReopenRequest(ctx, rr...)
+}
+
+// DeleteCity311ReopenRequestByID deletes one or more City311ReopenRequests from store
+//
+// This function is auto-generated
+func DeleteCity311ReopenRequestByID(ctx context.Context, s City311ReopenRequests, id uint64) error {
+	return s.DeleteCity311ReopenRequestByID(ctx, id)
+}
+
+// TruncateCity311ReopenRequests Deletes all City311ReopenRequests from store
+//
+// This function is auto-generated
+func TruncateCity311ReopenRequests(ctx context.Context, s City311ReopenRequests) error {
+	return s.TruncateCity311ReopenRequests(ctx)
+}
+
+// LookupCity311ReopenRequestByID
+//
+// This function is auto-generated
+func LookupCity311ReopenRequestByID(ctx context.Context, s City311ReopenRequests, id uint64) (*composeType.City311ReopenRequest, error) {
+	return s.LookupCity311ReopenRequestByID(ctx, id)
 }
 
 // SearchCity311RequestAttachments returns all matching City311RequestAttachments from store

@@ -126,3 +126,172 @@ func TestReminderValidationAuthorizationAndCancellation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, set, 1)
 }
+
+func TestDueEmailReminderRetriesOncePerOccurrenceAndRecoversAfterRestart(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	require.NoError(t, svc.Seed(ctx, svc.now()))
+	request, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
+	require.NoError(t, err)
+	agent := seededAssignmentActor(t, ctx, svc, st, "service-agent@city311.example.invalid")
+	manager := seededAssignmentUser(t, ctx, st, "department-manager@city311.example.invalid")
+	supervisor := seededAssignmentActor(t, ctx, svc, st, "supervisor@city311.example.invalid")
+	current := svc.now()
+	svc.now = func() time.Time { return current }
+	sender := &scriptedMailSender{codes: []int{421, 451, 250}}
+	svc.SetMailSender(sender)
+	svc.mailWait = func(context.Context, time.Duration) error { return nil }
+
+	dueAt := current.Add(-time.Minute)
+	created, err := svc.CreateReminder(ctx, agent, request.ID, contract.ReminderWrite{
+		Title: "Confirm completed repair", DueAt: dueAt, Timezone: "America/New_York",
+		RecipientStaffID: strconv.FormatUint(manager.ID, 10), Channel: contract.ReminderChannelEmail,
+	})
+	require.NoError(t, err)
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	require.Len(t, sender.messages, 3)
+	require.Equal(t, []string{manager.Email}, sender.messages[0].To)
+	require.Equal(t, "City 311 reminder: Confirm completed repair", sender.messages[0].Subject)
+	require.Contains(t, sender.messages[0].Text, request.RequestNumber)
+	require.Equal(t, sender.deliveryKeys[0], sender.deliveryKeys[1])
+	require.Equal(t, sender.deliveryKeys[1], sender.deliveryKeys[2])
+
+	reminderID, err := strconv.ParseUint(created.ReminderID, 10, 64)
+	require.NoError(t, err)
+	persisted, err := store.LookupReminderByID(ctx, st, reminderID)
+	require.NoError(t, err)
+	payload, err := decodeReminderPayload(persisted)
+	require.NoError(t, err)
+	require.Equal(t, reminderDeliveryDelivered, payload.DeliveryStatus)
+	require.Equal(t, 3, payload.DeliveryAttempts)
+	require.Equal(t, sender.deliveryKeys[0], payload.DeliveryKey)
+	require.Equal(t, current, *payload.DeliveredAt)
+
+	// Reprocessing and service restart preserve the terminal delivery marker.
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	restarted := New(st)
+	restarted.now = svc.now
+	restarted.SetMailSender(sender)
+	restarted.mailWait = svc.mailWait
+	require.NoError(t, restarted.ProcessDueReminders(ctx))
+	require.Len(t, sender.messages, 3)
+
+	// Snoozing creates a new occurrence and therefore a new stable delivery key.
+	secondDueAt := current.Add(time.Hour)
+	snoozed, err := svc.ActionReminder(ctx, supervisor, reminderID, contract.ReminderActionSnooze, contract.ReminderActionInput{DueAt: &secondDueAt})
+	require.NoError(t, err)
+	require.Equal(t, contract.ReminderStatusSnoozed, snoozed.Status)
+	persisted, err = store.LookupReminderByID(ctx, st, reminderID)
+	require.NoError(t, err)
+	payload, err = decodeReminderPayload(persisted)
+	require.NoError(t, err)
+	require.Equal(t, reminderDeliveryPending, payload.DeliveryStatus)
+	require.NotEqual(t, sender.deliveryKeys[0], payload.DeliveryKey)
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	require.Len(t, sender.messages, 3)
+	current = secondDueAt.Add(time.Second)
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	require.Len(t, sender.messages, 4)
+	require.Equal(t, payload.DeliveryKey, sender.deliveryKeys[3])
+
+	audits, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{
+		RequestID: request.ID, EntityType: "reminder", EntityID: strconv.FormatUint(reminderID, 10),
+	})
+	require.NoError(t, err)
+	events := map[string]int{}
+	for _, audit := range audits {
+		events[audit.EventType]++
+	}
+	require.Equal(t, 2, events["REMINDER_EMAIL_DELIVERED"])
+}
+
+func TestDueEmailReminderPersistsTerminalFailureWithoutRedelivery(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	require.NoError(t, svc.Seed(ctx, svc.now()))
+	request, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
+	require.NoError(t, err)
+	agent := seededAssignmentActor(t, ctx, svc, st, "service-agent@city311.example.invalid")
+	recipient := seededAssignmentUser(t, ctx, st, "department-manager@city311.example.invalid")
+	sender := &scriptedMailSender{codes: []int{550}}
+	svc.SetMailSender(sender)
+
+	created, err := svc.CreateReminder(ctx, agent, request.ID, contract.ReminderWrite{
+		Title: "Permanent rejection", DueAt: svc.now().Add(-time.Minute), Timezone: "America/New_York",
+		RecipientStaffID: strconv.FormatUint(recipient.ID, 10), Channel: contract.ReminderChannelEmail,
+	})
+	require.NoError(t, err)
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	require.Len(t, sender.messages, 1)
+	reminderID, err := strconv.ParseUint(created.ReminderID, 10, 64)
+	require.NoError(t, err)
+	persisted, err := store.LookupReminderByID(ctx, st, reminderID)
+	require.NoError(t, err)
+	payload, err := decodeReminderPayload(persisted)
+	require.NoError(t, err)
+	require.Equal(t, reminderDeliveryTerminalFailure, payload.DeliveryStatus)
+	require.Equal(t, 1, payload.DeliveryAttempts)
+	require.NotEmpty(t, payload.LastDeliveryError)
+	require.Nil(t, payload.DeliveredAt)
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	require.Len(t, sender.messages, 1)
+
+	audits, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{
+		RequestID: request.ID, EntityType: "reminder", EntityID: strconv.FormatUint(reminderID, 10),
+	})
+	require.NoError(t, err)
+	count := 0
+	for _, audit := range audits {
+		if audit.EventType == "REMINDER_EMAIL_DELIVERY_FAILED" {
+			count++
+			require.Equal(t, contract.AuditActorSystem, audit.ActorType)
+		}
+	}
+	require.Equal(t, 1, count)
+}
+
+func TestReminderWorkerMakesOneDueInAppNotificationVisible(t *testing.T) {
+	svc, st := testService(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, svc.Seed(ctx, svc.now()))
+	request, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
+	require.NoError(t, err)
+	agent := seededAssignmentActor(t, ctx, svc, st, "service-agent@city311.example.invalid")
+	recipient := seededAssignmentUser(t, ctx, st, "department-manager@city311.example.invalid")
+	created, err := svc.CreateReminder(ctx, agent, request.ID, contract.ReminderWrite{
+		Title: "Visible in-app reminder", DueAt: svc.now().Add(-time.Minute), Timezone: "America/New_York",
+		RecipientStaffID: strconv.FormatUint(recipient.ID, 10), Channel: contract.ReminderChannelInApp,
+	})
+	require.NoError(t, err)
+	reminderID, err := strconv.ParseUint(created.ReminderID, 10, 64)
+	require.NoError(t, err)
+	svc.reminderPoll = 5 * time.Millisecond
+	svc.StartReminderWorker(ctx)
+
+	require.Eventually(t, func() bool {
+		persisted, lookupErr := store.LookupReminderByID(ctx, st, reminderID)
+		if lookupErr != nil {
+			return false
+		}
+		payload, decodeErr := decodeReminderPayload(persisted)
+		return decodeErr == nil && payload.DeliveryStatus == reminderDeliveryDelivered && payload.DeliveryAttempts == 1
+	}, time.Second, 10*time.Millisecond)
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+
+	set, _, err := store.SearchReminders(ctx, st, systemTypes.ReminderFilter{Resource: requestReminderResource(request.ID)})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	audits, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{
+		RequestID: request.ID, EntityType: "reminder", EntityID: strconv.FormatUint(reminderID, 10),
+	})
+	require.NoError(t, err)
+	count := 0
+	for _, audit := range audits {
+		if audit.EventType == "REMINDER_IN_APP_DELIVERED" {
+			count++
+			require.Equal(t, contract.AuditActorSystem, audit.ActorType)
+		}
+	}
+	require.Equal(t, 1, count)
+}

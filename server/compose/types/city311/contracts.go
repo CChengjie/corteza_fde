@@ -26,7 +26,24 @@ type (
 	PhoneLabel           string
 	ValidationCode       string
 	ErrorCode            string
+	IntegrationKind      string
 )
+
+const (
+	IntegrationKindCivicWorks    IntegrationKind = "CIVICWORKS"
+	IntegrationKindMapping       IntegrationKind = "MAPPING"
+	IntegrationKindWorkflowOAuth IntegrationKind = "WORKFLOW_OAUTH"
+	IntegrationKindMail          IntegrationKind = "MAIL"
+	IntegrationKindIdentity      IntegrationKind = "IDENTITY"
+)
+
+var IntegrationKinds = []IntegrationKind{
+	IntegrationKindCivicWorks,
+	IntegrationKindMapping,
+	IntegrationKindWorkflowOAuth,
+	IntegrationKindMail,
+	IntegrationKindIdentity,
+}
 
 const (
 	ServiceRequestStatusDraft      ServiceRequestStatus = "DRAFT"

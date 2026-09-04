@@ -105,6 +105,7 @@ func MountRoutesWithService(service *city311Service.Service) func(chi.Router) {
 
 func MountRoutesWithServices(service *city311Service.Service, identity *city311Service.IdentityService) func(chi.Router) {
 	return func(r chi.Router) {
+		service.BindIdentityService(identity)
 		h := &handler{service: service, identity: identity}
 		r.Use(h.optionalIdentitySession)
 		r.Post("/public/service-request-status", h.publicStatusLookup)
@@ -135,6 +136,11 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Use(requireIdentity)
 			r.Get("/identity", h.adminIdentityConfigurationGet)
 			r.Patch("/identity", h.adminIdentityConfigurationUpdate)
+			r.Get("/integrations", h.adminIntegrationList)
+			r.Get("/integrations/{integration_id}", h.adminIntegrationGet)
+			r.Patch("/integrations/{integration_id}", h.adminIntegrationUpdate)
+			r.Post("/integrations/{integration_id}/rotate", h.adminIntegrationRotate)
+			r.Post("/integrations/{integration_id}/revoke", h.adminIntegrationRevoke)
 			r.Get("/contact-categories", h.adminContactCategoryList)
 			r.Post("/contact-categories", h.adminContactCategoryCreate)
 			r.Patch("/contact-categories/{category_code}", h.adminContactCategoryUpdate)

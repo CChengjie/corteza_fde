@@ -20,6 +20,16 @@ func TestStaffConstituentRelationshipHTTPContract(t *testing.T) {
 	request, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
 	require.NoError(t, err)
 	path := fmt.Sprintf("/api/v1/staff/service-requests/%d/constituents", request.ID)
+	invalidLinkRequest := executeJSON(t, router, http.MethodPost, "/api/v1/staff/service-requests/not-a-number/constituents", map[string]any{}, nil, staff.ID)
+	require.Equal(t, http.StatusUnprocessableEntity, invalidLinkRequest.Code, invalidLinkRequest.Body.String())
+	invalidUnlinkRequest := executeJSON(t, router, http.MethodDelete, "/api/v1/staff/service-requests/0/constituents/C-3", map[string]any{}, nil, staff.ID)
+	require.Equal(t, http.StatusUnprocessableEntity, invalidUnlinkRequest.Code, invalidUnlinkRequest.Body.String())
+	missingUnlinkVersion := executeJSON(t, router, http.MethodDelete, path+"/C-3", map[string]any{"reason": "Not linked"}, nil, staff.ID)
+	require.Equal(t, http.StatusPreconditionRequired, missingUnlinkVersion.Code, missingUnlinkVersion.Body.String())
+	emptyConstituent := executeJSON(t, router, http.MethodDelete, path+"/%20", map[string]any{"reason": "Not linked"}, map[string]string{
+		contract.IfMatchHeader: `"1"`,
+	}, staff.ID)
+	require.Equal(t, http.StatusUnprocessableEntity, emptyConstituent.Code, emptyConstituent.Body.String())
 
 	missingVersion := executeJSON(t, router, http.MethodPost, path, map[string]any{
 		"constituent_id": "C-3", "relationship_type": "AFFECTED_RESIDENT", "portal_visible": true, "notify_status": true,
@@ -84,6 +94,8 @@ func TestPortalAnonymousLinkAndMyRequestsHTTPContract(t *testing.T) {
 	require.Equal(t, http.StatusOK, signedIn.Code, signedIn.Body.String())
 	cookie := signedIn.Result().Cookies()[0]
 	headers := map[string]string{"Cookie": cookie.Name + "=" + cookie.Value}
+	invalidPageSize := executeJSON(t, router, http.MethodGet, "/api/v1/portal/service-requests?page_size=0", nil, headers, 0)
+	require.Equal(t, http.StatusUnprocessableEntity, invalidPageSize.Code, invalidPageSize.Body.String())
 
 	wrongEmail := executeJSON(t, router, http.MethodPost, "/api/v1/portal/service-requests/link", map[string]any{
 		"request_number": submitted.RequestNumber, "email": "wrong@example.invalid",

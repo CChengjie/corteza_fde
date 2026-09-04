@@ -66,6 +66,7 @@ type (
 		City311PasswordResetTokens
 		City311PublicHistoryItems
 		City311RequestAttachments
+		City311RequestConstituentLinks
 		City311RequestSequences
 		City311ServiceRequests
 		City311StagedAttachments
@@ -389,6 +390,18 @@ type (
 		DeleteCity311RequestAttachmentByID(ctx context.Context, id uint64) error
 		TruncateCity311RequestAttachments(ctx context.Context) error
 		LookupCity311RequestAttachmentByID(ctx context.Context, id uint64) (*composeType.City311RequestAttachment, error)
+	}
+
+	City311RequestConstituentLinks interface {
+		SearchCity311RequestConstituentLinks(ctx context.Context, f composeType.City311RequestConstituentFilter) (composeType.City311RequestConstituentSet, composeType.City311RequestConstituentFilter, error)
+		CreateCity311RequestConstituentLink(ctx context.Context, rr ...*composeType.City311RequestConstituent) error
+		UpdateCity311RequestConstituentLink(ctx context.Context, rr ...*composeType.City311RequestConstituent) error
+		UpsertCity311RequestConstituentLink(ctx context.Context, rr ...*composeType.City311RequestConstituent) error
+		DeleteCity311RequestConstituentLink(ctx context.Context, rr ...*composeType.City311RequestConstituent) error
+
+		DeleteCity311RequestConstituentLinkByID(ctx context.Context, id uint64) error
+		TruncateCity311RequestConstituentLinks(ctx context.Context) error
+		LookupCity311RequestConstituentLinkByID(ctx context.Context, id uint64) (*composeType.City311RequestConstituent, error)
 	}
 
 	City311RequestSequences interface {
@@ -2265,6 +2278,62 @@ func TruncateCity311RequestAttachments(ctx context.Context, s City311RequestAtta
 // This function is auto-generated
 func LookupCity311RequestAttachmentByID(ctx context.Context, s City311RequestAttachments, id uint64) (*composeType.City311RequestAttachment, error) {
 	return s.LookupCity311RequestAttachmentByID(ctx, id)
+}
+
+// SearchCity311RequestConstituentLinks returns all matching City311RequestConstituentLinks from store
+//
+// This function is auto-generated
+func SearchCity311RequestConstituentLinks(ctx context.Context, s City311RequestConstituentLinks, f composeType.City311RequestConstituentFilter) (composeType.City311RequestConstituentSet, composeType.City311RequestConstituentFilter, error) {
+	return s.SearchCity311RequestConstituentLinks(ctx, f)
+}
+
+// CreateCity311RequestConstituentLink creates one or more City311RequestConstituentLinks in store
+//
+// This function is auto-generated
+func CreateCity311RequestConstituentLink(ctx context.Context, s City311RequestConstituentLinks, rr ...*composeType.City311RequestConstituent) error {
+	return s.CreateCity311RequestConstituentLink(ctx, rr...)
+}
+
+// UpdateCity311RequestConstituentLink updates one or more (existing) City311RequestConstituentLinks in store
+//
+// This function is auto-generated
+func UpdateCity311RequestConstituentLink(ctx context.Context, s City311RequestConstituentLinks, rr ...*composeType.City311RequestConstituent) error {
+	return s.UpdateCity311RequestConstituentLink(ctx, rr...)
+}
+
+// UpsertCity311RequestConstituentLink creates new or updates existing one or more City311RequestConstituentLinks in store
+//
+// This function is auto-generated
+func UpsertCity311RequestConstituentLink(ctx context.Context, s City311RequestConstituentLinks, rr ...*composeType.City311RequestConstituent) error {
+	return s.UpsertCity311RequestConstituentLink(ctx, rr...)
+}
+
+// DeleteCity311RequestConstituentLink deletes one or more City311RequestConstituentLinks from store
+//
+// This function is auto-generated
+func DeleteCity311RequestConstituentLink(ctx context.Context, s City311RequestConstituentLinks, rr ...*composeType.City311RequestConstituent) error {
+	return s.DeleteCity311RequestConstituentLink(ctx, rr...)
+}
+
+// DeleteCity311RequestConstituentLinkByID deletes one or more City311RequestConstituentLinks from store
+//
+// This function is auto-generated
+func DeleteCity311RequestConstituentLinkByID(ctx context.Context, s City311RequestConstituentLinks, id uint64) error {
+	return s.DeleteCity311RequestConstituentLinkByID(ctx, id)
+}
+
+// TruncateCity311RequestConstituentLinks Deletes all City311RequestConstituentLinks from store
+//
+// This function is auto-generated
+func TruncateCity311RequestConstituentLinks(ctx context.Context, s City311RequestConstituentLinks) error {
+	return s.TruncateCity311RequestConstituentLinks(ctx)
+}
+
+// LookupCity311RequestConstituentLinkByID
+//
+// This function is auto-generated
+func LookupCity311RequestConstituentLinkByID(ctx context.Context, s City311RequestConstituentLinks, id uint64) (*composeType.City311RequestConstituent, error) {
+	return s.LookupCity311RequestConstituentLinkByID(ctx, id)
 }
 
 // SearchCity311RequestSequences returns all matching City311RequestSequences from store

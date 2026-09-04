@@ -55,6 +55,10 @@ type (
 		reminderWake        chan struct{}
 		reminderPoll        time.Duration
 		reminderWorkerError func(error)
+		noticeWorkerOnce    sync.Once
+		noticeWake          chan struct{}
+		noticePoll          time.Duration
+		noticeWorkerError   func(error)
 		mailSender          MailSender
 		mailWait            func(context.Context, time.Duration) error
 		dataExportLimits    map[uint64]dataExportLimit
@@ -141,6 +145,7 @@ func New(s store.Storer) *Service {
 		store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next,
 		mailSender: smtpMailSender{dial: dialSMTP}, mailWait: waitForMailRetry, dataExportLimits: make(map[uint64]dataExportLimit),
 		reminderWake: make(chan struct{}, 1), reminderPoll: 30 * time.Second,
+		noticeWake: make(chan struct{}, 1), noticePoll: 30 * time.Second,
 	}
 	svc.integrationKey = integrationEncryptionKey()
 	svc.civicWorksClient, svc.civicWorksSecret, svc.civicWorksConfig = NewCivicWorksFromEnvironment(nil)
@@ -340,6 +345,7 @@ func (svc *Service) Submit(ctx context.Context, in contract.ServiceRequestCreate
 	})
 	svc.mu.Unlock()
 	if err == nil && result.status == http.StatusCreated && result.response != nil {
+		svc.wakeRequestNotificationWorker()
 		requestID, parseErr := strconv.ParseUint(result.response.RequestID, 10, 64)
 		if parseErr == nil {
 			if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
@@ -666,10 +672,13 @@ func (svc *Service) persistSubmissionEvents(ctx context.Context, tx store.Storer
 	if err := store.CreateCity311AuditEvent(ctx, tx, audit); err != nil {
 		return err
 	}
-	return store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
+	if err := store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
 		ID: svc.nextID(), RequestID: request.ID, Action: string(request.Status),
 		ResponsibleDepartment: request.OwningDepartment, OccurredAt: now,
-	})
+	}); err != nil {
+		return err
+	}
+	return svc.enqueueRelationshipNotifications(ctx, tx, request, "", RelationshipNotificationSubmitted, options.ActorID, options.SourceChannel)
 }
 
 func (svc *Service) persistIdempotencyRecord(ctx context.Context, tx store.Storer, prepared *preparedSubmission, response *contract.ServiceRequestResponse, keyHash string, requestID uint64, now time.Time) error {
@@ -728,6 +737,7 @@ func (svc *Service) Transition(ctx context.Context, actor contract.Actor, reques
 	if err != nil {
 		return nil, err
 	}
+	svc.wakeRequestNotificationWorker()
 	if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
 		svc.runActiveWorkflows(ctx, actor, WorkflowTriggerStatusChanged, request)
 	}
@@ -810,10 +820,14 @@ func (svc *Service) persistTransitionEvents(ctx context.Context, tx store.Storer
 	}); err != nil {
 		return err
 	}
-	return store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
+	if err := store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
 		ID: svc.nextID(), RequestID: request.ID, Action: string(request.Status),
 		ResponsibleDepartment: request.OwningDepartment, OccurredAt: request.UpdatedAt,
-	})
+	}); err != nil {
+		return err
+	}
+	previousStatus := contract.ServiceRequestStatus(anyString(before["status"]))
+	return svc.enqueueRelationshipNotifications(ctx, tx, request, previousStatus, relationshipNotificationEvent(request.Status), actorID, contract.SourceChannelStaffInPerson)
 }
 
 func transitionAllowed(from, to contract.ServiceRequestStatus) bool {

@@ -208,6 +208,10 @@ func Initialize(ctx context.Context, log *zap.Logger, s store.Storer, c Config) 
 		DefaultLogger.Error("City 311 reminder delivery worker failed", zap.Error(err))
 	})
 	city311Service.Default.StartReminderWorker(ctx)
+	city311Service.Default.SetRequestNotificationWorkerErrorHandler(func(err error) {
+		DefaultLogger.Error("City 311 request notification worker failed", zap.Error(err))
+	})
+	city311Service.Default.StartRequestNotificationWorker(ctx)
 	if configErr := city311Service.DefaultIdentity.ConfigurationError(); configErr != nil {
 		DefaultLogger.Error("City 311 identity configuration is unavailable", zap.Error(configErr))
 	} else {

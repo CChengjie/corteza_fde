@@ -422,6 +422,126 @@ var City311AuditEvent = &dal.Model{
 	},
 }
 
+var City311ConfigurationRevision = &dal.Model{
+	Ident:        "compose_city311_configuration_revision",
+	ResourceType: types.City311ConfigurationRevisionResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "ResourceType", Sortable: true,
+			Type:  &dal.TypeText{Length: 32},
+			Store: &dal.CodecAlias{Ident: "resource_type"},
+		},
+
+		&dal.Attribute{
+			Ident: "ResourceKey", Sortable: true,
+			Type:  &dal.TypeText{Length: 128},
+			Store: &dal.CodecAlias{Ident: "resource_key"},
+		},
+
+		&dal.Attribute{
+			Ident: "Language", Sortable: true,
+			Type:  &dal.TypeText{Length: 8},
+			Store: &dal.CodecAlias{Ident: "language"},
+		},
+
+		&dal.Attribute{
+			Ident: "Payload",
+			Type: &dal.TypeJSON{
+				DefaultValue: "{}",
+			},
+			Store: &dal.CodecAlias{Ident: "payload"},
+		},
+
+		&dal.Attribute{
+			Ident: "Version", Sortable: true,
+			Type: &dal.TypeNumber{HasDefault: true,
+				DefaultValue: 1,
+				Precision:    -1, Scale: -1, Meta: map[string]interface{}{"rdbms:type": "integer"},
+			},
+			Store: &dal.CodecAlias{Ident: "version"},
+		},
+
+		&dal.Attribute{
+			Ident: "Published", Sortable: true,
+			Type: &dal.TypeBoolean{HasDefault: true,
+				DefaultValue: false,
+			},
+			Store: &dal.CodecAlias{Ident: "published"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_configuration_revision_resourceVersion",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ResourceType",
+				},
+
+				{
+					AttributeIdent: "ResourceKey",
+				},
+
+				{
+					AttributeIdent: "Version",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_configuration_revision_uniqueRevision",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ResourceType",
+				},
+
+				{
+					AttributeIdent: "ResourceKey",
+				},
+
+				{
+					AttributeIdent: "Language",
+				},
+
+				{
+					AttributeIdent: "Version",
+				},
+			},
+		},
+	},
+}
+
 var City311Constituent = &dal.Model{
 	Ident:        "compose_city311_constituent",
 	ResourceType: types.City311ConstituentResourceType,
@@ -3163,6 +3283,7 @@ func init() {
 		Chart,
 		City311ActorProfile,
 		City311AuditEvent,
+		City311ConfigurationRevision,
 		City311Constituent,
 		City311IdempotencyRecord,
 		City311IdentityNotification,

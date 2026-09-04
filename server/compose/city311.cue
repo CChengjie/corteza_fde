@@ -646,3 +646,40 @@ city311WorkflowExecution: {
 		]
 	}
 }
+
+city311ConfigurationRevision: {
+	model: {
+		ident:            "compose_city311_configuration_revision"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			resource_type: {goType: "string", sortable: true, dal: {type: "Text", length: 32}}
+			resource_key: {goType: "string", sortable: true, dal: {type: "Text", length: 128}}
+			language: {goType: "string", sortable: true, dal: {type: "Text", length: 8, default: ""}}
+			payload: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			version: {goType: "int", sortable: true, dal: {type: "Number", meta: {"rdbms:type": "integer"}, default: 1}}
+			published: {goType: "bool", sortable: true, dal: {type: "Boolean", default: false}}
+			created_at: schema.SortableTimestampNowField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_revision: {attributes: ["resource_type", "resource_key", "language", "version"]}
+			resource_version: {attributes: ["resource_type", "resource_key", "version"]}
+		}
+	}
+	filter: {
+		struct: {
+			resource_type: {goType: "string"}
+			resource_key: {goType: "string"}
+			language: {goType: "string"}
+			published: {goType: "bool"}
+		}
+		byValue: ["resource_type", "resource_key", "language", "published"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {
+		ident: "city311ConfigurationRevision"
+		api: lookups: [{fields: ["id"]}]
+	}
+}

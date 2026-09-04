@@ -120,6 +120,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Post("/login-identifier", h.loginIdentifierChange)
 		})
 		r.With(requireScope(contract.ScopeRequestWrite)).Post(serviceRequestsRoute, h.integrationSubmit)
+		r.With(requireScope(contract.ScopeCRMExport)).Get("/export/{entity}", h.dataExport)
 		r.Post("/portal/service-requests", h.portalSubmit)
 		r.Post("/portal/attachments", h.attachmentUpload)
 		r.With(requireIdentity).Get("/attachments/{attachment_id}", h.attachmentDownload)
@@ -323,6 +324,68 @@ func (h *handler) integrationSubmit(w http.ResponseWriter, r *http.Request) {
 		ActorType: contract.AuditActorIntegrationClient, ActorID: auth.GetIdentityFromContext(r.Context()).Identity(), RequireIdempotency: true,
 	})
 	writeResult(w, status, response, err)
+}
+
+func (h *handler) dataExport(w http.ResponseWriter, r *http.Request) {
+	identity := auth.GetIdentityFromContext(r.Context())
+	if retryAfter := h.service.CheckDataExportLimit(identity.Identity()); retryAfter > 0 {
+		w.Header().Set(contract.RetryAfterHeader, strconv.Itoa(retryAfter))
+		writeJSON(w, http.StatusTooManyRequests, contract.APIError{
+			Error: contract.ErrorRateLimited, Message: "The client request limit has been exceeded.", Retryable: true,
+		})
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), identity.Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	query, err := parseDataExportQuery(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ExportData(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "entity")), query)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func parseDataExportQuery(r *http.Request) (contract.DataExportQuery, error) {
+	query := contract.DataExportQuery{PageSize: 50, PageToken: r.URL.Query().Get("page_token"), Filters: map[string][]string{}}
+	if raw := strings.TrimSpace(r.URL.Query().Get("page_size")); raw != "" {
+		pageSize, err := strconv.ParseUint(raw, 10, 16)
+		if err != nil || pageSize == 0 || pageSize > 100 {
+			return contract.DataExportQuery{}, dataExportInputError("page_size must be between 1 and 100.")
+		}
+		query.PageSize = uint(pageSize)
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("updated_since")); raw != "" {
+		updatedSince, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return contract.DataExportQuery{}, dataExportInputError("updated_since must be an ISO 8601 date-time.")
+		}
+		updatedSince = updatedSince.UTC()
+		query.UpdatedSince = &updatedSince
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("filters")); raw != "" {
+		input := map[string]stringList{}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		if err := decoder.Decode(&input); err != nil {
+			return contract.DataExportQuery{}, dataExportInputError("filters must be an object of string values or arrays.")
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			return contract.DataExportQuery{}, dataExportInputError("filters must contain one JSON object.")
+		}
+		for key, values := range input {
+			query.Filters[key] = append([]string(nil), values...)
+		}
+	}
+	return query, nil
+}
+
+func dataExportInputError(message string) error {
+	return &city311Service.ServiceError{Status: http.StatusUnprocessableEntity, Payload: contract.APIError{
+		Error: contract.ErrorInvalidFilter, Message: message, Retryable: false,
+	}}
 }
 
 func (h *handler) portalSubmit(w http.ResponseWriter, r *http.Request) {

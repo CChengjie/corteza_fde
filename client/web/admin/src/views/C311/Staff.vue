@@ -177,7 +177,7 @@ export default {
     relationshipAuditEvents () { return this.audit.filter(event => ['LINKED', 'UNLINKED', 'UPDATED'].includes(event.action)) },
     attachmentEntries () {
       if (this.detail?.attachments?.length) return this.detail.attachments
-      return (this.detail?.request?.custom_fields?.attachment_tokens || []).map(attachment_token => ({ attachment_token }))
+      return (this.detail?.request?.custom_fields?.attachment_tokens || []).map(attachmentToken => ({ attachment_token: attachmentToken }))
     },
   },
   watch: { '$route.params.request_id': 'loadFromRoute' },

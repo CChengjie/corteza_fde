@@ -138,6 +138,24 @@ func testCity311RequestConstituentLinks(t *testing.T, s store.City311RequestCons
 	require.NoError(t, s.DeleteCity311RequestConstituentLinkByID(ctx, primary.ID))
 }
 
+func testCity311RequestNotes(t *testing.T, s store.City311RequestNotes) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311RequestNotes(ctx))
+	note := &composeTypes.City311RequestNote{
+		ID: 290, RequestID: 301, AuthorType: contract.AuditActorConstituent,
+		AuthorID: 151, AuthorConstituentID: "C-151", Body: "Please check the east side of the street.",
+		PortalVisible: true, CreatedAt: *now(),
+	}
+	require.NoError(t, s.CreateCity311RequestNote(ctx, note))
+	fetched, err := s.LookupCity311RequestNoteByID(ctx, note.ID)
+	require.NoError(t, err)
+	require.Equal(t, note.Body, fetched.Body)
+	set, _, err := s.SearchCity311RequestNotes(ctx, composeTypes.City311RequestNoteFilter{RequestID: note.RequestID})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	require.Equal(t, note.AuthorConstituentID, set[0].AuthorConstituentID)
+}
+
 func testCity311PublicHistoryItems(t *testing.T, s store.City311PublicHistoryItems) {
 	ctx := context.Background()
 	require.NoError(t, s.TruncateCity311PublicHistoryItems(ctx))

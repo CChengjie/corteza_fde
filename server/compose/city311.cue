@@ -138,6 +138,34 @@ requestConstituentLink: {
 	}
 }
 
+requestNote: {
+	model: {
+		ident:            "compose_city311_request_note"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			request_id: {ident: "requestID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			author_type: {goType: "types.AuditActorType", dal: {type: "Text", length: 32}}
+			author_id: {ident: "authorID", goType: "uint64", dal: {type: "ID"}}
+			author_constituent_id: {ident: "authorConstituentID", goType: "string", dal: {type: "Text", length: 64}}
+			body: {goType: "string", dal: {type: "Text", length: 2000}}
+			portal_visible: {goType: "bool", dal: {type: "Boolean", default: false}}
+			created_at: schema.SortableTimestampNowField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			request: {attributes: ["request_id", "created_at"]}
+		}
+	}
+	filter: {
+		struct: {request_id: {ident: "requestID", goType: "uint64"}}
+		byValue: ["request_id"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {ident: "city311RequestNote", api: lookups: [{fields: ["id"]}]}
+}
+
 requestSequence: {
 	model: {
 		ident:            "compose_city311_request_sequence"

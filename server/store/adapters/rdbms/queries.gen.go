@@ -2491,6 +2491,106 @@ var (
 		}
 	}
 
+	// city311RequestNoteTable represents city311RequestNotes store table
+	//
+	// This value is auto-generated
+	city311RequestNoteTable = goqu.T("compose_city311_request_note")
+
+	// city311RequestNoteSelectQuery assembles select query for fetching city311RequestNotes
+	//
+	// This function is auto-generated
+	city311RequestNoteSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"request_id",
+			"author_type",
+			"author_id",
+			"author_constituent_id",
+			"body",
+			"portal_visible",
+			"created_at",
+		).From(city311RequestNoteTable)
+	}
+
+	// city311RequestNoteInsertQuery assembles query inserting city311RequestNotes
+	//
+	// This function is auto-generated
+	city311RequestNoteInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311RequestNote) *goqu.InsertDataset {
+		return d.Insert(city311RequestNoteTable).
+			Rows(goqu.Record{
+				"id":                    res.ID,
+				"request_id":            res.RequestID,
+				"author_type":           res.AuthorType,
+				"author_id":             res.AuthorID,
+				"author_constituent_id": res.AuthorConstituentID,
+				"body":                  res.Body,
+				"portal_visible":        res.PortalVisible,
+				"created_at":            res.CreatedAt,
+			})
+	}
+
+	// city311RequestNoteUpsertQuery assembles (insert+on-conflict) query for replacing city311RequestNotes
+	//
+	// This function is auto-generated
+	city311RequestNoteUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311RequestNote) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311RequestNoteInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"request_id":            res.RequestID,
+						"author_type":           res.AuthorType,
+						"author_id":             res.AuthorID,
+						"author_constituent_id": res.AuthorConstituentID,
+						"body":                  res.Body,
+						"portal_visible":        res.PortalVisible,
+						"created_at":            res.CreatedAt,
+					},
+				),
+			)
+	}
+
+	// city311RequestNoteUpdateQuery assembles query for updating city311RequestNotes
+	//
+	// This function is auto-generated
+	city311RequestNoteUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311RequestNote) *goqu.UpdateDataset {
+		return d.Update(city311RequestNoteTable).
+			Set(goqu.Record{
+				"request_id":            res.RequestID,
+				"author_type":           res.AuthorType,
+				"author_id":             res.AuthorID,
+				"author_constituent_id": res.AuthorConstituentID,
+				"body":                  res.Body,
+				"portal_visible":        res.PortalVisible,
+				"created_at":            res.CreatedAt,
+			}).
+			Where(city311RequestNotePrimaryKeys(res))
+	}
+
+	// city311RequestNoteDeleteQuery assembles delete query for removing city311RequestNotes
+	//
+	// This function is auto-generated
+	city311RequestNoteDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311RequestNoteTable).Where(ee...)
+	}
+
+	// city311RequestNoteDeleteQuery assembles delete query for removing city311RequestNotes
+	//
+	// This function is auto-generated
+	city311RequestNoteTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311RequestNoteTable)
+	}
+
+	// city311RequestNotePrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311RequestNotePrimaryKeys = func(res *composeType.City311RequestNote) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
 	// city311RequestSequenceTable represents city311RequestSequences store table
 	//
 	// This value is auto-generated

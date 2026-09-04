@@ -995,6 +995,10 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 	if err != nil {
 		return nil, err
 	}
+	notes, err := listRequestNotes(ctx, svc.store, stored.ID)
+	if err != nil {
+		return nil, err
+	}
 	audits, _, err := store.SearchCity311AuditEvents(ctx, svc.store, composeTypes.City311AuditEventFilter{RequestID: stored.ID})
 	if err != nil {
 		return nil, err
@@ -1005,7 +1009,7 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 	}
 	primaryAssignee := optionalID(stored.PrimaryAssigneeID)
 	result := &contract.StaffServiceRequestDetail{
-		Request: toContract(stored), ConstituentLinks: make([]contract.ConstituentLink, 0, len(links)), AvailableActions: availableActions(actor, stored), PrimaryAssigneeID: primaryAssignee,
+		Request: toContract(stored), ConstituentLinks: make([]contract.ConstituentLink, 0, len(links)), Notes: notes, AvailableActions: availableActions(actor, stored), PrimaryAssigneeID: primaryAssignee,
 		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: []any{}, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: nil,
 	}
 	for _, link := range links {
@@ -1019,7 +1023,7 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 	}
 	for _, audit := range audits {
 		result.Audit = append(result.Audit, contract.AuditEvent{
-			EntityType: "service_request", EntityID: strconv.FormatUint(audit.RequestID, 10), EventType: audit.EventType,
+			EntityType: audit.EntityType, EntityID: audit.EntityID, EventType: audit.EventType,
 			ActorType: audit.ActorType, ActorID: strconv.FormatUint(audit.ActorID, 10), OccurredAt: audit.CreatedAt,
 			SourceChannel: audit.SourceChannel, Before: audit.Before, After: audit.After,
 		})

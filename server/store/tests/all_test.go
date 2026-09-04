@@ -83,6 +83,9 @@ func testAllGenerated(t *testing.T, s store.Storer) {
 	t.Run("city311RequestConstituentLink", func(t *testing.T) {
 		testCity311RequestConstituentLinks(t, s)
 	})
+	t.Run("city311RequestNote", func(t *testing.T) {
+		testCity311RequestNotes(t, s)
+	})
 	t.Run("city311RequestSequence", func(t *testing.T) {
 		testCity311RequestSequences(t, s)
 	})

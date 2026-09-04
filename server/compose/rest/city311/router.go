@@ -103,9 +103,6 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Get(serviceRequestsRoute, h.staffList)
 			r.Get("/service-requests/{request_id}", h.staffDetail)
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
-			r.Get("/constituents", h.constituentList)
-			r.Get("/constituents/{constituent_id}", h.constituentDetail)
-			r.Get("/audit-events", h.auditList)
 		})
 	}
 }

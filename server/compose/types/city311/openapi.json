@@ -237,7 +237,17 @@
         "properties": {
           "applied_filters": {
             "additionalProperties": {
-              "type": "string"
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
             },
             "type": "object"
           },
@@ -844,7 +854,17 @@
         "properties": {
           "applied_filters": {
             "additionalProperties": {
-              "type": "string"
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
             },
             "type": "object"
           },
@@ -17393,36 +17413,80 @@
               "additionalProperties": false,
               "properties": {
                 "actor_id": {
-                  "maxLength": 500,
-                  "type": "string"
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "actor_type": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_audit_actor_type",
+                    "x-city311-enum-ref": "audit_actor_type"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "entity_id": {
-                  "maxLength": 500,
-                  "type": "string"
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "entity_type": {
-                  "maxLength": 500,
-                  "type": "string"
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "event_type": {
-                  "maxLength": 500,
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "occurred_from": {
+                  "format": "date-time",
                   "type": "string"
                 },
-                "from": {
-                  "maxLength": 500,
+                "occurred_to": {
+                  "format": "date-time",
                   "type": "string"
                 },
                 "request_id": {
-                  "maxLength": 500,
-                  "type": "string"
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "source_channel": {
-                  "maxLength": 500,
-                  "type": "string"
-                },
-                "to": {
-                  "maxLength": 500,
-                  "type": "string"
+                  "items": {
+                    "$ref": "#/components/schemas/enum_source_channel",
+                    "x-city311-enum-ref": "source_channel"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 }
               },
               "type": "object"
@@ -17445,7 +17509,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "x-city311-binding": "operation, actor/record scope, filters and sort; re-evaluate permission before each page",
+              "x-city311-binding": "operation, filters and sort; permission re-evaluated for every request",
               "x-city311-opaque": true
             }
           },
@@ -17454,14 +17518,16 @@
             "name": "sort",
             "required": false,
             "schema": {
-              "default": "occurred_at",
+              "default": "-occurred_at",
               "type": "string",
               "x-city311-allowed-fields": [
                 "occurred_at",
                 "entity_type",
                 "entity_id",
                 "event_type",
-                "actor_id"
+                "actor_type",
+                "actor_id",
+                "source_channel"
               ],
               "x-city311-maximum-fields": 3
             }
@@ -18213,25 +18279,115 @@
             "schema": {
               "additionalProperties": false,
               "properties": {
-                "category": {
-                  "maxLength": 500,
-                  "type": "string"
+                "constituent_id": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "custom_fields": {
+                  "additionalProperties": {
+                    "items": {
+                      "maxLength": 254,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "type": "object"
                 },
                 "department": {
-                  "maxLength": 500,
-                  "type": "string"
+                  "items": {
+                    "$ref": "#/components/schemas/enum_department_code",
+                    "x-city311-enum-ref": "department_code"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "display_name": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "district": {
-                  "maxLength": 500,
-                  "type": "string"
+                  "items": {
+                    "$ref": "#/components/schemas/enum_district_code",
+                    "x-city311-enum-ref": "district_code"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "email": {
-                  "maxLength": 500,
-                  "type": "string"
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 },
-                "q": {
-                  "maxLength": 500,
-                  "type": "string"
+                "email_opt_out": {
+                  "items": {
+                    "enum": [
+                      "true",
+                      "false"
+                    ]
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "phone": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "preferred_language": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_language",
+                    "x-city311-enum-ref": "language"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "primary_category": {
+                  "items": {
+                    "$ref": "#/components/schemas/enum_contact_category",
+                    "x-city311-enum-ref": "contact_category"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "query": {
+                  "items": {
+                    "maxLength": 254,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 }
               },
               "type": "object"
@@ -18254,7 +18410,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "x-city311-binding": "operation, actor/record scope, filters and sort; re-evaluate permission before each page",
+              "x-city311-binding": "operation, filters and sort; permission re-evaluated for every request",
               "x-city311-opaque": true
             }
           },
@@ -18263,13 +18419,15 @@
             "name": "sort",
             "required": false,
             "schema": {
-              "default": "constituent_id",
+              "default": "display_name,constituent_id",
               "type": "string",
               "x-city311-allowed-fields": [
                 "constituent_id",
                 "display_name",
                 "primary_category",
-                "updated_at"
+                "preferred_language",
+                "department",
+                "district"
               ],
               "x-city311-maximum-fields": 3
             }

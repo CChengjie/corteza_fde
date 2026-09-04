@@ -481,6 +481,15 @@ type (
 		CompletedBy      string          `json:"completed_by,omitempty"`
 	}
 
+	Reassignment struct {
+		AssigneeID string `json:"assignee_id"`
+		Reason     string `json:"reason"`
+	}
+
+	Reason struct {
+		Reason string `json:"reason"`
+	}
+
 	PublicHistoryItem struct {
 		Action                string    `json:"action"`
 		OccurredAt            time.Time `json:"occurred_at"`

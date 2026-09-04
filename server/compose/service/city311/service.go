@@ -49,6 +49,8 @@ type (
 		workflowMu       sync.Mutex
 		presentationMu   sync.Mutex
 		reportMu         sync.Mutex
+		integrationMu    sync.Mutex
+		runtimeMu        sync.RWMutex
 		mailSender       MailSender
 		mailWait         func(context.Context, time.Duration) error
 		dataExportLimits map[uint64]dataExportLimit
@@ -57,6 +59,10 @@ type (
 		civicWorksConfig error
 		workflowHTTP     WorkflowHTTPClient
 		workflowConfig   error
+		mappingService   *MappingService
+		mappingConfig    error
+		identityService  *IdentityService
+		integrationKey   [32]byte
 	}
 
 	dataExportLimit struct {
@@ -131,8 +137,10 @@ func New(s store.Storer) *Service {
 		store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next,
 		mailSender: smtpMailSender{dial: dialSMTP}, mailWait: waitForMailRetry, dataExportLimits: make(map[uint64]dataExportLimit),
 	}
+	svc.integrationKey = integrationEncryptionKey()
 	svc.civicWorksClient, svc.civicWorksSecret, svc.civicWorksConfig = NewCivicWorksFromEnvironment(nil)
 	svc.workflowHTTP, svc.workflowConfig = NewWorkflowHTTPClientFromEnvironment(nil)
+	svc.mappingService, svc.mappingConfig = NewMappingFromEnvironment(nil)
 	return svc
 }
 
@@ -151,13 +159,20 @@ func Initialize(ctx context.Context, s store.Storer) error {
 	}
 	var err error
 	DefaultIdentity, err = NewDefaultIdentity(s, Default.now)
+	identityConfigurationError := err
 	if err != nil {
 		DefaultIdentity = NewIdentity(s, IdentityOptions{
 			Now: Default.now, ConfigurationError: err,
 		})
 	}
+	Default.BindIdentityService(DefaultIdentity)
 	if err = Default.Seed(ctx, benchmarkNow); err != nil {
 		return err
+	}
+	if identityConfigurationError == nil {
+		if err = Default.ReloadIntegrations(ctx); err != nil {
+			return fmt.Errorf("reload City 311 integrations: %w", err)
+		}
 	}
 	return nil
 }

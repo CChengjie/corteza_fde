@@ -48,6 +48,15 @@ type WorkflowHTTPClient interface {
 	Execute(context.Context, contract.WorkflowActionRequest, string) (int, error)
 }
 
+type WorkflowHTTPOptions struct {
+	TokenURL     string
+	APIBaseURL   string
+	ClientID     string
+	ClientSecret string
+	HTTPClient   *http.Client
+	Now          func() time.Time
+}
+
 type workflowHTTPError struct {
 	status int
 	body   contract.APIError
@@ -85,12 +94,36 @@ func NewWorkflowHTTPClientFromEnvironment(client *http.Client) (WorkflowHTTPClie
 	if err != nil {
 		return nil, err
 	}
+	return NewWorkflowHTTPClient(WorkflowHTTPOptions{
+		TokenURL: configuration[0], APIBaseURL: configuration[1], ClientID: configuration[2], ClientSecret: configuration[3], HTTPClient: client,
+	})
+}
+
+func NewWorkflowHTTPClient(options WorkflowHTTPOptions) (WorkflowHTTPClient, error) {
+	values := [4]string{
+		strings.TrimSpace(options.TokenURL), strings.TrimSpace(options.APIBaseURL), strings.TrimSpace(options.ClientID), strings.TrimSpace(options.ClientSecret),
+	}
+	for index, key := range [...]string{"WORKFLOW_OAUTH_TOKEN_URL", "WORKFLOW_API_BASE_URL", "WORKFLOW_CLIENT_ID", "WORKFLOW_CLIENT_SECRET"} {
+		if values[index] == "" {
+			return nil, fmt.Errorf("%s is required", key)
+		}
+	}
+	for index, key := range [...]string{"WORKFLOW_OAUTH_TOKEN_URL", "WORKFLOW_API_BASE_URL"} {
+		parsed, err := url.Parse(values[index])
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return nil, fmt.Errorf("%s must be an absolute HTTP or HTTPS URL", key)
+		}
+	}
+	client := options.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
+	now := options.Now
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC() }
+	}
 	return &oauthWorkflowHTTPClient{
-		tokenURL: configuration[0], baseURL: configuration[1], clientID: configuration[2], clientSecret: configuration[3],
-		client: client, now: func() time.Time { return time.Now().UTC() },
+		tokenURL: values[0], baseURL: values[1], clientID: values[2], clientSecret: values[3], client: client, now: now,
 	}, nil
 }
 
@@ -202,8 +235,13 @@ func scopeContains(raw, expected string) bool {
 }
 
 func (svc *Service) SetWorkflowHTTPClient(client WorkflowHTTPClient) {
+	svc.runtimeMu.Lock()
+	defer svc.runtimeMu.Unlock()
 	svc.workflowHTTP = client
 	svc.workflowConfig = nil
+	if client == nil {
+		svc.workflowConfig = fmt.Errorf("workflow HTTP client is required")
+	}
 }
 
 func (svc *Service) CreateWorkflow(ctx context.Context, actor contract.Actor, input contract.WorkflowDefinition) (*contract.WorkflowDefinition, error) {
@@ -610,13 +648,16 @@ func (svc *Service) executeWorkflowAction(ctx context.Context, actor contract.Ac
 	case "NOTIFICATION":
 		return 0, svc.workflowNotification(ctx, actor, definition, request, index, action)
 	case "AUTHENTICATED_HTTP":
-		if svc.workflowConfig != nil || svc.workflowHTTP == nil {
+		svc.runtimeMu.RLock()
+		workflowHTTP, configurationError := svc.workflowHTTP, svc.workflowConfig
+		svc.runtimeMu.RUnlock()
+		if configurationError != nil || workflowHTTP == nil {
 			return http.StatusServiceUnavailable, &workflowHTTPError{status: http.StatusServiceUnavailable, body: contract.MockWorkflowFailure(contract.ErrorTemporarilyUnavailable, true)}
 		}
 		payload, _ := action["payload"].(map[string]any)
 		actionName, _ := stringValue(action, "action")
 		key := fmt.Sprintf("workflow:%s:%d:%d:%d", definition.WorkflowID, definition.Version, request.ID, index)
-		return svc.workflowHTTP.Execute(ctx, contract.WorkflowActionRequest{Action: actionName, RequestID: strconv.FormatUint(request.ID, 10), Payload: payload}, key)
+		return workflowHTTP.Execute(ctx, contract.WorkflowActionRequest{Action: actionName, RequestID: strconv.FormatUint(request.ID, 10), Payload: payload}, key)
 	default:
 		return 0, validationError(contract.FieldError{Field: fmt.Sprintf("/actions/%d/type", index), Code: contract.ValidationInvalidValue})
 	}

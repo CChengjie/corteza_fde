@@ -177,11 +177,12 @@ func (svc *IdentityService) latestIdentityRevision(ctx context.Context, st store
 func (svc *IdentityService) identityConfigurationFromRevision(revision *composeTypes.City311ConfigurationRevision) *contract.IdentityConfiguration {
 	payload := identityConfigurationPayload{}
 	decodeConfigurationPayload(revision.Payload, &payload)
+	runtime, _ := svc.federationRuntime()
 	return &contract.IdentityConfiguration{
 		OIDCEnabled: payload.OIDCEnabled, SAMLEnabled: payload.SAMLEnabled,
-		OIDCIssuerURL: svc.runtime.OIDCIssuerURL, OIDCStaffClientID: svc.runtime.OIDCStaffClientID,
-		OIDCPublicClientID: svc.runtime.OIDCPublicClientID, OIDCClientSecretConfigured: svc.runtime.OIDCClientSecret != "",
-		SAMLMetadataURL: svc.runtime.SAMLMetadataURL, SAMLSPServiceEntityID: svc.runtime.SAMLServiceProvider,
+		OIDCIssuerURL: runtime.OIDCIssuerURL, OIDCStaffClientID: runtime.OIDCStaffClientID,
+		OIDCPublicClientID: runtime.OIDCPublicClientID, OIDCClientSecretConfigured: runtime.OIDCClientSecret != "",
+		SAMLMetadataURL: runtime.SAMLMetadataURL, SAMLSPServiceEntityID: runtime.SAMLServiceProvider,
 		ActorRoleMappings: append([]contract.ActorRoleMapping(nil), identityRoleMappings...),
 		Version:           uint64(revision.Version), UpdatedAt: revision.CreatedAt,
 	}
@@ -199,21 +200,23 @@ func (svc *IdentityService) validateIdentityEnablement(payload identityConfigura
 }
 
 func (svc *IdentityService) oidcRuntimeConfigured() bool {
-	issuer, err := url.Parse(svc.runtime.OIDCIssuerURL)
+	runtime, _ := svc.federationRuntime()
+	issuer, err := url.Parse(runtime.OIDCIssuerURL)
 	return err == nil && issuer.Host != "" && (issuer.Scheme == "http" || issuer.Scheme == "https") &&
-		svc.runtime.OIDCStaffClientID != "" && svc.runtime.OIDCPublicClientID != "" &&
-		svc.runtime.OIDCClientSecret != "" && svc.validFederationBaseURL()
+		runtime.OIDCStaffClientID != "" && runtime.OIDCPublicClientID != "" &&
+		runtime.OIDCClientSecret != "" && validFederationBaseURL(runtime)
 }
 
 func (svc *IdentityService) samlRuntimeConfigured() bool {
-	metadata, metadataErr := url.Parse(svc.runtime.SAMLMetadataURL)
-	entity, entityErr := url.Parse(svc.runtime.SAMLServiceProvider)
-	return svc.validFederationBaseURL() && metadataErr == nil && metadata.Host != "" &&
+	runtime, _ := svc.federationRuntime()
+	metadata, metadataErr := url.Parse(runtime.SAMLMetadataURL)
+	entity, entityErr := url.Parse(runtime.SAMLServiceProvider)
+	return validFederationBaseURL(runtime) && metadataErr == nil && metadata.Host != "" &&
 		entityErr == nil && entity.Host != ""
 }
 
-func (svc *IdentityService) validFederationBaseURL() bool {
-	parsed, err := url.Parse(svc.runtime.BaseURL)
+func validFederationBaseURL(runtime IdentityRuntimeConfiguration) bool {
+	parsed, err := url.Parse(runtime.BaseURL)
 	return err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
 }
 
@@ -255,9 +258,10 @@ func (svc *IdentityService) StartFederatedSignIn(ctx context.Context, provider, 
 		Provider: provider, Client: client, State: state, Nonce: nonce, PKCEVerifier: verifier,
 		LinkUserID: linkUserID, IssuedAt: svc.now().UTC(),
 	}
-	authorization, err := svc.federation.Start(ctx, FederationStartRequest{
+	runtime, federation := svc.federationRuntime()
+	authorization, err := federation.Start(ctx, FederationStartRequest{
 		Provider: provider, Client: client, State: state, Nonce: nonce, PKCEVerifier: verifier,
-		CallbackURL: svc.federationCallbackURL(provider),
+		CallbackURL: federationCallbackURL(runtime, provider),
 	})
 	if err != nil {
 		return nil, "", svc.federationError(err)
@@ -313,9 +317,10 @@ func (svc *IdentityService) CompleteFederatedSignIn(ctx context.Context, provide
 	if (flow.Provider == federatedProviderOIDC && !effective.OIDCEnabled) || (flow.Provider == federatedProviderSAML && !effective.SAMLEnabled) {
 		return "", nil, svc.configurationUnavailable()
 	}
-	claims, err := svc.federation.Callback(ctx, FederationCallbackRequest{
+	runtime, federation := svc.federationRuntime()
+	claims, err := federation.Callback(ctx, FederationCallbackRequest{
 		Provider: flow.Provider, Client: flow.Client, Code: strings.TrimSpace(code), Nonce: flow.Nonce,
-		PKCEVerifier: flow.PKCEVerifier, CallbackURL: svc.federationCallbackURL(flow.Provider),
+		PKCEVerifier: flow.PKCEVerifier, CallbackURL: federationCallbackURL(runtime, flow.Provider),
 		SAMLResponse: strings.TrimSpace(samlResponse), SAMLRequestID: flow.SAMLRequestID,
 	})
 	if err != nil {
@@ -646,8 +651,8 @@ func (svc *IdentityService) federationEncryptionKey() []byte {
 	return key[:]
 }
 
-func (svc *IdentityService) federationCallbackURL(provider string) string {
-	return svc.runtime.BaseURL + "/api/v1/auth/" + provider + "/callback"
+func federationCallbackURL(runtime IdentityRuntimeConfiguration, provider string) string {
+	return runtime.BaseURL + "/api/v1/auth/" + provider + "/callback"
 }
 
 func (svc *IdentityService) federationError(err error) error {

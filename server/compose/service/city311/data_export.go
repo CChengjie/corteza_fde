@@ -74,9 +74,20 @@ func (svc *Service) CheckDataExportLimit(clientID uint64) int {
 
 func (svc *Service) ExportData(ctx context.Context, actor contract.Actor, entity string, query contract.DataExportQuery) (*contract.ExportResponse, error) {
 	entity = strings.TrimSpace(entity)
-	allowedFilters, supported := dataExportEntities[entity]
+	baseFilters, supported := dataExportEntities[entity]
 	if !supported {
 		return nil, invalidExportFilter("The export entity is not supported.")
+	}
+	allowedFilters := make(map[string]bool, len(baseFilters))
+	for key, allowed := range baseFilters {
+		allowedFilters[key] = allowed
+	}
+	definitions, err := svc.exportCustomFieldDefinitions(ctx, entity)
+	if err != nil {
+		return nil, err
+	}
+	for key := range definitions {
+		allowedFilters["custom_fields."+key] = true
 	}
 	if query.PageSize == 0 {
 		query.PageSize = 50
@@ -88,7 +99,11 @@ func (svc *Service) ExportData(ctx context.Context, actor contract.Actor, entity
 	if err != nil {
 		return nil, err
 	}
-	if err = validateDataExportFilters(entity, filters); err != nil {
+	activeCategories, err := svc.activeContactCategories(ctx, svc.store)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateDataExportFilters(entity, filters, activeCategories); err != nil {
 		return nil, err
 	}
 
@@ -148,6 +163,9 @@ func (svc *Service) dataExportRows(ctx context.Context, actor contract.Actor, en
 				mapped, mapErr := mapFrom(projected)
 				if mapErr != nil {
 					return nil, mapErr
+				}
+				if customFields, ok := item.Profile["custom_fields"].(map[string]any); ok {
+					mapped["custom_fields"] = cloneMap(customFields)
 				}
 				rows = append(rows, dataExportRow{id: item.ID, item: mapped})
 			}
@@ -247,7 +265,11 @@ func normalizeDataExportFilters(filters map[string][]string, allowed map[string]
 	return normalized, nil
 }
 
-func validateDataExportFilters(entity string, filters map[string][]string) error {
+func validateDataExportFilters(entity string, filters map[string][]string, categorySets ...[]contract.ContactCategory) error {
+	categories := contract.ContactCategories
+	if len(categorySets) > 0 {
+		categories = categorySets[0]
+	}
 	for key, values := range filters {
 		switch key {
 		case "request_id", "actor_id":
@@ -282,7 +304,7 @@ func validateDataExportFilters(entity string, filters map[string][]string) error
 				return invalidExportFilter("A source_channel filter is invalid.")
 			}
 		case "primary_category", "category":
-			if !validExportEnum(values, contract.ContactCategories) {
+			if !validExportEnum(values, categories) {
 				return invalidExportFilter("A category filter is invalid.")
 			}
 		case "preferred_language":
@@ -366,7 +388,8 @@ func matchesConstituentExport(item *composeTypes.City311Constituent, projected c
 		matchesString(string(item.CouncilDistrict), filters["district"]) &&
 		matchesString(string(projected.PrimaryCategory), filters["primary_category"]) &&
 		matchesString(string(projected.PreferredLanguage), filters["preferred_language"]) &&
-		(len(filters["email_opt_out"]) == 0 || matchesString(strconv.FormatBool(projected.EmailOptOut), filters["email_opt_out"]))
+		(len(filters["email_opt_out"]) == 0 || matchesString(strconv.FormatBool(projected.EmailOptOut), filters["email_opt_out"])) &&
+		matchesCustomExportFilters(profileCustomFields(item.Profile), filters)
 }
 
 func matchesRequestExport(item *composeTypes.City311ServiceRequest, filters map[string][]string) bool {
@@ -379,7 +402,81 @@ func matchesRequestExport(item *composeTypes.City311ServiceRequest, filters map[
 		matchesString(string(item.Status), filters["status"]) && matchesString(string(item.ServiceType), filters["service_type"]) &&
 		matchesString(string(item.OwningDepartment), filters["department"]) && matchesString(string(item.CouncilDistrict), filters["district"]) &&
 		matchesString(string(item.OriginClass), filters["origin_class"]) && matchesString(string(item.SourceChannel), filters["source_channel"]) &&
-		matchesString(category, filters["category"]) && matchesString(item.DuplicateGroupID, filters["duplicate_group"])
+		matchesString(category, filters["category"]) && matchesString(item.DuplicateGroupID, filters["duplicate_group"]) &&
+		matchesCustomExportFilters(item.CustomFields, filters)
+}
+
+func (svc *Service) exportCustomFieldDefinitions(ctx context.Context, entity string) (map[string]contract.CustomFieldDefinition, error) {
+	definitionEntity := ""
+	switch entity {
+	case "constituents":
+		definitionEntity = "constituent"
+	case "service-requests":
+		definitionEntity = "service_request"
+	default:
+		return map[string]contract.CustomFieldDefinition{}, nil
+	}
+	set, err := svc.customFieldDefinitions(ctx, svc.store, definitionEntity)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]contract.CustomFieldDefinition, len(set))
+	for _, definition := range set {
+		if definition.Active {
+			out[definition.Key] = definition
+		}
+	}
+	return out, nil
+}
+
+func profileCustomFields(profile map[string]any) map[string]any {
+	if custom, ok := profile["custom_fields"].(map[string]any); ok {
+		return custom
+	}
+	return map[string]any{}
+}
+
+func matchesCustomExportFilters(values map[string]any, filters map[string][]string) bool {
+	for filter, expected := range filters {
+		if !strings.HasPrefix(filter, "custom_fields.") {
+			continue
+		}
+		key := strings.TrimPrefix(filter, "custom_fields.")
+		value, found := values[key]
+		if !found || !matchesCustomFieldValue(value, expected) {
+			return false
+		}
+	}
+	return true
+}
+
+func customFieldFilterValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case bool:
+		return strconv.FormatBool(typed)
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(typed), 'f', -1, 32)
+	case int:
+		return strconv.Itoa(typed)
+	case int64:
+		return strconv.FormatInt(typed, 10)
+	case uint64:
+		return strconv.FormatUint(typed, 10)
+	case []string:
+		return strings.Join(typed, ",")
+	case []any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, customFieldFilterValue(item))
+		}
+		return strings.Join(parts, ",")
+	default:
+		return fmt.Sprint(value)
+	}
 }
 
 func matchesAuditExport(item *composeTypes.City311AuditEvent, filters map[string][]string) bool {

@@ -85,6 +85,7 @@ type (
 		PrimaryAssigneeIDs []uint64
 		CollaboratorIDs    []uint64
 		Categories         []contract.ContactCategory
+		CustomFields       map[string][]string
 		CreatedFrom        *time.Time
 		CreatedTo          *time.Time
 		DuplicateGroups    []string
@@ -349,6 +350,11 @@ func (svc *Service) prepareSubmission(ctx context.Context, in contract.ServiceRe
 	if validationErr := validateWrite(in); validationErr != nil {
 		return nil, validationErr
 	}
+	customFields, err := svc.validateAndDefaultCustomFields(ctx, svc.store, "service_request", in.CustomFields)
+	if err != nil {
+		return nil, err
+	}
+	in.CustomFields = customFields
 	if err = authorizeStaffSubmission(in.ServiceType, options.StaffActor); err != nil {
 		return nil, err
 	}
@@ -802,8 +808,15 @@ func (svc *Service) List(ctx context.Context, actor contract.Actor, requested Re
 	if !canOperateRequest(actor) {
 		return nil, apiError(403, contract.ErrorForbidden, "A CRM record role is required.")
 	}
-	if fieldErrors := validateRequestFilter(requested); len(fieldErrors) > 0 {
+	activeCategories, err := svc.activeContactCategories(ctx, svc.store)
+	if err != nil {
+		return nil, err
+	}
+	if fieldErrors := validateRequestFilter(requested, activeCategories); len(fieldErrors) > 0 {
 		return nil, validationError(fieldErrors...)
+	}
+	if err = svc.validateRequestCustomFieldFilters(ctx, requested.CustomFields); err != nil {
+		return nil, err
 	}
 	if requested.PageSize == 0 {
 		requested.PageSize = 50
@@ -854,8 +867,12 @@ func (svc *Service) List(ctx context.Context, actor contract.Actor, requested Re
 	return response, nil
 }
 
-func validateRequestFilter(requested RequestFilter) []contract.FieldError {
+func validateRequestFilter(requested RequestFilter, categorySets ...[]contract.ContactCategory) []contract.FieldError {
 	var out []contract.FieldError
+	categories := contract.ContactCategories
+	if len(categorySets) > 0 {
+		categories = categorySets[0]
+	}
 	if !containsEnums(requested.Statuses, contract.ServiceRequestStatuses) {
 		out = append(out, contract.FieldError{Field: "/query/filters/status", Code: contract.ValidationInvalidValue})
 	}
@@ -874,7 +891,7 @@ func validateRequestFilter(requested RequestFilter) []contract.FieldError {
 	if !containsEnums(requested.SourceChannels, contract.SourceChannels) {
 		out = append(out, contract.FieldError{Field: "/query/filters/source_channel", Code: contract.ValidationInvalidValue})
 	}
-	if !containsEnums(requested.Categories, contract.ContactCategories) {
+	if !containsEnums(requested.Categories, categories) {
 		out = append(out, contract.FieldError{Field: "/query/filters/category", Code: contract.ValidationInvalidValue})
 	}
 	if requested.CreatedFrom != nil && requested.CreatedTo != nil && requested.CreatedFrom.After(*requested.CreatedTo) {
@@ -909,6 +926,7 @@ func matchesRequestFilter(item *composeTypes.City311ServiceRequest, requested Re
 		!matchesUint64(item.PrimaryAssigneeID, requested.PrimaryAssigneeIDs) ||
 		!matchesAnyUint64(item.CollaboratorIDs, requested.CollaboratorIDs) ||
 		!matchesString(fmt.Sprint(item.PrimaryRequester["primary_category"]), requested.Categories) ||
+		!matchesCustomFields(item.CustomFields, requested.CustomFields) ||
 		!matchesString(item.DuplicateGroupID, requested.DuplicateGroups) {
 		return false
 	}
@@ -1093,6 +1111,9 @@ func appliedFilters(requested RequestFilter) map[string]any {
 	}
 	if len(requested.Categories) > 0 {
 		out["category"] = requested.Categories
+	}
+	if len(requested.CustomFields) > 0 {
+		out["custom_fields"] = requested.CustomFields
 	}
 	if requested.CreatedFrom != nil {
 		out["created_from"] = requested.CreatedFrom.Format(time.RFC3339)

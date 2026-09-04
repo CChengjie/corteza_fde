@@ -22,7 +22,13 @@ func TestPresentationSeedIsIdempotentAndPublicDefaultsAreAvailable(t *testing.T)
 	require.NoError(t, svc.Seed(ctx, svc.now()))
 	revisions, _, err := store.SearchCity311ConfigurationRevisions(ctx, st, composeTypes.City311ConfigurationRevisionFilter{})
 	require.NoError(t, err)
-	require.Len(t, revisions, 14)
+	presentationRevisions := 0
+	for _, revision := range revisions {
+		if revision.ResourceType == configurationBranding || revision.ResourceType == configurationContent || revision.ResourceType == configurationHelp {
+			presentationRevisions++
+		}
+	}
+	require.Equal(t, 14, presentationRevisions)
 
 	branding, err := svc.PublicBranding(ctx)
 	require.NoError(t, err)

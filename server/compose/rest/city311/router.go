@@ -53,18 +53,19 @@ func (values *stringList) UnmarshalJSON(data []byte) error {
 }
 
 type staffQueueFilters struct {
-	Status         stringList `json:"status"`
-	ServiceType    stringList `json:"service_type"`
-	Department     stringList `json:"department"`
-	District       stringList `json:"district"`
-	OriginClass    stringList `json:"origin_class"`
-	SourceChannel  stringList `json:"source_channel"`
-	Assignee       stringList `json:"assignee"`
-	Collaborator   stringList `json:"collaborator"`
-	Category       stringList `json:"category"`
-	CreatedFrom    string     `json:"created_from"`
-	CreatedTo      string     `json:"created_to"`
-	DuplicateGroup stringList `json:"duplicate_group"`
+	Status         stringList            `json:"status"`
+	ServiceType    stringList            `json:"service_type"`
+	Department     stringList            `json:"department"`
+	District       stringList            `json:"district"`
+	OriginClass    stringList            `json:"origin_class"`
+	SourceChannel  stringList            `json:"source_channel"`
+	Assignee       stringList            `json:"assignee"`
+	Collaborator   stringList            `json:"collaborator"`
+	Category       stringList            `json:"category"`
+	CustomFields   map[string]stringList `json:"custom_fields"`
+	CreatedFrom    string                `json:"created_from"`
+	CreatedTo      string                `json:"created_to"`
+	DuplicateGroup stringList            `json:"duplicate_group"`
 }
 
 type constituentLinkWrite struct {
@@ -130,6 +131,12 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Get("/public/help/{help_key}", h.publicHelpGet)
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(requireIdentity)
+			r.Get("/contact-categories", h.adminContactCategoryList)
+			r.Post("/contact-categories", h.adminContactCategoryCreate)
+			r.Patch("/contact-categories/{category_code}", h.adminContactCategoryUpdate)
+			r.Get("/custom-fields", h.adminCustomFieldList)
+			r.Post("/custom-fields", h.adminCustomFieldCreate)
+			r.Patch("/custom-fields/{field_key}", h.adminCustomFieldUpdate)
 			r.Get("/branding", h.adminBrandingGet)
 			r.Patch("/branding", h.adminBrandingUpdate)
 			r.Post("/branding/preview", h.adminBrandingPreview)
@@ -864,6 +871,7 @@ func parseStaffQueueFilters(r *http.Request) (city311Service.RequestFilter, erro
 		input.Assignee = queryValues(query, "assignee")
 		input.Collaborator = queryValues(query, "collaborator")
 		input.Category = queryValues(query, "category")
+		input.CustomFields = explodedCustomFieldFilters(query)
 		input.CreatedFrom = firstQueryValue(queryValues(query, "created_from"))
 		input.CreatedTo = firstQueryValue(queryValues(query, "created_to"))
 		input.DuplicateGroup = queryValues(query, "duplicate_group")
@@ -896,10 +904,35 @@ func parseStaffQueueFilters(r *http.Request) (city311Service.RequestFilter, erro
 		PrimaryAssigneeIDs: assignees,
 		CollaboratorIDs:    collaborators,
 		Categories:         convertStrings(input.Category, contract.ContactCategory("")),
+		CustomFields:       customFieldFilterValues(input.CustomFields),
 		CreatedFrom:        createdFrom,
 		CreatedTo:          createdTo,
 		DuplicateGroups:    []string(input.DuplicateGroup),
 	}, nil
+}
+
+func explodedCustomFieldFilters(query map[string][]string) map[string]stringList {
+	out := map[string]stringList{}
+	for rawKey := range query {
+		key := rawKey
+		if strings.HasPrefix(key, "filters[") && strings.HasSuffix(key, "]") {
+			key = strings.TrimSuffix(strings.TrimPrefix(key, "filters["), "]")
+		}
+		if !strings.HasPrefix(key, "custom_fields.") {
+			continue
+		}
+		fieldKey := strings.TrimPrefix(key, "custom_fields.")
+		out[fieldKey] = append(out[fieldKey], queryValues(query, rawKey)...)
+	}
+	return out
+}
+
+func customFieldFilterValues(input map[string]stringList) map[string][]string {
+	out := make(map[string][]string, len(input))
+	for key, values := range input {
+		out[key] = []string(values)
+	}
+	return out
 }
 
 func queryValues(query map[string][]string, field string) stringList {

@@ -175,6 +175,7 @@ func TestIdentityRegistrationIsValidatedPrivateAndFullyProvisioned(t *testing.T)
 
 func TestDefaultIdentityRequiresRuntimeSecretAndAbsoluteBaseURL(t *testing.T) {
 	_, st := testService(t)
+	setFederatedIdentityEnvironment(t)
 	t.Setenv("SESSION_SECRET", "")
 	_, err := NewDefaultIdentity(st, time.Now)
 	require.EqualError(t, err, "SESSION_SECRET is required for City 311 sessions")
@@ -184,6 +185,14 @@ func TestDefaultIdentityRequiresRuntimeSecretAndAbsoluteBaseURL(t *testing.T) {
 	_, err = NewDefaultIdentity(st, time.Now)
 	require.EqualError(t, err, "APP_BASE_URL must be an absolute HTTP or HTTPS URL")
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
+	t.Setenv("OIDC_STAFF_CLIENT_ID", "")
+	_, err = NewDefaultIdentity(st, time.Now)
+	require.EqualError(t, err, "OIDC_STAFF_CLIENT_ID is required for City 311 federated identity")
+	t.Setenv("OIDC_STAFF_CLIENT_ID", "staff")
+	t.Setenv("OIDC_ISSUER_URL", "relative-url")
+	_, err = NewDefaultIdentity(st, time.Now)
+	require.EqualError(t, err, "OIDC_ISSUER_URL must be an absolute HTTP or HTTPS URL")
+	t.Setenv("OIDC_ISSUER_URL", "https://identity.example.test")
 	t.Setenv(seedConstituentPasswordEnv, "")
 	_, err = NewDefaultIdentity(st, time.Now)
 	require.EqualError(t, err, seedConstituentPasswordEnv+" is required for the City 311 public seed")
@@ -194,6 +203,7 @@ func TestDefaultIdentityRequiresRuntimeSecretAndAbsoluteBaseURL(t *testing.T) {
 
 func TestInitializeBuildsIdentityFromRuntimeConfiguration(t *testing.T) {
 	_, st := testService(t)
+	setFederatedIdentityEnvironment(t)
 	id.Init(context.Background())
 	previousDefault, previousIdentity := Default, DefaultIdentity
 	t.Cleanup(func() {

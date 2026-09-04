@@ -330,10 +330,14 @@ func (svc *Service) ListPortalRequests(ctx context.Context, ownerID uint64, requ
 }
 
 func (svc *Service) RelationshipNotificationRecipients(ctx context.Context, requestID uint64, event RelationshipNotificationEvent) ([]string, error) {
+	return relationshipNotificationRecipients(ctx, svc.store, requestID, event)
+}
+
+func relationshipNotificationRecipients(ctx context.Context, st store.Storer, requestID uint64, event RelationshipNotificationEvent) ([]string, error) {
 	if !validRelationshipNotificationEvent(event) {
 		return nil, validationError(contract.FieldError{Field: "/event", Code: contract.ValidationInvalidValue})
 	}
-	links, _, err := store.SearchCity311RequestConstituentLinks(ctx, svc.store, composeTypes.City311RequestConstituentFilter{RequestID: requestID})
+	links, _, err := store.SearchCity311RequestConstituentLinks(ctx, st, composeTypes.City311RequestConstituentFilter{RequestID: requestID})
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +345,9 @@ func (svc *Service) RelationshipNotificationRecipients(ctx context.Context, requ
 	seen := map[string]bool{}
 	for _, link := range links {
 		eligible := link.RelationshipType == contract.RelationshipPrimaryRequester ||
-			((link.RelationshipType == contract.RelationshipAffectedResident || link.RelationshipType == contract.RelationshipReporter) && link.PortalVisible && link.NotifyStatus)
+			(event != RelationshipNotificationSubmitted &&
+				(link.RelationshipType == contract.RelationshipAffectedResident || link.RelationshipType == contract.RelationshipReporter) &&
+				link.PortalVisible && link.NotifyStatus)
 		if eligible && !seen[link.ConstituentID] {
 			seen[link.ConstituentID] = true
 			recipients = append(recipients, link.ConstituentID)

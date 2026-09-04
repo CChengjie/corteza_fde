@@ -190,6 +190,8 @@ func decodeCivicWorksResponse(data []byte, workOrder *contract.CivicWorksWorkOrd
 }
 
 func (svc *Service) SetCivicWorks(client CivicWorksClient, webhookSecret string) {
+	svc.runtimeMu.Lock()
+	defer svc.runtimeMu.Unlock()
 	svc.civicWorksClient = client
 	svc.civicWorksSecret = strings.TrimSpace(webhookSecret)
 	svc.civicWorksConfig = nil
@@ -225,12 +227,15 @@ func (svc *Service) AssignCivicWorks(ctx context.Context, actor contract.Actor, 
 		svc.mu.Unlock()
 		return nil, err
 	}
-	if svc.civicWorksConfig != nil || svc.civicWorksClient == nil {
+	svc.runtimeMu.RLock()
+	client, configurationError := svc.civicWorksClient, svc.civicWorksConfig
+	svc.runtimeMu.RUnlock()
+	if configurationError != nil || client == nil {
 		svc.mu.Unlock()
 		return nil, civicWorksUnavailableError()
 	}
 	input := civicWorksCreateInput(request)
-	workOrder, err := svc.civicWorksClient.CreateWorkOrder(ctx, input, civicWorksIdempotencyKey(request.ID))
+	workOrder, err := client.CreateWorkOrder(ctx, input, civicWorksIdempotencyKey(request.ID))
 	if err != nil {
 		svc.mu.Unlock()
 		return nil, err
@@ -280,10 +285,13 @@ func (svc *Service) AssignCivicWorks(ctx context.Context, actor contract.Actor, 
 }
 
 func (svc *Service) HandleCivicWorksEvent(ctx context.Context, body []byte, headerEventID, signature string) error {
-	if svc.civicWorksConfig != nil || svc.civicWorksSecret == "" {
+	svc.runtimeMu.RLock()
+	configurationError, webhookSecret := svc.civicWorksConfig, svc.civicWorksSecret
+	svc.runtimeMu.RUnlock()
+	if configurationError != nil || webhookSecret == "" {
 		return civicWorksUnavailableError()
 	}
-	if !validCivicWorksSignature(body, signature, svc.civicWorksSecret) {
+	if !validCivicWorksSignature(body, signature, webhookSecret) {
 		return &ServiceError{Status: http.StatusUnauthorized, Payload: contract.APIError{
 			Error: contract.ErrorInvalidSignature, Message: "The CivicWorks event signature is invalid.", Retryable: false,
 		}}

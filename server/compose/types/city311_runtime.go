@@ -191,6 +191,24 @@ type (
 	}
 	City311RequestConstituentSet []*City311RequestConstituent
 
+	City311RequestNote struct {
+		ID                  uint64                      `json:"id,string"`
+		RequestID           uint64                      `json:"requestID,string"`
+		AuthorType          city311Types.AuditActorType `json:"authorType"`
+		AuthorID            uint64                      `json:"authorID,string"`
+		AuthorConstituentID string                      `json:"authorConstituentID,omitempty"`
+		Body                string                      `json:"body"`
+		PortalVisible       bool                        `json:"portalVisible"`
+		CreatedAt           time.Time                   `json:"createdAt"`
+	}
+	City311RequestNoteFilter struct {
+		RequestID uint64
+		Check     func(*City311RequestNote) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311RequestNoteSet []*City311RequestNote
+
 	City311PublicHistoryItem struct {
 		ID                    uint64                      `json:"id,string"`
 		RequestID             uint64                      `json:"requestID,string"`

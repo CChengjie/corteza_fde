@@ -1,5 +1,5 @@
 import { APPLICATION_ROLES, CONTRACT_VERSION, type ApplicationRole, type HelpKey, type PublicContentKey } from './enums'
-import type { Branding, C311FixtureSet, C311RoleFixture, Constituent, ContentObject, CurrentActor, HelpContent, PublicHistoryItem, RequestNote, RequestQueueItem, RequestRelationship, ServiceRequest, Session, StaffServiceRequestDetail } from './types'
+import type { Branding, C311FixtureSet, C311RoleFixture, Constituent, ContentObject, CurrentActor, HelpContent, PortalAttachment, PublicHistoryItem, RequestNote, RequestQueueItem, RequestRelationship, ServiceRequest, Session, StaffServiceRequestDetail } from './types'
 
 export const BENCHMARK_NOW = '2026-01-15T15:00:00.000Z'
 export const BENCHMARK_TIMEZONE = 'America/New_York'
@@ -86,6 +86,7 @@ const detail: StaffServiceRequestDetail = {
   primary_assignee_id: null,
   collaborator_ids: [],
   reminders: [],
+  attachments: [{ attachment_token: 'attachment-fixture-001', filename: 'fixture.txt', media_type: 'text/plain', size: 18, expires_at: BENCHMARK_NOW } as PortalAttachment],
   history,
   audit: [],
   external_work_order: null,
@@ -204,7 +205,7 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Service agent',
     departments: ['STREETS'],
     districts: ['NORTH'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_service_request_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_note_create', 'report_catalogue', 'report_export'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_reminder_create', 'staff_note_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_service_request_create', 'report_catalogue', 'report_export'],
     scopes: ['service_requests.write'],
     routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_service_request_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_note_create', 'report_catalogue', 'report_export'],
     deniedScope: 'workflow.execute',
@@ -214,9 +215,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Supervisor',
     departments: ['STREETS'],
     districts: ['NORTH', 'CENTRAL'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_request_bulk', 'report_catalogue', 'report_export', 'audit_list', 'audit_export'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_collaborator_add', 'staff_collaborator_remove', 'staff_reminder_action', 'staff_duplicate_group_confirm', 'staff_duplicate_group_remove', 'staff_reopen_approve', 'staff_request_bulk', 'report_catalogue', 'report_export'],
     scopes: ['service_requests.write'],
-    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_request_bulk', 'report_catalogue', 'report_export', 'audit_list', 'audit_export'],
+    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_request_bulk', 'report_catalogue', 'report_export'],
     deniedScope: 'workflow.execute',
   },
   department_manager: {
@@ -224,7 +225,7 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Department manager',
     departments: ['STREETS', 'PUBLIC_WORKS'],
     districts: ['NORTH', 'CENTRAL', 'SOUTH'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'report_catalogue', 'report_export', 'audit_list', 'audit_export'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_collaborator_add', 'staff_collaborator_remove', 'staff_origin_override', 'staff_scope_override', 'staff_reopen_approve', 'report_catalogue', 'report_export', 'audit_list', 'audit_export'],
     scopes: ['service_requests.write', 'crm.export'],
     routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'report_catalogue', 'report_export', 'audit_list', 'audit_export'],
     deniedScope: 'workflow.execute',
@@ -234,9 +235,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Platform administrator',
     departments: ['PUBLIC_WORKS', 'STREETS', 'SANITATION', 'GENERAL_SERVICES'],
     districts: ['NORTH', 'CENTRAL', 'SOUTH'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_request_bulk', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_update', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_origin_override', 'staff_scope_override', 'staff_request_bulk', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_update', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
     scopes: ['service_requests.write', 'crm.export'],
-    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_request_bulk', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_update', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
+    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_bulk', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_update', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
     deniedScope: 'workflow.execute',
   },
   workflow_designer: {
@@ -443,6 +444,8 @@ export function createDefaultFixtureSet (): C311FixtureSet {
       'attachment-terminal': { error: 'OPERATION_FAILED', message: 'The attachment service failed permanently.', retryable: false },
       'map-retryable': { error: 'MAP_TEMPORARILY_UNAVAILABLE', message: 'The mapping service is temporarily unavailable.', retryable: true },
       'map-auth-failure': { error: 'MAP_UNAUTHENTICATED', message: 'The mapping service credentials are unavailable.', retryable: false },
+      'scope-denied': { error: 'FORBIDDEN', message: 'The request is outside your assigned scope.', retryable: false },
+      'scope-filter': { error: 'FORBIDDEN', message: 'The request is outside your assigned scope.', retryable: false },
     },
     branding,
     public_content: publicContent,

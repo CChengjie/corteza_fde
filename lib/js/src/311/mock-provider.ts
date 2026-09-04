@@ -1,5 +1,5 @@
 import { C311ApiError } from './errors'
-import { APPLICATION_ROLES, CONTACT_CATEGORIES, C311_SCENARIOS, LANGUAGES, PHONE_LABELS, RELATIONSHIP_TYPES, type ApplicationRole, type C311Scenario, type ContractCapability, type HelpKey, type IdentityProvider, type Language, type PublicContentKey } from './enums'
+import { APPLICATION_ROLES, CONTACT_CATEGORIES, C311_SCENARIOS, DEPARTMENT_CODES, DISTRICT_CODES, LANGUAGES, ORIGIN_CLASSES, PHONE_LABELS, RELATIONSHIP_TYPES, SERVICE_REQUEST_STATUSES, SERVICE_TYPES, SOURCE_CHANNELS, type ApplicationRole, type C311Scenario, type ContractCapability, type HelpKey, type IdentityProvider, type Language, type PublicContentKey } from './enums'
 import { cloneFixtureSet, createDefaultFixtureSet } from './fixtures'
 import type {
   AccountRegistration,
@@ -43,6 +43,15 @@ import type {
   Constituent,
   StaffServiceRequestDetail,
   StaffServiceRequestCreate,
+  RequestTransition,
+  Reassignment,
+  CollaboratorChange,
+  ReminderWrite,
+  ReminderActionInput,
+  OriginOverride,
+  ScopeOverride,
+  DuplicateGroupChange,
+  Reminder,
   ConstituentLink,
   ConstituentUnlink,
   RequestNote,
@@ -50,7 +59,7 @@ import type {
   RequestRelationshipAudit,
   WorkflowDefinition,
 } from './types'
-import { validatePortalAttachment, type C311Provider, type C311RequestOptions, type PortalAttachmentUpload, type ReportExportOptions, type RequestTransition } from './provider'
+import { validatePortalAttachment, type C311Provider, type C311RequestOptions, type PortalAttachmentUpload, type ReportExportOptions } from './provider'
 
 export interface MockC311ProviderOptions {
   scenario?: C311Scenario
@@ -87,6 +96,7 @@ const statusByScenario: Partial<Record<C311Scenario, number>> = {
   'attachment-terminal': 500,
   'map-retryable': 503,
   'map-auth-failure': 401,
+  'scope-denied': 403,
 }
 
 function copy<T> (value: T): T {
@@ -165,6 +175,22 @@ export class MockC311Provider implements C311Provider {
     this.notes = copy(this.fixtures.notes || {})
     this.publicRelationships = copy(this.fixtures.public_relationships || this.relationships)
     this.publicNotes = copy(this.fixtures.public_notes || this.notes)
+    if (this.scenario === 'scope-filter' && this.fixtures.queue[0]) {
+      const baseDetail = this.fixtures.details[this.fixtures.queue[0].request_id]
+      if (baseDetail) {
+        const foreignRequestID = 'request-fixture-foreign'
+        const foreignDetail = copy(baseDetail)
+        foreignDetail.request = {
+          ...foreignDetail.request,
+          request_id: foreignRequestID,
+          request_number: 'SR-2026-00099',
+          summary: 'Out of scope fixture request',
+          owning_department: 'GENERAL_SERVICES',
+          council_district: 'SOUTH',
+        }
+        this.fixtures.details[foreignRequestID] = foreignDetail
+      }
+    }
     Object.entries(this.relationships).forEach(([requestID, relationships]) => {
       this.relationshipAudits[requestID] = relationships.flatMap(relationship => relationship.audit || []).map(audit => copy(audit))
     })
@@ -424,6 +450,63 @@ export class MockC311Provider implements C311Provider {
       owning_department: request.owning_department,
       updated_at: request.updated_at,
     }
+  }
+
+  private staffRequest (requestID: string, capability: ContractCapability, options: C311RequestOptions = {}, requireVersion = true): StaffServiceRequestDetail {
+    this.requireStaffCapability(capability)
+    const detail = this.fixtures.details[requestID]
+    if (!detail) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+    const actor = this.currentSession.actor
+    const request = detail.request
+    const currentVersion = this.requestVersion(requestID)
+    request.version = currentVersion
+    const unrestricted = actor?.application_roles.includes('platform_administrator')
+    const inDepartment = unrestricted || !!actor?.department_codes.includes(request.owning_department)
+    const inDistrict = unrestricted || !request.council_district || !!actor?.district_codes.includes(request.council_district)
+    if (!inDepartment || !inDistrict) throw new C311ApiError({ error: 'FORBIDDEN', message: 'The request is outside your assigned scope.', retryable: false }, 403)
+    if (options.expectedVersion !== undefined && options.expectedVersion !== currentVersion) {
+      throw new C311ApiError({ error: 'VERSION_CONFLICT', message: 'The record changed before your update.', retryable: false, current_version: currentVersion }, 409)
+    }
+    if (requireVersion && options.expectedVersion === undefined && capability !== 'staff_request_detail') {
+      throw new C311ApiError({ error: 'EXPECTED_VERSION_REQUIRED', message: 'An expected version is required for this operation.', retryable: false }, 428)
+    }
+    return detail
+  }
+
+  private requireStaffCapability (capability: ContractCapability): void {
+    this.requireCapability(capability)
+  }
+
+  private syncQueueItem (detail: StaffServiceRequestDetail): void {
+    const index = this.fixtures.queue.findIndex(item => item.request_id === detail.request.request_id)
+    if (index < 0) return
+    const request = detail.request
+    this.fixtures.queue[index] = {
+      ...this.fixtures.queue[index],
+      request_number: request.request_number || '',
+      summary: request.summary,
+      service_type: request.service_type,
+      status: request.status,
+      owning_department: request.owning_department,
+      council_district: request.council_district,
+      origin_class: request.origin_class,
+      version: request.version,
+      updated_at: request.updated_at,
+      primary_assignee_id: detail.primary_assignee_id,
+      duplicate_group_id: request.duplicate_group_id,
+      available_actions: detail.available_actions,
+    }
+  }
+
+  private bumpStaffRequest (detail: StaffServiceRequestDetail): void {
+    detail.request.version += 1
+    this.requestVersions[detail.request.request_id] = detail.request.version
+    detail.request.updated_at = '2026-01-15T15:00:00.000Z'
+    this.syncQueueItem(detail)
+  }
+
+  private auditStaffRequest (detail: StaffServiceRequestDetail, action: string): void {
+    detail.audit = [...detail.audit, { action, actor_id: this.currentSession.actor?.actor_id || 'fixture', occurred_at: '2026-01-15T15:00:00.000Z' }]
   }
 
   async getSession (): Promise<Session> {
@@ -898,14 +981,79 @@ export class MockC311Provider implements C311Provider {
   }
 
   async listStaffRequests (query: RequestListQuery = {}): Promise<PageResponse<RequestQueueItem>> {
-    this.requireCapability('staff_request_queue')
+    this.requireStaffCapability('staff_request_queue')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'retryable', 'version-conflict', 'terminal'])
-    return this.page(this.scenario === 'empty' ? [] : this.fixtures.queue, query)
+    const pageSize = query.page_size === undefined ? 50 : Number(query.page_size)
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'page_size must be between 1 and 100.', retryable: false, errors: [{ field: '/page_size', code: 'OUT_OF_RANGE' }] }, 422)
+    }
+    const sort = query.sort ? String(query.sort).split(',').map(value => value.trim()).filter(Boolean) : []
+    if (sort.length > 3) throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'At most three sort fields are supported.', retryable: false, errors: [{ field: '/sort', code: 'TOO_MANY_ITEMS' }] }, 422)
+    let offset = 0
+    if (query.page_token) {
+      const match = /^fixture-page-(\d+)$/.exec(query.page_token)
+      if (!match) throw new C311ApiError({ error: 'INVALID_PAGE_TOKEN', message: 'The page token is invalid.', retryable: false }, 422)
+      offset = Number(match[1])
+    }
+    const actor = this.currentSession.actor
+    const unrestricted = actor?.application_roles.includes('platform_administrator')
+    const inScope = (item: RequestQueueItem) => unrestricted || (!!actor?.department_codes.includes(item.owning_department) && (!item.council_district || !!actor?.district_codes.includes(item.council_district)))
+    const filters = { ...query.filters, ...Object.fromEntries(Object.entries(query).filter(([key, value]) => !['filters', 'page_token', 'page_size', 'sort'].includes(key) && value !== undefined)) }
+    const filterNames = new Set(['status', 'service_type', 'department', 'district', 'origin_class', 'source_channel', 'assignee', 'collaborator', 'category', 'created_from', 'created_to', 'duplicate_group'])
+    for (const [key, value] of Object.entries(filters)) {
+      if (value === undefined || value === '') continue
+      if (!filterNames.has(key)) throw new C311ApiError({ error: 'INVALID_FILTER', message: 'The request filter is not supported.', retryable: false, errors: [{ field: `/filters/${key}`, code: 'INVALID_VALUE' }] }, 422)
+      const values: Record<string, readonly string[]> = { status: SERVICE_REQUEST_STATUSES, service_type: SERVICE_TYPES, department: DEPARTMENT_CODES, district: DISTRICT_CODES, origin_class: ORIGIN_CLASSES, source_channel: SOURCE_CHANNELS }
+      if (values[key] && !values[key].includes(String(value))) throw new C311ApiError({ error: 'VALIDATION_ERROR', message: `Unsupported ${key} filter.`, retryable: false, errors: [{ field: `/${key}`, code: 'INVALID_VALUE' }] }, 422)
+    }
+    const paginationItem = this.fixtures.queue[0] ? { ...this.fixtures.queue[0], request_id: 'request-fixture-002', request_number: 'SR-2026-00002', summary: 'Second fixture request' } : null
+    const foreignItem: RequestQueueItem | null = this.fixtures.queue[0] ? { ...this.fixtures.queue[0], request_id: 'request-fixture-foreign', request_number: 'SR-2026-00099', summary: 'Out of scope fixture request', owning_department: 'GENERAL_SERVICES', council_district: 'SOUTH' } : null
+    const queue = this.scenario === 'scope-denied' || this.scenario === 'empty' ? [] : this.scenario === 'pagination' && paginationItem ? this.fixtures.queue.concat(paginationItem) : this.scenario === 'scope-filter' && foreignItem ? this.fixtures.queue.concat(foreignItem) : this.fixtures.queue
+    let filtered = queue.filter(item => {
+      if (!inScope(item)) return false
+      const detail = this.fixtures.details[item.request_id]
+      return Object.entries(filters).every(([key, value]) => {
+        if (value === undefined || value === '') return true
+        if (key === 'department') return item.owning_department === value
+        if (key === 'district') return item.council_district === value
+        if (key === 'duplicate_group') return item.duplicate_group_id === value
+        if (key === 'assignee') return item.primary_assignee_id === value
+        if (key === 'collaborator') return !!detail?.collaborator_ids.includes(String(value))
+        if (key === 'category') return detail?.request.primary_requester.primary_category === value
+        if (key === 'created_from') return !!detail && detail.request.created_at >= String(value)
+        if (key === 'created_to') return !!detail && detail.request.created_at <= String(value)
+        return (item as unknown as Record<string, unknown>)[key] === value
+      })
+    })
+    if (sort.length) {
+      filtered = [...filtered].sort((left, right) => {
+        for (const field of sort) {
+          const descending = field.startsWith('-')
+          const key = descending ? field.slice(1) : field
+          const leftValue = String((left as unknown as Record<string, unknown>)[key] ?? '')
+          const rightValue = String((right as unknown as Record<string, unknown>)[key] ?? '')
+          if (leftValue === rightValue) continue
+          const result = leftValue < rightValue ? -1 : 1
+          return descending ? -result : result
+        }
+        return 0
+      })
+    }
+    const items = filtered.slice(offset, offset + pageSize)
+    return {
+      items: copy(items),
+      next_page_token: offset + pageSize < filtered.length ? `fixture-page-${offset + pageSize}` : null,
+      total_count: filtered.length,
+      applied_filters: copy(filters),
+      sort,
+    }
   }
 
   async getStaffRequest (requestID: string): Promise<StaffServiceRequestDetail> {
-    this.requireCapability('staff_request_detail')
-    this.failIfNeeded(['forbidden', 'not-found', 'validation'])
+    this.requireStaffCapability('staff_request_detail')
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'retryable', 'terminal'])
+    if (this.scenario === 'scope-denied') this.failScenario('scope-denied')
+    this.staffRequest(requestID, 'staff_request_detail', {}, false)
     return this.staffDetail(requestID)
   }
 
@@ -913,7 +1061,7 @@ export class MockC311Provider implements C311Provider {
     this.requireCapability('staff_constituent_link')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict'])
     if (options.expectedVersion === undefined) this.failScenario('expected-version-required')
-    const current = this.staffDetail(requestID)
+    const current = this.staffRequest(requestID, 'staff_constituent_link', options)
     if (options.expectedVersion !== current.request.version) this.failScenario('version-conflict')
     const relationships = this.relationships[requestID] || []
     if (!input || !input.constituent_id || !RELATIONSHIP_TYPES.includes(input.relationship_type) || typeof input.portal_visible !== 'boolean' || typeof input.notify_status !== 'boolean') this.failScenario('validation')
@@ -938,7 +1086,7 @@ export class MockC311Provider implements C311Provider {
     this.requireCapability('staff_constituent_unlink')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict'])
     if (options.expectedVersion === undefined) this.failScenario('expected-version-required')
-    const current = this.staffDetail(requestID)
+    const current = this.staffRequest(requestID, 'staff_constituent_unlink', options)
     if (options.expectedVersion !== current.request.version) this.failScenario('version-conflict')
     if (!input?.reason?.trim()) this.failScenario('validation')
     const relationships = this.relationships[requestID] || []
@@ -962,7 +1110,7 @@ export class MockC311Provider implements C311Provider {
   async createStaffNote (requestID: string, input: RequestNote): Promise<RequestNote> {
     this.requireCapability('staff_note_create')
     this.failIfNeeded(['forbidden', 'not-found', 'validation'])
-    if (!this.fixtures.details[requestID]) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+    this.staffRequest(requestID, 'staff_note_create', {}, false)
     if (!input || typeof input.body !== 'string' || !input.body.trim() || input.body.length > 2000 || typeof input.portal_visible !== 'boolean') this.failScenario('validation')
     const note: RequestNote = {
       note_id: `note-fixture-${String(++this.noteSerial).padStart(3, '0')}`,
@@ -978,9 +1126,123 @@ export class MockC311Provider implements C311Provider {
     return copy(note)
   }
 
-  async transitionStaffRequest (requestID: string, _input: RequestTransition, _options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
-    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict'])
-    return this.getStaffRequest(requestID)
+  async transitionStaffRequest (requestID: string, input: RequestTransition, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_request_transition', options)
+    const allowed: Record<string, string[]> = { DRAFT: ['SUBMITTED'], SUBMITTED: ['TRIAGED'], TRIAGED: ['ASSIGNED'], ASSIGNED: ['IN_PROGRESS'], IN_PROGRESS: ['RESOLVED'], RESOLVED: ['CLOSED', 'REOPENED'], CLOSED: ['REOPENED'], REOPENED: ['ASSIGNED', 'IN_PROGRESS'] }
+    if (!allowed[detail.request.status]?.includes(input.to_status)) throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'The requested status transition is not allowed.', retryable: false, errors: [{ field: '/to_status', code: 'INVALID_VALUE' }] }, 422)
+    detail.request.status = input.to_status
+    detail.available_actions = detail.available_actions.filter(action => action !== 'TRIAGE' || input.to_status !== 'TRIAGED')
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, `STATUS_${input.to_status}`)
+    this.countWrite('staff_request_transition')
+    return copy(detail)
+  }
+
+  async reassignStaffRequest (requestID: string, input: Reassignment, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_request_reassign', options)
+    detail.primary_assignee_id = input.assignee_id
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, 'ASSIGN')
+    this.countWrite('staff_request_reassign')
+    return copy(detail)
+  }
+
+  async addStaffCollaborator (requestID: string, staffID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_collaborator_add', options)
+    if (!detail.collaborator_ids.includes(staffID)) detail.collaborator_ids.push(staffID)
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, 'COLLABORATOR_ADD')
+    this.countWrite('staff_collaborator_add')
+    return copy(detail)
+  }
+
+  async removeStaffCollaborator (requestID: string, staffID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_collaborator_remove', options)
+    detail.collaborator_ids = detail.collaborator_ids.filter(id => id !== staffID)
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, 'COLLABORATOR_REMOVE')
+    this.countWrite('staff_collaborator_remove')
+    return copy(detail)
+  }
+
+  async createStaffReminder (requestID: string, input: ReminderWrite): Promise<Reminder> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation'])
+    const detail = this.staffRequest(requestID, 'staff_reminder_create', {}, false)
+    const reminder: Reminder = { reminder_id: `reminder-fixture-${detail.reminders.length + 1}`, request_id: requestID, ...input, status: 'SCHEDULED', completed_at: null }
+    detail.reminders.push(reminder)
+    this.countWrite('staff_reminder_create')
+    return copy(reminder)
+  }
+
+  async actionStaffReminder (reminderID: string, action: import('./enums').ReminderAction, input: ReminderActionInput = {}): Promise<Reminder> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation'])
+    this.requireCapability('staff_reminder_action')
+    for (const detail of Object.values(this.fixtures.details)) {
+      const reminder = detail.reminders.find(item => item.reminder_id === reminderID)
+      if (reminder) {
+        this.staffRequest(detail.request.request_id, 'staff_reminder_action', {}, false)
+        reminder.status = action === 'SNOOZE' ? 'SNOOZED' : action === 'COMPLETE' ? 'COMPLETED' : 'CANCELLED'
+        if (input.due_at) reminder.due_at = input.due_at
+        this.countWrite('staff_reminder_action')
+        return copy(reminder)
+      }
+    }
+    throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+  }
+
+  async overrideStaffOrigin (requestID: string, input: OriginOverride, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_origin_override', options)
+    detail.request.origin_class = input.origin_class
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, 'ORIGIN_OVERRIDE')
+    this.countWrite('staff_origin_override')
+    return copy(detail)
+  }
+
+  async overrideStaffScope (requestID: string, input: ScopeOverride, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_scope_override', options)
+    detail.request.owning_department = input.department_code
+    detail.request.council_district = input.district_codes[0]
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, 'SCOPE_OVERRIDE')
+    this.countWrite('staff_scope_override')
+    return copy(detail)
+  }
+
+  async confirmStaffDuplicateGroup (requestID: string, input: DuplicateGroupChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_duplicate_group_confirm', options)
+    detail.request.duplicate_group_id = input.duplicate_group_id
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, 'DUPLICATE_GROUP_CONFIRM')
+    this.countWrite('staff_duplicate_group_confirm')
+    return copy(detail)
+  }
+
+  async removeStaffDuplicateGroup (requestID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_duplicate_group_remove', options)
+    delete detail.request.duplicate_group_id
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, 'DUPLICATE_GROUP_REMOVE')
+    this.countWrite('staff_duplicate_group_remove')
+    return copy(detail)
+  }
+
+  async approveStaffReopen (requestID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    const detail = this.staffRequest(requestID, 'staff_reopen_approve', options)
+    detail.request.status = 'REOPENED'
+    this.bumpStaffRequest(detail)
+    this.auditStaffRequest(detail, 'REOPEN_APPROVE')
+    this.countWrite('staff_reopen_approve')
+    return copy(detail)
   }
 
   async listReports (query: ListQuery = {}): Promise<PageResponse<ReportDefinition>> {

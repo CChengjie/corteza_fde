@@ -455,6 +455,31 @@ export interface RequestTransition {
   reason?: string
 }
 
+export type BulkAction = 'UPDATE' | 'CLOSE'
+
+export interface BulkRequestItem {
+  request_id: string
+  expected_version: number
+}
+
+export interface BulkChanges {
+  primary_assignee_id?: string | null
+  priority?: string
+  status?: ServiceRequestStatus
+  staff_note?: string
+}
+
+export interface BulkRequest {
+  action: BulkAction
+  changes: BulkChanges
+  request_items: BulkRequestItem[]
+}
+
+export interface BulkResult {
+  updated_count: number
+  updated_request_ids: string[]
+}
+
 export interface Reassignment {
   assignee_id: string
   reason: string
@@ -490,6 +515,30 @@ export interface ScopeOverride {
 export interface DuplicateGroupChange {
   duplicate_group_id: string
   reason: string
+}
+
+export interface CivicWorksEvent {
+  event_id: string
+  event_type: 'work_order.status_changed'
+  work_order_id: string
+  source_case_id: string
+  previous_status: import('./enums').CivicWorksStatus
+  status: import('./enums').CivicWorksStatus
+  version: number
+  occurred_at: ISODateTime
+}
+
+export interface CivicWorksEventResult {
+  acknowledged: boolean
+  duplicate?: boolean
+}
+
+export interface CivicWorksWorkOrder {
+  work_order_id: string
+  source_case_id: string
+  status: import('./enums').CivicWorksStatus
+  version: number
+  updated_at: ISODateTime
 }
 
 export interface ConstituentLink {

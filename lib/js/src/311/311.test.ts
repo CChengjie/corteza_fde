@@ -1086,4 +1086,80 @@ describe('FE-06 staff queue and detail contract', () => {
     await expectError(() => supervisor.actionStaffReminder('missing-reminder', 'COMPLETE'), 'NOT_FOUND')
     await expectError(() => new MockC311Provider({ role: 'service_agent', scenario: 'forbidden' }).createStaffNote('request-fixture-001', { body: 'fixture', portal_visible: false }), 'FORBIDDEN')
   })
+
+  it('enforces the FE-07 status machine and keeps invalid transitions side-effect free', async () => {
+    const provider = new MockC311Provider({ role: 'supervisor' })
+    const before = await provider.getStaffRequest('request-fixture-001')
+    const triaged = await provider.transitionStaffRequest('request-fixture-001', { to_status: 'TRIAGED', reason: 'reviewed' }, { expectedVersion: before.request.version })
+    expect(triaged.request.version).to.equal(before.request.version + 1)
+    expect(triaged.available_actions).to.deep.equal(['ASSIGN'])
+    await expectError(() => provider.transitionStaffRequest('request-fixture-001', { to_status: 'CLOSED' }, { expectedVersion: triaged.request.version }), 'INVALID_STATUS_TRANSITION')
+    const unchanged = await provider.getStaffRequest('request-fixture-001')
+    expect(unchanged.request.status).to.equal('TRIAGED')
+    expect(unchanged.request.version).to.equal(triaged.request.version)
+    expect(provider.getWriteCount('staff_request_transition')).to.equal(1)
+  })
+
+  it('applies scope and duplicate controls with versioned staff writes', async () => {
+    const manager = new MockC311Provider({ role: 'department_manager' })
+    const before = await manager.getStaffRequest('request-fixture-001')
+    const scoped = await manager.overrideStaffScope('request-fixture-001', { department_code: 'STREETS', district_codes: ['NORTH'], reason: 'fixture scope' }, { expectedVersion: before.request.version })
+    expect(scoped.request.version).to.equal(before.request.version + 1)
+    expect(scoped.request.owning_department).to.equal('STREETS')
+    const supervisor = new MockC311Provider({ role: 'supervisor' })
+    const duplicateBefore = await supervisor.getStaffRequest('request-fixture-001')
+    const grouped = await supervisor.confirmStaffDuplicateGroup('request-fixture-001', { duplicate_group_id: 'duplicate-fixture-001', reason: 'fixture duplicate' }, { expectedVersion: duplicateBefore.request.version })
+    expect(grouped.request.duplicate_group_id).to.equal('duplicate-fixture-001')
+    expect(grouped.request.version).to.equal(duplicateBefore.request.version + 1)
+    const removed = await supervisor.removeStaffDuplicateGroup('request-fixture-001', { reason: 'fixture remove' }, { expectedVersion: grouped.request.version })
+    expect(removed.request.duplicate_group_id).to.equal(undefined)
+    expect(removed.request.version).to.equal(grouped.request.version + 1)
+    expect(manager.getWriteCount('staff_scope_override')).to.equal(1)
+    expect(supervisor.getWriteCount('staff_duplicate_group_confirm')).to.equal(1)
+    expect(supervisor.getWriteCount('staff_duplicate_group_remove')).to.equal(1)
+    await expectError(() => new MockC311Provider({ role: 'service_agent' }).overrideStaffScope('request-fixture-001', { department_code: 'STREETS', district_codes: ['NORTH'], reason: 'forbidden' }, { expectedVersion: 1 }), 'FORBIDDEN')
+  })
+
+  it('performs atomic, idempotent bulk updates with expected versions', async () => {
+    const provider = new MockC311Provider({ role: 'supervisor', scenario: 'pagination' })
+    const page = await provider.listStaffRequests({ page_size: 2 })
+    const input = { action: 'UPDATE' as const, changes: { primary_assignee_id: 'actor-fixture-agent', staff_note: 'bulk fixture' }, request_items: page.items.map(item => ({ request_id: item.request_id, expected_version: item.version })) }
+    const result = await provider.bulkStaffRequests(input, { idempotencyKey: 'bulk-fixture-001' })
+    expect(result.updated_count).to.equal(2)
+    expect(await provider.bulkStaffRequests(input, { idempotencyKey: 'bulk-fixture-001' })).to.deep.equal(result)
+    expect(provider.getWriteCount('staff_request_bulk')).to.equal(1)
+    const currentItems = await provider.listStaffRequests({ page_size: 2 })
+    await expectError(() => provider.bulkStaffRequests({ ...input, changes: { status: 'CLOSED' }, request_items: currentItems.items.map(item => ({ request_id: item.request_id, expected_version: item.version })) }, { idempotencyKey: 'bulk-fixture-002' }), 'INVALID_STATUS_TRANSITION')
+    expect((await provider.getStaffRequest(page.items[0].request_id)).primary_assignee_id).to.equal('actor-fixture-agent')
+  })
+
+  it('models reminder lifecycle and CivicWorks event idempotency', async () => {
+    const fixtures = createDefaultFixtureSet()
+    fixtures.details['request-fixture-001'].reminders = [{ reminder_id: 'reminder-fixture-001', request_id: 'request-fixture-001', title: 'Existing', due_at: '2026-01-16T15:00:00.000Z', timezone: 'America/New_York', recipient_staff_id: 'actor-fixture-supervisor', channel: 'IN_APP', status: 'SCHEDULED', completed_at: null }]
+    const supervisor = new MockC311Provider({ role: 'supervisor', fixtures })
+    const snoozed = await supervisor.actionStaffReminder('reminder-fixture-001', 'SNOOZE', { due_at: '2026-01-17T15:00:00.000Z' })
+    expect(snoozed.status).to.equal('SNOOZED')
+    const completed = await supervisor.actionStaffReminder('reminder-fixture-001', 'COMPLETE')
+    expect(completed.status).to.equal('COMPLETED')
+    expect(await supervisor.actionStaffReminder('reminder-fixture-001', 'COMPLETE')).to.deep.equal(completed)
+
+    const event = { event_id: 'cw-event-001', event_type: 'work_order.status_changed' as const, work_order_id: 'cw-001', source_case_id: 'request-fixture-001', previous_status: 'ASSIGNED' as const, status: 'COMPLETED' as const, version: 2, occurred_at: '2026-01-15T15:00:00.000Z' }
+    const result = await supervisor.processCivicWorksEvent(event, event.event_id, 'fixture-signature')
+    expect(result.acknowledged).to.equal(true)
+    expect((await supervisor.processCivicWorksEvent(event, event.event_id, 'fixture-signature')).duplicate).to.equal(true)
+    expect(supervisor.getWriteCount('civicworks_event_callback')).to.equal(1)
+    await expectError(() => new MockC311Provider({ scenario: 'civicworks-invalid-signature' }).processCivicWorksEvent(event, event.event_id, 'bad'), 'INVALID_SIGNATURE')
+  })
+
+  it('maps FE-07 bulk and CivicWorks HTTP contracts', async () => {
+    const requests: C311TransportRequest[] = []
+    const transport = { request: async <T>(request: C311TransportRequest) => { requests.push(request); return {} as T } }
+    const provider = new C311HttpProvider(transport)
+    await provider.bulkStaffRequests({ action: 'CLOSE', changes: {}, request_items: [{ request_id: 'r1', expected_version: 2 }] }, { idempotencyKey: 'bulk-key' })
+    await provider.processCivicWorksEvent({ event_id: 'e1', event_type: 'work_order.status_changed', work_order_id: 'w1', source_case_id: 'r1', previous_status: 'ASSIGNED', status: 'IN_PROGRESS', version: 2, occurred_at: '2026-01-15T15:00:00.000Z' }, 'e1', 'sig')
+    expect(requests[0]).to.include({ method: 'POST', path: '/api/v1/staff/service-requests/bulk' })
+    expect(requests[0].headers).to.deep.equal({ 'Idempotency-Key': 'bulk-key' })
+    expect(requests[1].path).to.equal('/integrations/civicworks/events')
+    expect(requests[1].headers).to.deep.equal({ 'Content-Type': 'application/json', 'X-CivicWorks-Event-Id': 'e1', 'X-CivicWorks-Signature': 'sig' })
+  })
 })

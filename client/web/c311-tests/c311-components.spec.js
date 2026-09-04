@@ -631,8 +631,7 @@ describe('C311 shared components', () => {
     expect(wrapper.find('[data-c311-action="transition-request"]').exists()).toBe(true)
     expect(wrapper.find('[data-c311-action="reassign-request"]').exists()).toBe(false)
     await wrapper.find('[data-c311-action="transition-request"]').trigger('click')
-    expect(provider.transitionStaffRequest).not.toHaveBeenCalled()
-    expect(wrapper.find('[data-c311-action-message]').text()).toContain('next staff workflow')
+    expect(provider.transitionStaffRequest).toHaveBeenCalledWith('request-fixture-001', { to_status: 'TRIAGED' }, { expectedVersion: 1 })
   })
 
   it('renders the localized API status value and collaborator entry', async () => {

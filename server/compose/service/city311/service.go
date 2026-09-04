@@ -41,28 +41,32 @@ var allowedAttachmentMediaTypes = map[string]bool{
 
 type (
 	Service struct {
-		store            store.Storer
-		now              func() time.Time
-		nextID           func() uint64
-		mu               sync.Mutex
-		mailMu           sync.Mutex
-		workflowMu       sync.Mutex
-		presentationMu   sync.Mutex
-		reportMu         sync.Mutex
-		integrationMu    sync.Mutex
-		runtimeMu        sync.RWMutex
-		mailSender       MailSender
-		mailWait         func(context.Context, time.Duration) error
-		dataExportLimits map[uint64]dataExportLimit
-		civicWorksClient CivicWorksClient
-		civicWorksSecret string
-		civicWorksConfig error
-		workflowHTTP     WorkflowHTTPClient
-		workflowConfig   error
-		mappingService   *MappingService
-		mappingConfig    error
-		identityService  *IdentityService
-		integrationKey   [32]byte
+		store               store.Storer
+		now                 func() time.Time
+		nextID              func() uint64
+		mu                  sync.Mutex
+		mailMu              sync.Mutex
+		workflowMu          sync.Mutex
+		presentationMu      sync.Mutex
+		reportMu            sync.Mutex
+		integrationMu       sync.Mutex
+		runtimeMu           sync.RWMutex
+		reminderWorkerOnce  sync.Once
+		reminderWake        chan struct{}
+		reminderPoll        time.Duration
+		reminderWorkerError func(error)
+		mailSender          MailSender
+		mailWait            func(context.Context, time.Duration) error
+		dataExportLimits    map[uint64]dataExportLimit
+		civicWorksClient    CivicWorksClient
+		civicWorksSecret    string
+		civicWorksConfig    error
+		workflowHTTP        WorkflowHTTPClient
+		workflowConfig      error
+		mappingService      *MappingService
+		mappingConfig       error
+		identityService     *IdentityService
+		integrationKey      [32]byte
 	}
 
 	dataExportLimit struct {
@@ -136,6 +140,7 @@ func New(s store.Storer) *Service {
 	svc := &Service{
 		store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next,
 		mailSender: smtpMailSender{dial: dialSMTP}, mailWait: waitForMailRetry, dataExportLimits: make(map[uint64]dataExportLimit),
+		reminderWake: make(chan struct{}, 1), reminderPoll: 30 * time.Second,
 	}
 	svc.integrationKey = integrationEncryptionKey()
 	svc.civicWorksClient, svc.civicWorksSecret, svc.civicWorksConfig = NewCivicWorksFromEnvironment(nil)

@@ -1070,6 +1070,10 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 		return nil, err
 	}
 	actions := availableActions(actor, stored)
+	reminders, err := svc.requestReminders(ctx, stored.ID)
+	if err != nil {
+		return nil, err
+	}
 	if requestCanBeReopened(stored.Status) && canApproveReopen(actor) {
 		pending, err := pendingReopenRequests(ctx, svc.store, stored.ID)
 		if err != nil {
@@ -1082,7 +1086,7 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 	primaryAssignee := optionalID(stored.PrimaryAssigneeID)
 	result := &contract.StaffServiceRequestDetail{
 		Request: toContract(stored), ConstituentLinks: make([]contract.ConstituentLink, 0, len(links)), Notes: notes, AvailableActions: actions, PrimaryAssigneeID: primaryAssignee,
-		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: []any{}, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: nil,
+		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: reminders, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: nil,
 	}
 	result.Request.Attachments, err = svc.attachmentMetadata(ctx, stored.ID)
 	if err != nil {

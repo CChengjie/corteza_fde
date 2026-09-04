@@ -12,6 +12,7 @@ type (
 	RelationshipType     string
 	ReminderStatus       string
 	ReminderChannel      string
+	ReminderAction       string
 	Language             string
 	CustomFieldType      string
 	ContactCategory      string
@@ -104,11 +105,15 @@ const (
 	ReminderStatusCancelled ReminderStatus  = "CANCELLED"
 	ReminderChannelEmail    ReminderChannel = "EMAIL"
 	ReminderChannelInApp    ReminderChannel = "IN_APP"
+	ReminderActionSnooze    ReminderAction  = "SNOOZE"
+	ReminderActionComplete  ReminderAction  = "COMPLETE"
+	ReminderActionCancel    ReminderAction  = "CANCEL"
 )
 
 var (
 	ReminderStatuses = []ReminderStatus{ReminderStatusScheduled, ReminderStatusSnoozed, ReminderStatusCompleted, ReminderStatusCancelled}
 	ReminderChannels = []ReminderChannel{ReminderChannelEmail, ReminderChannelInApp}
+	ReminderActions  = []ReminderAction{ReminderActionSnooze, ReminderActionComplete, ReminderActionCancel}
 )
 
 const (
@@ -479,6 +484,18 @@ type (
 		Status           ReminderStatus  `json:"status"`
 		CompletedAt      *time.Time      `json:"completed_at,omitempty"`
 		CompletedBy      string          `json:"completed_by,omitempty"`
+	}
+
+	ReminderWrite struct {
+		Title            string          `json:"title"`
+		DueAt            time.Time       `json:"due_at"`
+		Timezone         string          `json:"timezone"`
+		RecipientStaffID string          `json:"recipient_staff_id"`
+		Channel          ReminderChannel `json:"channel"`
+	}
+
+	ReminderActionInput struct {
+		DueAt *time.Time `json:"due_at,omitempty"`
 	}
 
 	Reassignment struct {

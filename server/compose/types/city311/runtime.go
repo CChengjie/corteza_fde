@@ -64,6 +64,15 @@ type RequestNote struct {
 	CreatedAt           time.Time      `json:"created_at"`
 }
 
+type ReopenRequest struct {
+	RequestID string `json:"request_id"`
+	Status    string `json:"status"`
+}
+
+type ReopenApproval struct {
+	Reason string `json:"reason"`
+}
+
 type PortalRequestSummary struct {
 	RequestID        string               `json:"request_id"`
 	RequestNumber    string               `json:"request_number"`

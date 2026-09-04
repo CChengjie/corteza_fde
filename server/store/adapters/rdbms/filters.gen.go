@@ -93,6 +93,9 @@ type (
 		// optional city311PublicHistoryItem filter function called after the generated function
 		City311PublicHistoryItem func(*Store, composeType.City311PublicHistoryItemFilter) ([]goqu.Expression, composeType.City311PublicHistoryItemFilter, error)
 
+		// optional city311ReopenRequest filter function called after the generated function
+		City311ReopenRequest func(*Store, composeType.City311ReopenRequestFilter) ([]goqu.Expression, composeType.City311ReopenRequestFilter, error)
+
 		// optional city311RequestAttachment filter function called after the generated function
 		City311RequestAttachment func(*Store, composeType.City311RequestAttachmentFilter) ([]goqu.Expression, composeType.City311RequestAttachmentFilter, error)
 
@@ -714,6 +717,26 @@ func City311PublicHistoryItemFilter(d drivers.Dialect, f composeType.City311Publ
 
 	if f.RequestID > 0 {
 		ee = append(ee, goqu.C("request_id").Eq(f.RequestID))
+	}
+
+	return ee, f, err
+}
+
+// City311ReopenRequestFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311ReopenRequests() and can be extended
+// by setting Store.Filters.City311ReopenRequest. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311ReopenRequestFilter(d drivers.Dialect, f composeType.City311ReopenRequestFilter) (ee []goqu.Expression, _ composeType.City311ReopenRequestFilter, err error) {
+
+	if f.RequestID > 0 {
+		ee = append(ee, goqu.C("request_id").Eq(f.RequestID))
+	}
+
+	if val := strings.TrimSpace(f.Status); len(val) > 0 {
+		ee = append(ee, goqu.C("status").Eq(f.Status))
 	}
 
 	return ee, f, err

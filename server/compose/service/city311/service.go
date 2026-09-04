@@ -652,8 +652,11 @@ func authorizeTransition(actor contract.Actor, request *composeTypes.City311Serv
 			Retryable: false, CurrentVersion: &current,
 		}}
 	}
+	if toStatus == contract.ServiceRequestStatusReopened {
+		return invalidStatusTransition("A reopen request must be approved before the service request can transition to REOPENED.")
+	}
 	if !transitionAllowed(request.Status, toStatus) {
-		return validationError(contract.FieldError{Field: "/to_status", Code: contract.ValidationInvalidValue})
+		return invalidStatusTransition("The requested service-request status transition is not allowed.")
 	}
 	return nil
 }
@@ -1007,9 +1010,19 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 	if err != nil {
 		return nil, err
 	}
+	actions := availableActions(actor, stored)
+	if requestCanBeReopened(stored.Status) && canApproveReopen(actor) {
+		pending, err := pendingReopenRequests(ctx, svc.store, stored.ID)
+		if err != nil {
+			return nil, err
+		}
+		if len(pending) > 0 {
+			actions = append(actions, "APPROVE_REOPEN")
+		}
+	}
 	primaryAssignee := optionalID(stored.PrimaryAssigneeID)
 	result := &contract.StaffServiceRequestDetail{
-		Request: toContract(stored), ConstituentLinks: make([]contract.ConstituentLink, 0, len(links)), Notes: notes, AvailableActions: availableActions(actor, stored), PrimaryAssigneeID: primaryAssignee,
+		Request: toContract(stored), ConstituentLinks: make([]contract.ConstituentLink, 0, len(links)), Notes: notes, AvailableActions: actions, PrimaryAssigneeID: primaryAssignee,
 		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: []any{}, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: nil,
 	}
 	for _, link := range links {

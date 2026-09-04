@@ -318,6 +318,19 @@ type (
 		OccurredAt            time.Time                  `db:"occurred_at"`
 	}
 
+	// auxCity311ReopenRequest is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311ReopenRequest struct {
+		ID             uint64     `db:"id"`
+		RequestID      uint64     `db:"request_id"`
+		RequestedBy    string     `db:"requested_by"`
+		RequestReason  string     `db:"request_reason"`
+		Status         string     `db:"status"`
+		RequestedAt    time.Time  `db:"requested_at"`
+		ApprovedBy     uint64     `db:"approved_by"`
+		ApprovalReason string     `db:"approval_reason"`
+		ApprovedAt     *time.Time `db:"approved_at"`
+	}
+
 	// auxCity311RequestAttachment is an auxiliary structure used for transporting to/from RDBMS store
 	auxCity311RequestAttachment struct {
 		ID        uint64    `db:"id"`
@@ -1966,6 +1979,56 @@ func (aux *auxCity311PublicHistoryItem) scan(row scanner) error {
 		&aux.Action,
 		&aux.ResponsibleDepartment,
 		&aux.OccurredAt,
+	)
+}
+
+// encodes City311ReopenRequest to auxCity311ReopenRequest
+//
+// This function is auto-generated
+func (aux *auxCity311ReopenRequest) encode(res *composeType.City311ReopenRequest) (_ error) {
+	aux.ID = res.ID
+	aux.RequestID = res.RequestID
+	aux.RequestedBy = res.RequestedBy
+	aux.RequestReason = res.RequestReason
+	aux.Status = res.Status
+	aux.RequestedAt = res.RequestedAt
+	aux.ApprovedBy = res.ApprovedBy
+	aux.ApprovalReason = res.ApprovalReason
+	aux.ApprovedAt = res.ApprovedAt
+	return
+}
+
+// decodes City311ReopenRequest from auxCity311ReopenRequest
+//
+// This function is auto-generated
+func (aux auxCity311ReopenRequest) decode() (res *composeType.City311ReopenRequest, _ error) {
+	res = new(composeType.City311ReopenRequest)
+	res.ID = aux.ID
+	res.RequestID = aux.RequestID
+	res.RequestedBy = aux.RequestedBy
+	res.RequestReason = aux.RequestReason
+	res.Status = aux.Status
+	res.RequestedAt = aux.RequestedAt
+	res.ApprovedBy = aux.ApprovedBy
+	res.ApprovalReason = aux.ApprovalReason
+	res.ApprovedAt = aux.ApprovedAt
+	return
+}
+
+// scans row and fills auxCity311ReopenRequest fields
+//
+// This function is auto-generated
+func (aux *auxCity311ReopenRequest) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.RequestID,
+		&aux.RequestedBy,
+		&aux.RequestReason,
+		&aux.Status,
+		&aux.RequestedAt,
+		&aux.ApprovedBy,
+		&aux.ApprovalReason,
+		&aux.ApprovedAt,
 	)
 }
 

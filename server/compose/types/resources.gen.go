@@ -26,6 +26,8 @@ const (
 	City311ReopenRequestResourceType        = "corteza::compose:city311-reopen-request"
 	City311ServiceRequestResourceType       = "corteza::compose:city311-service-request"
 	City311StagedAttachmentResourceType     = "corteza::compose:city311-staged-attachment"
+	City311WorkflowDefinitionResourceType   = "corteza::compose:city311-workflow-definition"
+	City311WorkflowExecutionResourceType    = "corteza::compose:city311-workflow-execution"
 	ModuleResourceType                      = "corteza::compose:module"
 	ModuleFieldResourceType                 = "corteza::compose:module-field"
 	NamespaceResourceType                   = "corteza::compose:namespace"

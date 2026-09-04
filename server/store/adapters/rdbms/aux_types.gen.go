@@ -427,6 +427,35 @@ type (
 		ExpiresAt time.Time `db:"expires_at"`
 	}
 
+	// auxCity311WorkflowDefinition is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311WorkflowDefinition struct {
+		ID         uint64                  `db:"id"`
+		WorkflowID string                  `db:"workflow_id"`
+		Name       string                  `db:"name"`
+		Trigger    string                  `db:"trigger"`
+		Active     bool                    `db:"active"`
+		Definition composeType.City311JSON `db:"definition"`
+		Version    int                     `db:"version"`
+		CreatedAt  time.Time               `db:"created_at"`
+		UpdatedAt  time.Time               `db:"updated_at"`
+	}
+
+	// auxCity311WorkflowExecution is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311WorkflowExecution struct {
+		ID               uint64                  `db:"id"`
+		ExecutionID      string                  `db:"execution_id"`
+		WorkflowID       string                  `db:"workflow_id"`
+		WorkflowVersion  int                     `db:"workflow_version"`
+		RequestID        uint64                  `db:"request_id"`
+		Trigger          string                  `db:"trigger"`
+		Outcome          string                  `db:"outcome"`
+		ActionsAttempted composeType.City311JSON `db:"actions_attempted"`
+		Succeeded        bool                    `db:"succeeded"`
+		ResponseStatus   int                     `db:"response_status"`
+		Error            composeType.City311JSON `db:"error"`
+		OccurredAt       time.Time               `db:"occurred_at"`
+	}
+
 	// auxComposeAttachment is an auxiliary structure used for transporting to/from RDBMS store
 	auxComposeAttachment struct {
 		ID          uint64                     `db:"id"`
@@ -2426,6 +2455,115 @@ func (aux *auxCity311StagedAttachment) scan(row scanner) error {
 		&aux.Content,
 		&aux.CreatedAt,
 		&aux.ExpiresAt,
+	)
+}
+
+// encodes City311WorkflowDefinition to auxCity311WorkflowDefinition
+//
+// This function is auto-generated
+func (aux *auxCity311WorkflowDefinition) encode(res *composeType.City311WorkflowDefinition) (_ error) {
+	aux.ID = res.ID
+	aux.WorkflowID = res.WorkflowID
+	aux.Name = res.Name
+	aux.Trigger = res.Trigger
+	aux.Active = res.Active
+	aux.Definition = res.Definition
+	aux.Version = res.Version
+	aux.CreatedAt = res.CreatedAt
+	aux.UpdatedAt = res.UpdatedAt
+	return
+}
+
+// decodes City311WorkflowDefinition from auxCity311WorkflowDefinition
+//
+// This function is auto-generated
+func (aux auxCity311WorkflowDefinition) decode() (res *composeType.City311WorkflowDefinition, _ error) {
+	res = new(composeType.City311WorkflowDefinition)
+	res.ID = aux.ID
+	res.WorkflowID = aux.WorkflowID
+	res.Name = aux.Name
+	res.Trigger = aux.Trigger
+	res.Active = aux.Active
+	res.Definition = aux.Definition
+	res.Version = aux.Version
+	res.CreatedAt = aux.CreatedAt
+	res.UpdatedAt = aux.UpdatedAt
+	return
+}
+
+// scans row and fills auxCity311WorkflowDefinition fields
+//
+// This function is auto-generated
+func (aux *auxCity311WorkflowDefinition) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.WorkflowID,
+		&aux.Name,
+		&aux.Trigger,
+		&aux.Active,
+		&aux.Definition,
+		&aux.Version,
+		&aux.CreatedAt,
+		&aux.UpdatedAt,
+	)
+}
+
+// encodes City311WorkflowExecution to auxCity311WorkflowExecution
+//
+// This function is auto-generated
+func (aux *auxCity311WorkflowExecution) encode(res *composeType.City311WorkflowExecution) (_ error) {
+	aux.ID = res.ID
+	aux.ExecutionID = res.ExecutionID
+	aux.WorkflowID = res.WorkflowID
+	aux.WorkflowVersion = res.WorkflowVersion
+	aux.RequestID = res.RequestID
+	aux.Trigger = res.Trigger
+	aux.Outcome = res.Outcome
+	aux.ActionsAttempted = res.ActionsAttempted
+	aux.Succeeded = res.Succeeded
+	aux.ResponseStatus = res.ResponseStatus
+	aux.Error = res.Error
+	aux.OccurredAt = res.OccurredAt
+	return
+}
+
+// decodes City311WorkflowExecution from auxCity311WorkflowExecution
+//
+// This function is auto-generated
+func (aux auxCity311WorkflowExecution) decode() (res *composeType.City311WorkflowExecution, _ error) {
+	res = new(composeType.City311WorkflowExecution)
+	res.ID = aux.ID
+	res.ExecutionID = aux.ExecutionID
+	res.WorkflowID = aux.WorkflowID
+	res.WorkflowVersion = aux.WorkflowVersion
+	res.RequestID = aux.RequestID
+	res.Trigger = aux.Trigger
+	res.Outcome = aux.Outcome
+	res.ActionsAttempted = aux.ActionsAttempted
+	res.Succeeded = aux.Succeeded
+	res.ResponseStatus = aux.ResponseStatus
+	res.Error = aux.Error
+	res.OccurredAt = aux.OccurredAt
+	return
+}
+
+// scans row and fills auxCity311WorkflowExecution fields
+//
+// This function is auto-generated
+func (aux *auxCity311WorkflowExecution) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.ExecutionID,
+		&aux.WorkflowID,
+		&aux.WorkflowVersion,
+		&aux.RequestID,
+		&aux.Trigger,
+		&aux.Outcome,
+		&aux.ActionsAttempted,
+		&aux.Succeeded,
+		&aux.ResponseStatus,
+		&aux.Error,
+		&aux.OccurredAt,
 	)
 }
 

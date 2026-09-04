@@ -117,6 +117,12 @@ type (
 		// optional city311StagedAttachment filter function called after the generated function
 		City311StagedAttachment func(*Store, composeType.City311StagedAttachmentFilter) ([]goqu.Expression, composeType.City311StagedAttachmentFilter, error)
 
+		// optional city311WorkflowDefinition filter function called after the generated function
+		City311WorkflowDefinition func(*Store, composeType.City311WorkflowDefinitionFilter) ([]goqu.Expression, composeType.City311WorkflowDefinitionFilter, error)
+
+		// optional city311WorkflowExecution filter function called after the generated function
+		City311WorkflowExecution func(*Store, composeType.City311WorkflowExecutionFilter) ([]goqu.Expression, composeType.City311WorkflowExecutionFilter, error)
+
 		// optional composeAttachment filter function called after the generated function
 		ComposeAttachment func(*Store, composeType.AttachmentFilter) ([]goqu.Expression, composeType.AttachmentFilter, error)
 
@@ -895,6 +901,62 @@ func City311StagedAttachmentFilter(d drivers.Dialect, f composeType.City311Stage
 
 	if f.OwnerID > 0 {
 		ee = append(ee, goqu.C("owner_id").Eq(f.OwnerID))
+	}
+
+	return ee, f, err
+}
+
+// City311WorkflowDefinitionFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311WorkflowDefinitions() and can be extended
+// by setting Store.Filters.City311WorkflowDefinition. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311WorkflowDefinitionFilter(d drivers.Dialect, f composeType.City311WorkflowDefinitionFilter) (ee []goqu.Expression, _ composeType.City311WorkflowDefinitionFilter, err error) {
+
+	if val := strings.TrimSpace(f.WorkflowID); len(val) > 0 {
+		ee = append(ee, goqu.C("workflow_id").Eq(f.WorkflowID))
+	}
+
+	if val := strings.TrimSpace(f.Trigger); len(val) > 0 {
+		ee = append(ee, goqu.C("trigger").Eq(f.Trigger))
+	}
+
+	if f.Active {
+		ee = append(ee, goqu.C("active").IsTrue())
+	}
+
+	return ee, f, err
+}
+
+// City311WorkflowExecutionFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311WorkflowExecutions() and can be extended
+// by setting Store.Filters.City311WorkflowExecution. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311WorkflowExecutionFilter(d drivers.Dialect, f composeType.City311WorkflowExecutionFilter) (ee []goqu.Expression, _ composeType.City311WorkflowExecutionFilter, err error) {
+
+	if val := strings.TrimSpace(f.ExecutionID); len(val) > 0 {
+		ee = append(ee, goqu.C("execution_id").Eq(f.ExecutionID))
+	}
+
+	if val := strings.TrimSpace(f.WorkflowID); len(val) > 0 {
+		ee = append(ee, goqu.C("workflow_id").Eq(f.WorkflowID))
+	}
+
+	if f.RequestID > 0 {
+		ee = append(ee, goqu.C("request_id").Eq(f.RequestID))
+	}
+
+	if val := strings.TrimSpace(f.Trigger); len(val) > 0 {
+		ee = append(ee, goqu.C("trigger").Eq(f.Trigger))
+	}
+
+	if f.Succeeded {
+		ee = append(ee, goqu.C("succeeded").IsTrue())
 	}
 
 	return ee, f, err

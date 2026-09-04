@@ -34,6 +34,7 @@ func TestHealthzReportsIdentityConfigurationReadiness(t *testing.T) {
 	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
 	t.Setenv("MAP_BASE_URL", "https://mapping.example.invalid")
 	t.Setenv("MAP_API_TOKEN", "runtime-map-token")
+	setFederatedIdentityHealthEnvironment(t)
 	setCivicWorksHealthEnvironment(t)
 	setWorkflowHealthEnvironment(t)
 
@@ -75,6 +76,7 @@ func TestHealthzReportsMappingConfigurationReadiness(t *testing.T) {
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
 	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")
 	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
+	setFederatedIdentityHealthEnvironment(t)
 	setCivicWorksHealthEnvironment(t)
 	setWorkflowHealthEnvironment(t)
 
@@ -114,6 +116,16 @@ func setCivicWorksHealthEnvironment(t *testing.T) {
 	t.Setenv("BENCHMARK_RUN_ID", "benchmark-run-health")
 }
 
+func setFederatedIdentityHealthEnvironment(t *testing.T) {
+	t.Helper()
+	t.Setenv("OIDC_ISSUER_URL", "https://identity.example.invalid")
+	t.Setenv("OIDC_STAFF_CLIENT_ID", "city311-staff")
+	t.Setenv("OIDC_PUBLIC_CLIENT_ID", "city311-public")
+	t.Setenv("OIDC_CLIENT_SECRET", "runtime-oidc-secret")
+	t.Setenv("SAML_METADATA_URL", "https://identity.example.invalid/saml/metadata")
+	t.Setenv("SAML_SP_ENTITY_ID", "https://city311.example.invalid/saml")
+}
+
 func setWorkflowHealthEnvironment(t *testing.T) {
 	t.Helper()
 	t.Setenv("WORKFLOW_OAUTH_TOKEN_URL", "https://workflow.example.invalid/oauth/token")
@@ -134,6 +146,7 @@ func TestHealthzReportsCivicWorksConfigurationReadiness(t *testing.T) {
 	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
 	t.Setenv("MAP_BASE_URL", "https://mapping.example.invalid")
 	t.Setenv("MAP_API_TOKEN", "runtime-map-token")
+	setFederatedIdentityHealthEnvironment(t)
 	t.Setenv("CIVICWORKS_BASE_URL", "")
 	t.Setenv("CIVICWORKS_API_TOKEN", "")
 	t.Setenv("CIVICWORKS_WEBHOOK_SECRET", "")
@@ -165,6 +178,7 @@ func TestHealthzReportsWorkflowConfigurationReadiness(t *testing.T) {
 	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
 	t.Setenv("MAP_BASE_URL", "https://mapping.example.invalid")
 	t.Setenv("MAP_API_TOKEN", "runtime-map-token")
+	setFederatedIdentityHealthEnvironment(t)
 	setCivicWorksHealthEnvironment(t)
 	t.Setenv("WORKFLOW_OAUTH_TOKEN_URL", "")
 	t.Setenv("WORKFLOW_API_BASE_URL", "")

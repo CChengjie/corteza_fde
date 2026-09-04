@@ -10,9 +10,13 @@ import (
 type mappingHandler struct {
 	service            *city311Service.MappingService
 	configurationError error
+	resolve            func() (*city311Service.MappingService, error)
 }
 
 func MountMappingRoutes() func(chi.Router) {
+	if city311Service.Default != nil {
+		return mountMappingRoutesWithResolver(city311Service.Default.MappingRuntime)
+	}
 	service, err := city311Service.NewMappingFromEnvironment(nil)
 	return mountMappingRoutes(service, err)
 }
@@ -22,8 +26,12 @@ func MountMappingRoutesWithService(service *city311Service.MappingService) func(
 }
 
 func mountMappingRoutes(service *city311Service.MappingService, configurationError error) func(chi.Router) {
+	return mountMappingRoutesWithResolver(func() (*city311Service.MappingService, error) { return service, configurationError })
+}
+
+func mountMappingRoutesWithResolver(resolve func() (*city311Service.MappingService, error)) func(chi.Router) {
 	return func(r chi.Router) {
-		h := &mappingHandler{service: service, configurationError: configurationError}
+		h := &mappingHandler{resolve: resolve}
 		r.Post("/geocode", h.geocode)
 	}
 }
@@ -35,13 +43,17 @@ func (h *mappingHandler) geocode(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	if h.configurationError != nil || h.service == nil {
+	service, configurationError := h.service, h.configurationError
+	if h.resolve != nil {
+		service, configurationError = h.resolve()
+	}
+	if configurationError != nil || service == nil {
 		writeResult(w, 0, nil, &city311Service.ServiceError{
 			Status:  http.StatusServiceUnavailable,
 			Payload: city311Service.MappingUnavailablePayload(),
 		})
 		return
 	}
-	response, err := h.service.Geocode(r.Context(), input.Address)
+	response, err := service.Geocode(r.Context(), input.Address)
 	writeResult(w, http.StatusOK, response, err)
 }

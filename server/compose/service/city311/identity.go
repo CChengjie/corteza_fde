@@ -101,6 +101,7 @@ type (
 		configErr  error
 
 		mfaMu        sync.RWMutex
+		runtimeMu    sync.RWMutex
 		mfaSettings  authSettings.Settings
 		resetMu      sync.Mutex
 		federationMu sync.Mutex
@@ -180,6 +181,21 @@ func (svc *IdentityService) UpdateMFASettings(settings *authSettings.Settings) {
 
 func (svc *IdentityService) ConfigurationError() error {
 	return svc.configErr
+}
+
+// SetFederationRuntime atomically replaces the live identity-provider
+// connection without changing local-account or local-session behavior.
+func (svc *IdentityService) SetFederationRuntime(runtime IdentityRuntimeConfiguration) {
+	svc.runtimeMu.Lock()
+	defer svc.runtimeMu.Unlock()
+	svc.runtime = runtime
+	svc.federation = NewRuntimeFederationProvider(runtime, nil, svc.now)
+}
+
+func (svc *IdentityService) federationRuntime() (IdentityRuntimeConfiguration, FederationProvider) {
+	svc.runtimeMu.RLock()
+	defer svc.runtimeMu.RUnlock()
+	return svc.runtime, svc.federation
 }
 
 func NewDefaultIdentity(s store.Storer, now func() time.Time) (*IdentityService, error) {

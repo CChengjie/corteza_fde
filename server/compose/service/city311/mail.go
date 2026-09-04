@@ -63,7 +63,13 @@ type smtpClient interface {
 
 type smtpDialer func(string) (smtpClient, error)
 
-type smtpMailSender struct{ dial smtpDialer }
+type smtpMailSender struct {
+	dial     smtpDialer
+	host     string
+	port     string
+	username string
+	password string
+}
 
 type mailTemplate struct {
 	From          string
@@ -77,6 +83,8 @@ var mailTemplates = map[string]mailTemplate{
 
 func (svc *Service) SetMailSender(sender MailSender) {
 	if sender != nil {
+		svc.runtimeMu.Lock()
+		defer svc.runtimeMu.Unlock()
 		svc.mailSender = sender
 	}
 }
@@ -251,6 +259,9 @@ func sanitizeMailHTML(value string) string {
 }
 
 func (svc *Service) deliverMail(ctx context.Context, message MailMessage, deliveryKey string) (string, int, error) {
+	svc.runtimeMu.RLock()
+	sender := svc.mailSender
+	svc.runtimeMu.RUnlock()
 	var lastErr error
 	for index, delay := range mailRetryDelays {
 		if delay > 0 {
@@ -258,7 +269,7 @@ func (svc *Service) deliverMail(ctx context.Context, message MailMessage, delive
 				return mailStatusFailed, index, err
 			}
 		}
-		code, err := svc.mailSender.Send(ctx, message, deliveryKey)
+		code, err := sender.Send(ctx, message, deliveryKey)
 		attempts := index + 1
 		if err == nil {
 			return mailStatusDelivered, attempts, nil
@@ -336,10 +347,16 @@ func (sender smtpMailSender) Send(ctx context.Context, message MailMessage, deli
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	host := strings.TrimSpace(os.Getenv("MAIL_SMTP_HOST"))
-	port := strings.TrimSpace(os.Getenv("MAIL_SMTP_PORT"))
-	username := os.Getenv("MAIL_SMTP_USERNAME")
-	password := os.Getenv("MAIL_SMTP_PASSWORD")
+	host := strings.TrimSpace(sender.host)
+	port := strings.TrimSpace(sender.port)
+	username := sender.username
+	password := sender.password
+	if host == "" && port == "" && username == "" && password == "" {
+		host = strings.TrimSpace(os.Getenv("MAIL_SMTP_HOST"))
+		port = strings.TrimSpace(os.Getenv("MAIL_SMTP_PORT"))
+		username = os.Getenv("MAIL_SMTP_USERNAME")
+		password = os.Getenv("MAIL_SMTP_PASSWORD")
+	}
 	if host == "" || port == "" || username == "" || password == "" {
 		return 0, fmt.Errorf("mail SMTP configuration is incomplete")
 	}

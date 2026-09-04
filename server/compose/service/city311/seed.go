@@ -66,6 +66,9 @@ func (svc *Service) Seed(ctx context.Context, benchmarkNow time.Time) error {
 		if err := svc.seedConfigurationDefinitions(ctx, tx, benchmarkNow); err != nil {
 			return fmt.Errorf("seed contact categories and custom fields: %w", err)
 		}
+		if err := svc.seedIntegrationConnections(ctx, tx, benchmarkNow); err != nil {
+			return fmt.Errorf("seed integration connections: %w", err)
+		}
 		return nil
 	})
 }

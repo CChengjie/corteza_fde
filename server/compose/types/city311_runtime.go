@@ -209,6 +209,26 @@ type (
 	}
 	City311RequestNoteSet []*City311RequestNote
 
+	City311ReopenRequest struct {
+		ID             uint64     `json:"id,string"`
+		RequestID      uint64     `json:"requestID,string"`
+		RequestedBy    string     `json:"requestedBy"`
+		RequestReason  string     `json:"requestReason"`
+		Status         string     `json:"status"`
+		RequestedAt    time.Time  `json:"requestedAt"`
+		ApprovedBy     uint64     `json:"approvedBy,string,omitempty"`
+		ApprovalReason string     `json:"approvalReason,omitempty"`
+		ApprovedAt     *time.Time `json:"approvedAt,omitempty"`
+	}
+	City311ReopenRequestFilter struct {
+		RequestID uint64
+		Status    string
+		Check     func(*City311ReopenRequest) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311ReopenRequestSet []*City311ReopenRequest
+
 	City311PublicHistoryItem struct {
 		ID                    uint64                      `json:"id,string"`
 		RequestID             uint64                      `json:"requestID,string"`

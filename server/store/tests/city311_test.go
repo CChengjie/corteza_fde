@@ -156,6 +156,36 @@ func testCity311RequestNotes(t *testing.T, s store.City311RequestNotes) {
 	require.Equal(t, note.AuthorConstituentID, set[0].AuthorConstituentID)
 }
 
+func testCity311ReopenRequests(t *testing.T, s store.City311ReopenRequests) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311ReopenRequests(ctx))
+	request := &composeTypes.City311ReopenRequest{
+		ID: 295, RequestID: 301, RequestedBy: "C-151", RequestReason: "The issue has returned.",
+		Status: "PENDING_APPROVAL", RequestedAt: *now(),
+	}
+	require.NoError(t, s.CreateCity311ReopenRequest(ctx, request))
+	duplicate := *request
+	duplicate.ID++
+	require.Error(t, s.CreateCity311ReopenRequest(ctx, &duplicate))
+	fetched, err := s.LookupCity311ReopenRequestByID(ctx, request.ID)
+	require.NoError(t, err)
+	require.Equal(t, request.RequestReason, fetched.RequestReason)
+	set, _, err := s.SearchCity311ReopenRequests(ctx, composeTypes.City311ReopenRequestFilter{
+		RequestID: request.RequestID, Status: "PENDING_APPROVAL",
+	})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	approvedAt := *now()
+	fetched.Status = "APPROVED"
+	fetched.ApprovedBy = 401
+	fetched.ApprovalReason = "Approved after review."
+	fetched.ApprovedAt = &approvedAt
+	require.NoError(t, s.UpdateCity311ReopenRequest(ctx, fetched))
+	second := duplicate
+	require.NoError(t, s.CreateCity311ReopenRequest(ctx, &second))
+	require.NoError(t, s.DeleteCity311ReopenRequestByID(ctx, second.ID))
+}
+
 func testCity311PublicHistoryItems(t *testing.T, s store.City311PublicHistoryItems) {
 	ctx := context.Background()
 	require.NoError(t, s.TruncateCity311PublicHistoryItems(ctx))

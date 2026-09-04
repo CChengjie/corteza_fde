@@ -23,6 +23,7 @@ component: schema.#component & {
 		"city311-request-constituent":   requestConstituentLink
 		"city311-request-note":          requestNote
 		"city311-request-sequence":      requestSequence
+		"city311-reopen-request":        reopenRequest
 		"city311-service-request":       serviceRequest
 		"city311-staged-attachment":     stagedAttachment
 		"module":                        module

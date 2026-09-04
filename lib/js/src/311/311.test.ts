@@ -150,6 +150,10 @@ describe('City 311 frontend contract', () => {
         expect(fixture.session.actor?.application_roles).to.include(role)
       }
     }
+    expect(fixtures.role_fixtures.supervisor.session.actor?.capabilities).to.not.include('audit_list')
+    expect(fixtures.role_fixtures.supervisor.session.actor?.available_routes).to.not.include('audit_list')
+    expect(fixtures.role_fixtures.platform_administrator.session.actor?.capabilities).to.not.include('staff_request_reassign')
+    expect(fixtures.role_fixtures.platform_administrator.session.actor?.available_routes).to.not.include('staff_request_reassign')
   })
 
   it('selects every role and expired session without changing the fixture set', async () => {
@@ -971,5 +975,115 @@ describe('City 311 frontend contract', () => {
     const detail = (await agent.getPublicStatus({ request_number: 'SR-2026-00001', email: 'alex@example.test' })).request_detail
     expect(detail?.relationships?.find(item => item.constituent_id === 'constituent-2')).to.deep.include({ constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT', portal_visible: true, notify_status: true, notification_target: 'constituent-2', notification_result: 'SENT' })
     expect(detail?.notes?.some(note => note.body === 'Public staff update')).to.equal(true)
+  })
+})
+
+describe('FE-06 staff queue and detail contract', () => {
+  it('filters the queue, preserves opaque pagination, and enforces role scope', async () => {
+    const fixtures = createDefaultFixtureSet()
+    const second = JSON.parse(JSON.stringify(fixtures.queue[0]))
+    second.request_id = 'request-fixture-002'
+    second.request_number = 'SR-2026-00002'
+    second.owning_department = 'GENERAL_SERVICES'
+    second.council_district = 'SOUTH'
+    second.service_type = 'GENERAL_INQUIRY'
+    fixtures.queue.push(second)
+    const secondDetail = JSON.parse(JSON.stringify(fixtures.details['request-fixture-001']))
+    secondDetail.request.request_id = second.request_id
+    secondDetail.request.request_number = second.request_number
+    secondDetail.request.owning_department = second.owning_department
+    secondDetail.request.council_district = second.council_district
+    secondDetail.request.service_type = second.service_type
+    fixtures.details[second.request_id] = secondDetail
+
+    const manager = new MockC311Provider({ role: 'department_manager', fixtures })
+    const page = await manager.listStaffRequests({ department: 'STREETS', page_size: 1, sort: '-updated_at' })
+    expect(page.items).to.have.length(1)
+    expect(page.applied_filters).to.include({ department: 'STREETS' })
+    expect(page.sort).to.deep.equal(['-updated_at'])
+    expect(page.next_page_token).to.equal(null)
+
+    const workflow = new MockC311Provider({ role: 'workflow_designer', fixtures })
+    await expectError(() => workflow.listStaffRequests(), 'FORBIDDEN')
+    await expectError(() => manager.getStaffRequest(second.request_id), 'FORBIDDEN')
+    await expectError(() => manager.listStaffRequests({ filters: { unsupported: 'value' } }), 'INVALID_FILTER')
+    await expectError(() => new MockC311Provider({ role: 'service_agent', sessionVariant: 'expired' }).listStaffRequests(), 'UNAUTHENTICATED')
+    await expectError(() => new MockC311Provider().listStaffRequests(), 'FORBIDDEN')
+  })
+
+  it('filters out-of-scope records while protecting direct detail access', async () => {
+    const agent = new MockC311Provider({ role: 'service_agent', scenario: 'scope-filter' })
+    const agentPage = await agent.listStaffRequests()
+    expect(agentPage.items).to.have.length(1)
+    expect(agentPage.items[0].owning_department).to.equal('STREETS')
+    await expectError(() => agent.getStaffRequest('request-fixture-foreign'), 'FORBIDDEN')
+
+    const administrator = new MockC311Provider({ role: 'platform_administrator', scenario: 'scope-filter' })
+    const administratorPage = await administrator.listStaffRequests()
+    expect(administratorPage.items).to.have.length(2)
+    expect(administratorPage.items.some(item => item.request_id === 'request-fixture-foreign')).to.equal(true)
+    const foreignDetail = await administrator.getStaffRequest('request-fixture-foreign')
+    expect(foreignDetail.request.request_number).to.equal('SR-2026-00099')
+  })
+
+  it('requires If-Match and increments the detail version for staff writes', async () => {
+    const provider = new MockC311Provider({ role: 'supervisor' })
+    const before = await provider.getStaffRequest('request-fixture-001')
+    await expectError(() => provider.transitionStaffRequest('request-fixture-001', { to_status: 'TRIAGED' }), 'EXPECTED_VERSION_REQUIRED')
+    const transitioned = await provider.transitionStaffRequest('request-fixture-001', { to_status: 'TRIAGED' }, { expectedVersion: before.request.version })
+    expect(transitioned.request.status).to.equal('TRIAGED')
+    expect(transitioned.request.version).to.equal(before.request.version + 1)
+    const reassigned = await provider.reassignStaffRequest('request-fixture-001', { assignee_id: 'actor-fixture-agent', reason: 'fixture' }, { expectedVersion: transitioned.request.version })
+    expect(reassigned.primary_assignee_id).to.equal('actor-fixture-agent')
+    expect(reassigned.request.version).to.equal(transitioned.request.version + 1)
+    const staffAgent = new MockC311Provider({ role: 'service_agent' })
+    const reminder = await staffAgent.createStaffReminder('request-fixture-001', { title: 'Fixture reminder', due_at: '2026-01-16T15:00:00.000Z', timezone: 'America/New_York', recipient_staff_id: 'actor-fixture-agent', channel: 'IN_APP' })
+    expect(reminder.status).to.equal('SCHEDULED')
+    const note = await staffAgent.createStaffNote('request-fixture-001', { body: 'Fixture note', portal_visible: false })
+    expect(note.request_id).to.equal('request-fixture-001')
+    expect(provider.getWriteCount('staff_request_transition')).to.equal(1)
+    expect(provider.getWriteCount('staff_request_reassign')).to.equal(1)
+    expect(staffAgent.getWriteCount('staff_reminder_create')).to.equal(1)
+    expect(staffAgent.getWriteCount('staff_note_create')).to.equal(1)
+  })
+
+  it('maps all FE-06 HTTP operations to contract paths and headers', async () => {
+    const requests: C311TransportRequest[] = []
+    const transport = { request: async <T>(request: C311TransportRequest) => { requests.push(request); return {} as T } }
+    const provider = new C311HttpProvider(transport)
+    await provider.reassignStaffRequest('r1', { assignee_id: 'a1', reason: 'fixture' }, { expectedVersion: 2 })
+    await provider.addStaffCollaborator('r1', 'a2', { reason: 'fixture' }, { expectedVersion: 3 })
+    await provider.removeStaffCollaborator('r1', 'a2', { reason: 'fixture' }, { expectedVersion: 4 })
+    await provider.createStaffReminder('r1', { title: 'Reminder', due_at: '2026-01-16T15:00:00.000Z', timezone: 'America/New_York', recipient_staff_id: 'a1', channel: 'IN_APP' })
+    await provider.actionStaffReminder('rem1', 'COMPLETE')
+    await provider.overrideStaffOrigin('r1', { origin_class: 'INTERNAL', reason: 'fixture' }, { expectedVersion: 5 })
+    await provider.overrideStaffScope('r1', { department_code: 'STREETS', district_codes: ['NORTH'], reason: 'fixture' }, { expectedVersion: 6 })
+    await provider.confirmStaffDuplicateGroup('r1', { duplicate_group_id: 'dg1', reason: 'fixture' }, { expectedVersion: 7 })
+    await provider.removeStaffDuplicateGroup('r1', { reason: 'fixture' }, { expectedVersion: 8 })
+    await provider.approveStaffReopen('r1', { reason: 'fixture' }, { expectedVersion: 9 })
+    expect(requests.map(request => `${request.method} ${request.path}`)).to.deep.equal([
+      'POST /api/v1/staff/service-requests/r1/assignment',
+      'PUT /api/v1/staff/service-requests/r1/collaborators/a2',
+      'DELETE /api/v1/staff/service-requests/r1/collaborators/a2',
+      'POST /api/v1/staff/service-requests/r1/reminders',
+      'POST /api/v1/staff/reminders/rem1/COMPLETE',
+      'POST /api/v1/staff/service-requests/r1/origin-class',
+      'POST /api/v1/staff/service-requests/r1/scope-override',
+      'POST /api/v1/staff/service-requests/r1/duplicate-group',
+      'DELETE /api/v1/staff/service-requests/r1/duplicate-group',
+      'POST /api/v1/staff/service-requests/r1/reopen/approve',
+    ])
+    expect(requests[0].headers).to.deep.equal({ 'If-Match': '"2"' })
+    expect(requests[1].headers).to.deep.equal({ 'If-Match': '"3"' })
+  })
+
+  it('applies fixture failures and reminder scope checks to staff mutations', async () => {
+    const supervisorInput = { assignee_id: 'actor-fixture-agent', reason: 'fixture' }
+    await expectError(() => new MockC311Provider({ role: 'supervisor', scenario: 'forbidden' }).reassignStaffRequest('request-fixture-001', supervisorInput, { expectedVersion: 1 }), 'FORBIDDEN')
+    await expectError(() => new MockC311Provider({ role: 'supervisor', scenario: 'version-conflict' }).reassignStaffRequest('request-fixture-001', supervisorInput, { expectedVersion: 1 }), 'VERSION_CONFLICT')
+
+    const supervisor = new MockC311Provider({ role: 'supervisor' })
+    await expectError(() => supervisor.actionStaffReminder('missing-reminder', 'COMPLETE'), 'NOT_FOUND')
+    await expectError(() => new MockC311Provider({ role: 'service_agent', scenario: 'forbidden' }).createStaffNote('request-fixture-001', { body: 'fixture', portal_visible: false }), 'FORBIDDEN')
   })
 })

@@ -41,7 +41,7 @@ export default {
       default: () => ({}),
     },
     error: {
-      type: Object,
+      type: [Object, Error],
       default: null,
     },
     retryable: {

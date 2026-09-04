@@ -7,28 +7,30 @@
             <th v-for="column in visibleColumns" :key="column.key" scope="col">
               {{ column.label }}
             </th>
-            <th v-if="selectable" scope="col">{{ actionLabel }}</th>
+            <th v-if="selectable" scope="col" class="c311-responsive-data__action-column">{{ actionLabel }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item[rowKey]">
+              <tr v-for="item in items" :key="item[rowKey]" :data-c311-row="item[rowKey]" :data-c311-department="item.owning_department || undefined">
             <td v-for="column in visibleColumns" :key="column.key" :data-label="column.label">
               {{ valueFor(item, column) }}
             </td>
-            <td v-if="selectable" data-label=""><button type="button" class="btn btn-link p-0" :data-c311-action="`view-request-${item[rowKey]}`" @click="$emit('select', item)">{{ actionLabel }}</button></td>
+            <td v-if="selectable" data-label="" class="text-nowrap c311-responsive-data__action-column">
+              <button type="button" class="btn btn-sm btn-link" :data-c311-action="`view-request-${item[rowKey]}`" @click="$emit('select', item)">{{ actionLabel }}</button>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
     <div class="c311-responsive-data__cards" data-c311-responsive-cards>
-      <article v-for="item in items" :key="item[rowKey]" class="border rounded p-3 mb-2">
+      <article v-for="item in items" :key="item[rowKey]" class="border rounded p-3 mb-2" :data-c311-department="item.owning_department || undefined">
         <dl class="mb-0">
           <div v-for="column in visibleColumns" :key="column.key" class="d-flex justify-content-between py-1">
             <dt class="font-weight-bold mr-3">{{ column.label }}</dt>
             <dd class="mb-0 text-right">{{ valueFor(item, column) }}</dd>
           </div>
         </dl>
-        <button v-if="selectable" type="button" class="btn btn-link p-0 mt-2" :data-c311-action="`view-request-${item[rowKey]}`" @click="$emit('select', item)">{{ actionLabel }}</button>
+        <button v-if="selectable" type="button" class="btn btn-sm btn-link p-0 mt-2" :data-c311-action="`view-request-${item[rowKey]}`" @click="$emit('select', item)">{{ actionLabel }}</button>
       </article>
     </div>
   </div>
@@ -100,6 +102,11 @@ export default {
   .c311-responsive-data__table th:nth-child(n+4),
   .c311-responsive-data__table td:nth-child(n+4) {
     display: none;
+  }
+
+  .c311-responsive-data__table th.c311-responsive-data__action-column,
+  .c311-responsive-data__table td.c311-responsive-data__action-column {
+    display: table-cell;
   }
 }
 </style>

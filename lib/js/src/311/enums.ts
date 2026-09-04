@@ -238,6 +238,12 @@ export const C311_SCENARIOS = [
   'attachment-terminal',
   'map-retryable',
   'map-auth-failure',
+  /** Mock-only fixture for an otherwise in-scope staff user and an out-of-scope record. */
+  'scope-denied',
+  /** Mock-only fixture with two queue items for deterministic pagination checks. */
+  'pagination',
+  /** Mock-only fixture with an out-of-scope queue item for scope filtering checks. */
+  'scope-filter',
 ] as const
 export type C311Scenario = typeof C311_SCENARIOS[number]
 

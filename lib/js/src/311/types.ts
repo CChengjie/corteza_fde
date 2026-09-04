@@ -332,6 +332,8 @@ export interface StaffServiceRequestDetail {
   primary_assignee_id?: string | null
   collaborator_ids: string[]
   reminders: Reminder[]
+  /** Attachment metadata returned by the staff detail projection. */
+  attachments?: PortalAttachment[]
   history: PublicHistoryItem[]
   audit: Record<string, unknown>[]
   external_work_order?: Record<string, unknown> | null
@@ -446,6 +448,68 @@ export interface RequestListQuery extends ListQuery {
   created_from?: string
   created_to?: string
   duplicate_group?: string
+}
+
+export interface RequestTransition {
+  to_status: ServiceRequestStatus
+  reason?: string
+}
+
+export interface Reassignment {
+  assignee_id: string
+  reason: string
+}
+
+export interface CollaboratorChange {
+  reason: string
+}
+
+export interface ReminderWrite {
+  title: string
+  due_at: ISODateTime
+  timezone: string
+  recipient_staff_id: string
+  channel: ReminderChannel
+}
+
+export interface ReminderActionInput {
+  due_at?: ISODateTime
+}
+
+export interface OriginOverride {
+  origin_class: OriginClass
+  reason: string
+}
+
+export interface ScopeOverride {
+  department_code: DepartmentCode
+  district_codes: DistrictCode[]
+  reason: string
+}
+
+export interface DuplicateGroupChange {
+  duplicate_group_id: string
+  reason: string
+}
+
+export interface ConstituentLink {
+  constituent_id: string
+  relationship_type: import('./enums').RelationshipType
+  portal_visible: boolean
+  notify_status: boolean
+}
+
+export interface ConstituentUnlink {
+  reason: string
+}
+
+export interface RequestNote {
+  request_id?: string
+  note_id?: string
+  author_constituent_id?: string
+  body: string
+  portal_visible: boolean
+  created_at?: ISODateTime
 }
 
 export interface DraftWrite extends Partial<PortalServiceRequestCreate> {

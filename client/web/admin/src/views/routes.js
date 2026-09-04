@@ -119,6 +119,12 @@ export default [
     meta: { c311: { requiresAuth: true, route: 'staff_request_queue', capabilities: ['staff_request_queue'], scopes: ['service_requests.write'] } },
   },
   {
+    name: 'c311.staff.detail',
+    path: '/c311/staff/requests/:request_id',
+    component: () => import('./C311/Staff.vue'),
+    meta: { c311: { requiresAuth: true, route: 'staff_request_detail', capabilities: ['staff_request_detail'], scopes: ['service_requests.write'] } },
+  },
+  {
     name: 'c311.staff.submit',
     path: '/c311/staff/submit',
     component: () => import('./C311/RequestCreate.vue'),

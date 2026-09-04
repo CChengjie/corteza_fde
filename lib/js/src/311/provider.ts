@@ -46,7 +46,15 @@ import type {
   FederatedSignInResult,
   StaffServiceRequestDetail,
   StaffServiceRequestCreate,
+  Reassignment,
+  CollaboratorChange,
+  ReminderWrite,
+  ReminderActionInput,
+  OriginOverride,
+  ScopeOverride,
+  DuplicateGroupChange,
   WorkflowDefinition,
+  RequestTransition,
 } from './types'
 
 export interface C311RequestOptions {
@@ -198,11 +206,6 @@ export interface ReportExportOptions extends C311RequestOptions {
   format?: 'CSV'
 }
 
-export interface RequestTransition {
-  to_status: ServiceRequest['status']
-  reason?: string
-}
-
 export interface C311Provider {
   getSession (): Promise<Session>
   signIn (input: LocalSignIn): Promise<Session>
@@ -246,6 +249,16 @@ export interface C311Provider {
   listStaffRequests (query?: RequestListQuery): Promise<PageResponse<RequestQueueItem>>
   getStaffRequest (requestID: string): Promise<StaffServiceRequestDetail>
   transitionStaffRequest (requestID: string, input: RequestTransition, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  reassignStaffRequest (requestID: string, input: Reassignment, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  addStaffCollaborator (requestID: string, staffID: string, input: CollaboratorChange, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  removeStaffCollaborator (requestID: string, staffID: string, input: CollaboratorChange, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  createStaffReminder (requestID: string, input: ReminderWrite): Promise<import('./types').Reminder>
+  actionStaffReminder (reminderID: string, action: import('./enums').ReminderAction, input?: ReminderActionInput): Promise<import('./types').Reminder>
+  overrideStaffOrigin (requestID: string, input: OriginOverride, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  overrideStaffScope (requestID: string, input: ScopeOverride, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  confirmStaffDuplicateGroup (requestID: string, input: DuplicateGroupChange, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  removeStaffDuplicateGroup (requestID: string, input: CollaboratorChange, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
+  approveStaffReopen (requestID: string, input: CollaboratorChange, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   linkStaffConstituent (requestID: string, input: ConstituentLink, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   unlinkStaffConstituent (requestID: string, constituentID: string, input: ConstituentUnlink, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   createStaffNote (requestID: string, input: RequestNote): Promise<RequestNote>
@@ -482,6 +495,45 @@ export class C311HttpProvider implements C311Provider {
     return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/transitions`, body: input, ...this.requestOptions(options) })
   }
 
+  reassignStaffRequest (requestID: string, input: Reassignment, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/assignment`, body: input, ...this.requestOptions(options) })
+  }
+
+  addStaffCollaborator (requestID: string, staffID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'PUT', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/collaborators/${encodeURIComponent(staffID)}`, body: input, ...this.requestOptions(options) })
+  }
+
+  removeStaffCollaborator (requestID: string, staffID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'DELETE', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/collaborators/${encodeURIComponent(staffID)}`, body: input, ...this.requestOptions(options) })
+  }
+
+  createStaffReminder (requestID: string, input: ReminderWrite): Promise<import('./types').Reminder> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/reminders`, body: input })
+  }
+
+  actionStaffReminder (reminderID: string, action: import('./enums').ReminderAction, input: ReminderActionInput = {}): Promise<import('./types').Reminder> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/reminders/${encodeURIComponent(reminderID)}/${encodeURIComponent(action)}`, body: input })
+  }
+
+  overrideStaffOrigin (requestID: string, input: OriginOverride, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/origin-class`, body: input, ...this.requestOptions(options) })
+  }
+
+  overrideStaffScope (requestID: string, input: ScopeOverride, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/scope-override`, body: input, ...this.requestOptions(options) })
+  }
+
+  confirmStaffDuplicateGroup (requestID: string, input: DuplicateGroupChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/duplicate-group`, body: input, ...this.requestOptions(options) })
+  }
+
+  removeStaffDuplicateGroup (requestID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'DELETE', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/duplicate-group`, body: input, ...this.requestOptions(options) })
+  }
+
+  approveStaffReopen (requestID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
+    return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/reopen/approve`, body: input, ...this.requestOptions(options) })
+  }
   linkStaffConstituent (requestID: string, input: ConstituentLink, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/constituents`, body: input, ...this.requestOptions(options) })
   }

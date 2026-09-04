@@ -374,25 +374,27 @@ type (
 
 	// auxCity311ServiceRequest is an auxiliary structure used for transporting to/from RDBMS store
 	auxCity311ServiceRequest struct {
-		ID                uint64                           `db:"id"`
-		RequestNumber     string                           `db:"request_number"`
-		Summary           string                           `db:"summary"`
-		Description       string                           `db:"description"`
-		ServiceType       composeType.ServiceType          `db:"service_type"`
-		OwningDepartment  composeType.DepartmentCode       `db:"owning_department"`
-		CouncilDistrict   composeType.DistrictCode         `db:"council_district"`
-		SourceChannel     composeType.SourceChannel        `db:"source_channel"`
-		OriginClass       composeType.OriginClass          `db:"origin_class"`
-		Status            composeType.ServiceRequestStatus `db:"status"`
-		PrimaryRequester  composeType.City311JSON          `db:"primary_requester"`
-		Location          composeType.City311JSON          `db:"location"`
-		CustomFields      composeType.City311JSON          `db:"custom_fields"`
-		PrimaryAssigneeID uint64                           `db:"primary_assignee_id"`
-		CollaboratorIDs   composeType.City311Uint64Set     `db:"collaborator_ids"`
-		DuplicateGroupID  string                           `db:"duplicate_group_id"`
-		Version           int                              `db:"version"`
-		CreatedAt         time.Time                        `db:"created_at"`
-		UpdatedAt         time.Time                        `db:"updated_at"`
+		ID                uint64                             `db:"id"`
+		RequestNumber     string                             `db:"request_number"`
+		Summary           string                             `db:"summary"`
+		Description       string                             `db:"description"`
+		ServiceType       composeType.ServiceType            `db:"service_type"`
+		OwningDepartment  composeType.DepartmentCode         `db:"owning_department"`
+		CouncilDistrict   composeType.DistrictCode           `db:"council_district"`
+		SourceChannel     composeType.SourceChannel          `db:"source_channel"`
+		OriginClass       composeType.OriginClass            `db:"origin_class"`
+		Status            composeType.ServiceRequestStatus   `db:"status"`
+		PrimaryRequester  composeType.City311JSON            `db:"primary_requester"`
+		Location          composeType.City311JSON            `db:"location"`
+		CustomFields      composeType.City311JSON            `db:"custom_fields"`
+		PrimaryAssigneeID uint64                             `db:"primary_assignee_id"`
+		CollaboratorIDs   composeType.City311Uint64Set       `db:"collaborator_ids"`
+		DuplicateGroupID  string                             `db:"duplicate_group_id"`
+		ScopeDepartment   *composeType.DepartmentCode        `db:"scope_department"`
+		ScopeDistricts    composeType.City311DistrictCodeSet `db:"scope_districts"`
+		Version           int                                `db:"version"`
+		CreatedAt         time.Time                          `db:"created_at"`
+		UpdatedAt         time.Time                          `db:"updated_at"`
 	}
 
 	// auxCity311StagedAttachment is an auxiliary structure used for transporting to/from RDBMS store
@@ -2231,6 +2233,8 @@ func (aux *auxCity311ServiceRequest) encode(res *composeType.City311ServiceReque
 	aux.PrimaryAssigneeID = res.PrimaryAssigneeID
 	aux.CollaboratorIDs = res.CollaboratorIDs
 	aux.DuplicateGroupID = res.DuplicateGroupID
+	aux.ScopeDepartment = res.ScopeDepartment
+	aux.ScopeDistricts = res.ScopeDistricts
 	aux.Version = res.Version
 	aux.CreatedAt = res.CreatedAt
 	aux.UpdatedAt = res.UpdatedAt
@@ -2258,6 +2262,8 @@ func (aux auxCity311ServiceRequest) decode() (res *composeType.City311ServiceReq
 	res.PrimaryAssigneeID = aux.PrimaryAssigneeID
 	res.CollaboratorIDs = aux.CollaboratorIDs
 	res.DuplicateGroupID = aux.DuplicateGroupID
+	res.ScopeDepartment = aux.ScopeDepartment
+	res.ScopeDistricts = aux.ScopeDistricts
 	res.Version = aux.Version
 	res.CreatedAt = aux.CreatedAt
 	res.UpdatedAt = aux.UpdatedAt
@@ -2285,6 +2291,8 @@ func (aux *auxCity311ServiceRequest) scan(row scanner) error {
 		&aux.PrimaryAssigneeID,
 		&aux.CollaboratorIDs,
 		&aux.DuplicateGroupID,
+		&aux.ScopeDepartment,
+		&aux.ScopeDistricts,
 		&aux.Version,
 		&aux.CreatedAt,
 		&aux.UpdatedAt,

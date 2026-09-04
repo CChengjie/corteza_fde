@@ -114,6 +114,17 @@ type ReopenApproval struct {
 	Reason string `json:"reason"`
 }
 
+type OriginOverride struct {
+	OriginClass OriginClass `json:"origin_class"`
+	Reason      string      `json:"reason"`
+}
+
+type ScopeOverride struct {
+	DepartmentCode DepartmentCode `json:"department_code"`
+	DistrictCodes  []DistrictCode `json:"district_codes"`
+	Reason         string         `json:"reason"`
+}
+
 type DuplicateGroupChange struct {
 	DuplicateGroupID string `json:"duplicate_group_id"`
 	Reason           string `json:"reason"`

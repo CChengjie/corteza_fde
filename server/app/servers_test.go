@@ -24,12 +24,30 @@ func TestHealthzReportsContractErrorUntilDatabaseIsAvailable(t *testing.T) {
 	require.Contains(t, response.Body.String(), `"retryable":true`)
 }
 
+func TestHealthzReportsRuntimeConfigurationReadiness(t *testing.T) {
+	ctx := context.Background()
+	st, err := sqlite.Connect(ctx, fmt.Sprintf("sqlite3://file:%s-health?mode=memory&cache=shared", t.Name()))
+	require.NoError(t, err)
+	logCore, observedLogs := observer.New(zap.ErrorLevel)
+	application := &CortezaApp{Store: st, Log: zap.New(logCore)}
+	setRuntimeHealthEnvironment(t)
+	t.Setenv("DATABASE_URL", "")
+
+	response := httptest.NewRecorder()
+	application.healthz(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.Contains(t, response.Body.String(), "A required City 311 runtime configuration is unavailable.")
+	require.NotContains(t, response.Body.String(), "DATABASE_URL")
+	require.Contains(t, observedLogs.All()[0].ContextMap()["error"], "DATABASE_URL is required")
+}
+
 func TestHealthzReportsIdentityConfigurationReadiness(t *testing.T) {
 	ctx := context.Background()
 	st, err := sqlite.Connect(ctx, fmt.Sprintf("sqlite3://file:%s-health?mode=memory&cache=shared", t.Name()))
 	require.NoError(t, err)
 	logCore, observedLogs := observer.New(zap.ErrorLevel)
 	application := &CortezaApp{Store: st, Log: zap.New(logCore)}
+	setRuntimeHealthEnvironment(t)
 	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")
 	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
 	t.Setenv("MAP_BASE_URL", "https://mapping.example.invalid")
@@ -72,6 +90,7 @@ func TestHealthzReportsMappingConfigurationReadiness(t *testing.T) {
 	require.NoError(t, err)
 	logCore, observedLogs := observer.New(zap.ErrorLevel)
 	application := &CortezaApp{Store: st, Log: zap.New(logCore)}
+	setRuntimeHealthEnvironment(t)
 	t.Setenv("SESSION_SECRET", "runtime-identity-secret")
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
 	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")
@@ -116,6 +135,22 @@ func setCivicWorksHealthEnvironment(t *testing.T) {
 	t.Setenv("BENCHMARK_RUN_ID", "benchmark-run-health")
 }
 
+func setRuntimeHealthEnvironment(t *testing.T) {
+	t.Helper()
+	t.Setenv("DATABASE_URL", "postgres://corteza:secret@postgres:5432/corteza?sslmode=disable")
+	t.Setenv("BENCHMARK_TIMEZONE", "America/New_York")
+	t.Setenv("BENCHMARK_NOW", "2026-02-03T15:04:05Z")
+	t.Setenv("BENCHMARK_SEED", "city311-public-v1")
+	t.Setenv("CRM_API_CLIENT_ID", "city311-api-client")
+	t.Setenv("CRM_API_CLIENT_SECRET", "runtime-api-secret")
+	t.Setenv("MAIL_SMTP_HOST", "mail.example.test")
+	t.Setenv("MAIL_SMTP_PORT", "587")
+	t.Setenv("MAIL_SMTP_USERNAME", "city311")
+	t.Setenv("MAIL_SMTP_PASSWORD", "runtime-mail-secret")
+	t.Setenv("MAIL_API_BASE_URL", "https://mail.example.test")
+	t.Setenv("MAIL_API_TOKEN", "runtime-mail-api-token")
+}
+
 func setFederatedIdentityHealthEnvironment(t *testing.T) {
 	t.Helper()
 	t.Setenv("OIDC_ISSUER_URL", "https://identity.example.invalid")
@@ -140,6 +175,7 @@ func TestHealthzReportsCivicWorksConfigurationReadiness(t *testing.T) {
 	require.NoError(t, err)
 	logCore, observedLogs := observer.New(zap.ErrorLevel)
 	application := &CortezaApp{Store: st, Log: zap.New(logCore)}
+	setRuntimeHealthEnvironment(t)
 	t.Setenv("SESSION_SECRET", "runtime-identity-secret")
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
 	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")
@@ -172,6 +208,7 @@ func TestHealthzReportsWorkflowConfigurationReadiness(t *testing.T) {
 	require.NoError(t, err)
 	logCore, observedLogs := observer.New(zap.ErrorLevel)
 	application := &CortezaApp{Store: st, Log: zap.New(logCore)}
+	setRuntimeHealthEnvironment(t)
 	t.Setenv("SESSION_SECRET", "runtime-identity-secret")
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
 	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")

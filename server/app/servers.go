@@ -179,6 +179,17 @@ func (app *CortezaApp) healthz(w http.ResponseWriter, request *http.Request) {
 		})
 		return
 	}
+	if err := city311Service.ValidateRuntimeEnvironment(); err != nil {
+		if app.Log != nil {
+			app.Log.Error("City 311 runtime configuration is unavailable", zap.Error(err))
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(city311Contract.APIError{
+			Error:   city311Contract.ErrorTemporarilyUnavailable,
+			Message: "A required City 311 runtime configuration is unavailable.", Retryable: true,
+		})
+		return
+	}
 	if err := city311Service.ValidateIdentityEnvironment(); err != nil {
 		if app.Log != nil {
 			app.Log.Error("City 311 identity configuration is unavailable", zap.Error(err))

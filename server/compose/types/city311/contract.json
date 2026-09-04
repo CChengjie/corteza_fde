@@ -1261,36 +1261,78 @@
           "additional_properties": false,
           "properties": {
             "actor_id": {
-              "max_length": 500,
-              "type": "string"
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "actor_type": {
+              "items": {
+                "enum_ref": "audit_actor_type"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             },
             "entity_id": {
-              "max_length": 500,
-              "type": "string"
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             },
             "entity_type": {
-              "max_length": 500,
-              "type": "string"
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             },
             "event_type": {
-              "max_length": 500,
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "occurred_from": {
+              "format": "date-time",
               "type": "string"
             },
-            "from": {
-              "max_length": 500,
+            "occurred_to": {
+              "format": "date-time",
               "type": "string"
             },
             "request_id": {
-              "max_length": 500,
-              "type": "string"
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             },
             "source_channel": {
-              "max_length": 500,
-              "type": "string"
-            },
-            "to": {
-              "max_length": 500,
-              "type": "string"
+              "items": {
+                "enum_ref": "source_channel"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             }
           },
           "type": "object"
@@ -1302,7 +1344,7 @@
           "type": "integer"
         },
         "page_token": {
-          "binding": "operation, actor/record scope, filters and sort; re-evaluate permission before each page",
+          "binding": "operation, filters and sort; permission re-evaluated for every request",
           "opaque": true,
           "type": "string"
         },
@@ -1312,9 +1354,11 @@
             "entity_type",
             "entity_id",
             "event_type",
-            "actor_id"
+            "actor_type",
+            "actor_id",
+            "source_channel"
           ],
-          "default": "occurred_at",
+          "default": "-occurred_at",
           "maximum_fields": 3,
           "type": "string"
         }
@@ -3017,25 +3061,111 @@
         "filters": {
           "additional_properties": false,
           "properties": {
-            "category": {
-              "max_length": 500,
-              "type": "string"
+            "constituent_id": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "custom_fields": {
+              "additional_properties": {
+                "items": {
+                  "max_length": 254,
+                  "min_length": 1,
+                  "type": "string"
+                },
+                "min_items": 1,
+                "type": "array",
+                "unique_items": true
+              },
+              "type": "object"
             },
             "department": {
-              "max_length": 500,
-              "type": "string"
+              "items": {
+                "enum_ref": "department_code"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "display_name": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             },
             "district": {
-              "max_length": 500,
-              "type": "string"
+              "items": {
+                "enum_ref": "district_code"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             },
             "email": {
-              "max_length": 500,
-              "type": "string"
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             },
-            "q": {
-              "max_length": 500,
-              "type": "string"
+            "email_opt_out": {
+              "items": {
+                "enum": [
+                  "true",
+                  "false"
+                ]
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "phone": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "preferred_language": {
+              "items": {
+                "enum_ref": "language"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "primary_category": {
+              "items": {
+                "enum_ref": "contact_category"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
+            },
+            "query": {
+              "items": {
+                "max_length": 254,
+                "min_length": 1,
+                "type": "string"
+              },
+              "min_items": 1,
+              "type": "array",
+              "unique_items": true
             }
           },
           "type": "object"
@@ -3047,7 +3177,7 @@
           "type": "integer"
         },
         "page_token": {
-          "binding": "operation, actor/record scope, filters and sort; re-evaluate permission before each page",
+          "binding": "operation, filters and sort; permission re-evaluated for every request",
           "opaque": true,
           "type": "string"
         },
@@ -3056,9 +3186,11 @@
             "constituent_id",
             "display_name",
             "primary_category",
-            "updated_at"
+            "preferred_language",
+            "department",
+            "district"
           ],
-          "default": "constituent_id",
+          "default": "display_name,constituent_id",
           "maximum_fields": 3,
           "type": "string"
         }
@@ -4742,7 +4874,17 @@
       "properties": {
         "applied_filters": {
           "additional_properties": {
-            "type": "string"
+            "one_of": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
           },
           "type": "object"
         },
@@ -5325,7 +5467,17 @@
       "properties": {
         "applied_filters": {
           "additional_properties": {
-            "type": "string"
+            "one_of": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
           },
           "type": "object"
         },

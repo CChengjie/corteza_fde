@@ -115,6 +115,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Post("/auth/password-reset/request", h.passwordResetRequest)
 		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
 		r.Patch("/preferences/language", h.languageUpdate)
+		r.Get("/auth/{provider}/start", h.federatedSignInStart)
+		r.Get("/auth/{provider}/callback", h.federatedSignInCallback)
 		r.With(requireIdentity).Get("/operations/{operation_id}", h.operationGet)
 		r.With(requireIdentity).Get("/operations/{operation_id}/result", h.operationResult)
 		r.Route("/account", func(r chi.Router) {
@@ -131,6 +133,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Get("/public/help/{help_key}", h.publicHelpGet)
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(requireIdentity)
+			r.Get("/identity", h.adminIdentityConfigurationGet)
+			r.Patch("/identity", h.adminIdentityConfigurationUpdate)
 			r.Get("/contact-categories", h.adminContactCategoryList)
 			r.Post("/contact-categories", h.adminContactCategoryCreate)
 			r.Patch("/contact-categories/{category_code}", h.adminContactCategoryUpdate)

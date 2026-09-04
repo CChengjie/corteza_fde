@@ -78,6 +78,8 @@ type (
 		Now                func() time.Time
 		NextID             func() uint64
 		Random             io.Reader
+		Runtime            *IdentityRuntimeConfiguration
+		Federation         FederationProvider
 		Notifier           IdentityNotifier
 		Wait               func(context.Context, time.Duration) error
 		ConfigurationError error
@@ -87,18 +89,21 @@ type (
 	}
 
 	IdentityService struct {
-		store     store.Storer
-		secret    []byte
-		now       func() time.Time
-		nextID    func() uint64
-		random    io.Reader
-		notifier  IdentityNotifier
-		wait      func(context.Context, time.Duration) error
-		configErr error
+		store      store.Storer
+		secret     []byte
+		now        func() time.Time
+		nextID     func() uint64
+		random     io.Reader
+		runtime    IdentityRuntimeConfiguration
+		federation FederationProvider
+		notifier   IdentityNotifier
+		wait       func(context.Context, time.Duration) error
+		configErr  error
 
-		mfaMu       sync.RWMutex
-		mfaSettings authSettings.Settings
-		resetMu     sync.Mutex
+		mfaMu        sync.RWMutex
+		mfaSettings  authSettings.Settings
+		resetMu      sync.Mutex
+		federationMu sync.Mutex
 
 		notificationWake chan struct{}
 		notificationPoll time.Duration
@@ -150,6 +155,16 @@ func NewIdentity(s store.Storer, options IdentityOptions) *IdentityService {
 		notificationWake: make(chan struct{}, identityNotificationQueueSize),
 		notificationPoll: options.NotificationPoll, workerError: options.WorkerError,
 	}
+	if options.Runtime == nil {
+		service.runtime = IdentityRuntimeFromEnvironment()
+	} else {
+		service.runtime = *options.Runtime
+	}
+	if options.Federation == nil {
+		service.federation = NewRuntimeFederationProvider(service.runtime, nil, service.now)
+	} else {
+		service.federation = options.Federation
+	}
 	service.UpdateMFASettings(options.MFASettings)
 	return service
 }
@@ -187,6 +202,24 @@ func ValidateIdentityEnvironment() error {
 	parsedBaseURL, err := url.Parse(baseURL)
 	if err != nil || parsedBaseURL.Host == "" || (parsedBaseURL.Scheme != "http" && parsedBaseURL.Scheme != "https") {
 		return fmt.Errorf("APP_BASE_URL must be an absolute HTTP or HTTPS URL")
+	}
+	runtime := IdentityRuntimeFromEnvironment()
+	for _, input := range []struct{ key, value string }{
+		{"OIDC_STAFF_CLIENT_ID", runtime.OIDCStaffClientID}, {"OIDC_PUBLIC_CLIENT_ID", runtime.OIDCPublicClientID},
+		{"OIDC_CLIENT_SECRET", runtime.OIDCClientSecret},
+	} {
+		if input.value == "" {
+			return fmt.Errorf("%s is required for City 311 federated identity", input.key)
+		}
+	}
+	for _, input := range []struct{ key, value string }{
+		{"OIDC_ISSUER_URL", runtime.OIDCIssuerURL}, {"SAML_METADATA_URL", runtime.SAMLMetadataURL},
+		{"SAML_SP_ENTITY_ID", runtime.SAMLServiceProvider},
+	} {
+		parsed, parseErr := url.Parse(input.value)
+		if parseErr != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return fmt.Errorf("%s must be an absolute HTTP or HTTPS URL", input.key)
+		}
 	}
 	for _, key := range []string{seedConstituentPasswordEnv, seedConstituentTwoPasswordEnv} {
 		if value := os.Getenv(key); value == "" {

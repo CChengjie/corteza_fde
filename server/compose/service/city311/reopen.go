@@ -127,14 +127,18 @@ func (svc *Service) ApproveReopen(ctx context.Context, actor contract.Actor, req
 		}); err != nil {
 			return err
 		}
-		return store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
+		if err = store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
 			ID: svc.nextID(), RequestID: request.ID, Action: string(contract.ServiceRequestStatusReopened),
 			ResponsibleDepartment: request.OwningDepartment, OccurredAt: now,
-		})
+		}); err != nil {
+			return err
+		}
+		return svc.enqueueRelationshipNotifications(ctx, tx, request, contract.ServiceRequestStatus(anyString(requestBefore["status"])), RelationshipNotificationReopened, actor.ID, contract.SourceChannelStaffInPerson)
 	})
 	if err != nil {
 		return nil, err
 	}
+	svc.wakeRequestNotificationWorker()
 	return svc.Find(ctx, actor, requestID)
 }
 

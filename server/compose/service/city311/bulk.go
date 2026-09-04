@@ -265,6 +265,7 @@ func (svc *Service) Bulk(ctx context.Context, actor contract.Actor, input contra
 	if err != nil {
 		return nil, err
 	}
+	svc.wakeRequestNotificationWorker()
 	return result, nil
 }
 
@@ -482,7 +483,13 @@ func (svc *Service) applyBulkItem(ctx context.Context, tx store.Storer, actor co
 	if action == contract.BulkActionClose {
 		eventType = "SERVICE_REQUEST_BULK_CLOSED"
 	}
-	return svc.persistBulkAudit(ctx, tx, actor.ID, request, eventType, before, after)
+	if err := svc.persistBulkAudit(ctx, tx, actor.ID, request, eventType, before, after); err != nil {
+		return err
+	}
+	if previousStatus == request.Status {
+		return nil
+	}
+	return svc.enqueueRelationshipNotifications(ctx, tx, request, previousStatus, relationshipNotificationEvent(request.Status), actor.ID, contract.SourceChannelStaffInPerson)
 }
 
 func bulkAuditValues(request *composeTypes.City311ServiceRequest, action contract.BulkAction, changes parsedBulkChanges, selectedCount int) (map[string]any, map[string]any) {

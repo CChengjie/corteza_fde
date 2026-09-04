@@ -278,6 +278,7 @@ func (svc *Service) AssignCivicWorks(ctx context.Context, actor contract.Actor, 
 	if err != nil {
 		return nil, err
 	}
+	svc.wakeRequestNotificationWorker()
 	if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
 		svc.runActiveWorkflows(ctx, actor, WorkflowTriggerStatusChanged, request)
 	}
@@ -371,6 +372,7 @@ func (svc *Service) HandleCivicWorksEvent(ctx context.Context, body []byte, head
 	if err != nil || !statusChanged {
 		return err
 	}
+	svc.wakeRequestNotificationWorker()
 	request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID)
 	if lookupErr != nil {
 		return lookupErr
@@ -451,9 +453,13 @@ func (svc *Service) persistCivicWorksTransition(ctx context.Context, tx store.St
 	}); err != nil {
 		return err
 	}
-	return store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
+	if err := store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
 		ID: svc.nextID(), RequestID: request.ID, Action: string(request.Status), ResponsibleDepartment: request.OwningDepartment, OccurredAt: event.OccurredAt.UTC(),
-	})
+	}); err != nil {
+		return err
+	}
+	previousStatus := contract.ServiceRequestStatus(anyString(before["status"]))
+	return svc.enqueueRelationshipNotifications(ctx, tx, request, previousStatus, relationshipNotificationEvent(request.Status), 0, contract.SourceChannelAPI)
 }
 
 func (svc *Service) persistCivicWorksWorkOrderUpdate(ctx context.Context, tx store.Storer, request *composeTypes.City311ServiceRequest, event contract.CivicWorksEvent, before map[string]any) error {

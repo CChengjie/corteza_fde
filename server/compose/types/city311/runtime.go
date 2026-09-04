@@ -148,7 +148,7 @@ type StaffServiceRequestDetail struct {
 	AvailableActions  []string            `json:"available_actions"`
 	PrimaryAssigneeID *string             `json:"primary_assignee_id"`
 	CollaboratorIDs   []string            `json:"collaborator_ids"`
-	Reminders         []any               `json:"reminders"`
+	Reminders         []Reminder          `json:"reminders"`
 	History           []PublicHistoryItem `json:"history"`
 	Audit             []AuditEvent        `json:"audit"`
 	ExternalWorkOrder any                 `json:"external_work_order"`

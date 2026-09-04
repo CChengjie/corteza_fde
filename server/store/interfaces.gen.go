@@ -63,6 +63,7 @@ type (
 		City311IdentityNotifications
 		City311IdentitySessions
 		City311LocalAccounts
+		City311Operations
 		City311PasswordResetTokens
 		City311PublicHistoryItems
 		City311ReopenRequests
@@ -355,6 +356,18 @@ type (
 		LookupCity311LocalAccountByID(ctx context.Context, id uint64) (*composeType.City311LocalAccount, error)
 		LookupCity311LocalAccountByLoginIdentifier(ctx context.Context, loginIdentifier string) (*composeType.City311LocalAccount, error)
 		LookupCity311LocalAccountByVerifiedEmail(ctx context.Context, verifiedEmail string) (*composeType.City311LocalAccount, error)
+	}
+
+	City311Operations interface {
+		SearchCity311Operations(ctx context.Context, f composeType.City311OperationFilter) (composeType.City311OperationSet, composeType.City311OperationFilter, error)
+		CreateCity311Operation(ctx context.Context, rr ...*composeType.City311Operation) error
+		UpdateCity311Operation(ctx context.Context, rr ...*composeType.City311Operation) error
+		UpsertCity311Operation(ctx context.Context, rr ...*composeType.City311Operation) error
+		DeleteCity311Operation(ctx context.Context, rr ...*composeType.City311Operation) error
+
+		DeleteCity311OperationByID(ctx context.Context, id uint64) error
+		TruncateCity311Operations(ctx context.Context) error
+		LookupCity311OperationByID(ctx context.Context, id uint64) (*composeType.City311Operation, error)
 	}
 
 	City311PasswordResetTokens interface {
@@ -2129,6 +2142,62 @@ func LookupCity311LocalAccountByLoginIdentifier(ctx context.Context, s City311Lo
 // This function is auto-generated
 func LookupCity311LocalAccountByVerifiedEmail(ctx context.Context, s City311LocalAccounts, verifiedEmail string) (*composeType.City311LocalAccount, error) {
 	return s.LookupCity311LocalAccountByVerifiedEmail(ctx, verifiedEmail)
+}
+
+// SearchCity311Operations returns all matching City311Operations from store
+//
+// This function is auto-generated
+func SearchCity311Operations(ctx context.Context, s City311Operations, f composeType.City311OperationFilter) (composeType.City311OperationSet, composeType.City311OperationFilter, error) {
+	return s.SearchCity311Operations(ctx, f)
+}
+
+// CreateCity311Operation creates one or more City311Operations in store
+//
+// This function is auto-generated
+func CreateCity311Operation(ctx context.Context, s City311Operations, rr ...*composeType.City311Operation) error {
+	return s.CreateCity311Operation(ctx, rr...)
+}
+
+// UpdateCity311Operation updates one or more (existing) City311Operations in store
+//
+// This function is auto-generated
+func UpdateCity311Operation(ctx context.Context, s City311Operations, rr ...*composeType.City311Operation) error {
+	return s.UpdateCity311Operation(ctx, rr...)
+}
+
+// UpsertCity311Operation creates new or updates existing one or more City311Operations in store
+//
+// This function is auto-generated
+func UpsertCity311Operation(ctx context.Context, s City311Operations, rr ...*composeType.City311Operation) error {
+	return s.UpsertCity311Operation(ctx, rr...)
+}
+
+// DeleteCity311Operation deletes one or more City311Operations from store
+//
+// This function is auto-generated
+func DeleteCity311Operation(ctx context.Context, s City311Operations, rr ...*composeType.City311Operation) error {
+	return s.DeleteCity311Operation(ctx, rr...)
+}
+
+// DeleteCity311OperationByID deletes one or more City311Operations from store
+//
+// This function is auto-generated
+func DeleteCity311OperationByID(ctx context.Context, s City311Operations, id uint64) error {
+	return s.DeleteCity311OperationByID(ctx, id)
+}
+
+// TruncateCity311Operations Deletes all City311Operations from store
+//
+// This function is auto-generated
+func TruncateCity311Operations(ctx context.Context, s City311Operations) error {
+	return s.TruncateCity311Operations(ctx)
+}
+
+// LookupCity311OperationByID
+//
+// This function is auto-generated
+func LookupCity311OperationByID(ctx context.Context, s City311Operations, id uint64) (*composeType.City311Operation, error) {
+	return s.LookupCity311OperationByID(ctx, id)
 }
 
 // SearchCity311PasswordResetTokens returns all matching City311PasswordResetTokens from store

@@ -30,6 +30,16 @@ type BinaryAttachment struct {
 	BodyEncoding       string `json:"body_encoding"`
 }
 
+type OperationStatus string
+
+const (
+	OperationStatusPending   OperationStatus = "PENDING"
+	OperationStatusRunning   OperationStatus = "RUNNING"
+	OperationStatusSucceeded OperationStatus = "SUCCEEDED"
+	OperationStatusFailed    OperationStatus = "FAILED"
+	OperationStatusCancelled OperationStatus = "CANCELLED"
+)
+
 // PortalDraftWrite is a partial draft update. Missing fields preserve the
 // existing draft value; a draft may be created before any required submission
 // fields are complete.
@@ -157,6 +167,49 @@ type BulkRequest struct {
 type BulkResult struct {
 	UpdatedRequestIDs []string `json:"updated_request_ids"`
 	UpdatedCount      int      `json:"updated_count"`
+}
+
+type AuditFilter struct {
+	RequestIDs     []string         `json:"request_id,omitempty"`
+	EntityTypes    []string         `json:"entity_type,omitempty"`
+	EntityIDs      []string         `json:"entity_id,omitempty"`
+	EventTypes     []string         `json:"event_type,omitempty"`
+	ActorTypes     []AuditActorType `json:"actor_type,omitempty"`
+	ActorIDs       []string         `json:"actor_id,omitempty"`
+	SourceChannels []SourceChannel  `json:"source_channel,omitempty"`
+	OccurredFrom   *time.Time       `json:"occurred_from,omitempty"`
+	OccurredTo     *time.Time       `json:"occurred_to,omitempty"`
+}
+
+type AuditQuery struct {
+	Filters   AuditFilter
+	PageSize  uint
+	PageToken string
+	Sort      string
+}
+
+type AuditExport struct {
+	Filters AuditFilter `json:"filters"`
+}
+
+type AuditListResponse struct {
+	Items          []AuditEvent   `json:"items"`
+	NextPageToken  *string        `json:"next_page_token"`
+	TotalCount     int            `json:"total_count"`
+	AppliedFilters map[string]any `json:"applied_filters"`
+	Sort           []string       `json:"sort"`
+}
+
+type Operation struct {
+	OperationID string          `json:"operation_id"`
+	Kind        string          `json:"kind"`
+	Status      OperationStatus `json:"status"`
+	Progress    int             `json:"progress"`
+	Result      map[string]any  `json:"result"`
+	Error       *APIError       `json:"error"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+	CompletedAt *time.Time      `json:"completed_at"`
 }
 
 type PortalRequestSummary struct {

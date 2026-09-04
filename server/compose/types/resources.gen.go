@@ -16,6 +16,7 @@ const (
 	City311IdentityNotificationResourceType = "corteza::compose:city311-identity-notification"
 	City311IdentitySessionResourceType      = "corteza::compose:city311-identity-session"
 	City311LocalAccountResourceType         = "corteza::compose:city311-local-account"
+	City311OperationResourceType            = "corteza::compose:city311-operation"
 	City311PasswordResetTokenResourceType   = "corteza::compose:city311-password-reset-token"
 	City311PublicHistoryItemResourceType    = "corteza::compose:city311-public-history-item"
 	City311RequestAttachmentResourceType    = "corteza::compose:city311-request-attachment"

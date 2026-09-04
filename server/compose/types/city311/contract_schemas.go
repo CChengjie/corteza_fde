@@ -89,10 +89,16 @@ func clientSchemas() map[string]map[string]interface{} {
 			"size":             map[string]interface{}{"type": "integer", "minimum": 1, "maximum": 10485760},
 			"expires_at":       timestampProperty(),
 		}),
-		"binary_attachment": object([]string{"content_type", "content_disposition", "body"}, map[string]interface{}{
+		"attachment_metadata": object([]string{"attachment_id", "filename", "media_type", "size"}, map[string]interface{}{
+			"attachment_id": map[string]interface{}{"type": "string"},
+			"filename":      stringProperty(1, 120), "media_type": attachmentMediaTypeProperty(),
+			"size": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 10485760},
+		}),
+		"binary_attachment": object([]string{"content_type", "content_disposition", "body", "body_encoding"}, map[string]interface{}{
 			"content_type":        map[string]interface{}{"type": "string"},
 			"content_disposition": map[string]interface{}{"type": "string"},
-			"body":                map[string]interface{}{"type": "string", "format": "binary"},
+			"body":                map[string]interface{}{"type": "string", "contentEncoding": "base64"},
+			"body_encoding":       map[string]interface{}{"type": "string", "enum": []string{"base64"}, "description": "Required. Decode body as RFC 4648 base64 to bytes before constructing a Blob. No literal-text representation is supported."},
 		}),
 		"portal_service_request_submit": portalRequestWriteSchema(false),
 		"portal_draft_write":            portalRequestWriteSchema(true),

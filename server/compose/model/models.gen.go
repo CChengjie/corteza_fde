@@ -1364,6 +1364,99 @@ var City311ServiceRequest = &dal.Model{
 	},
 }
 
+var City311StagedAttachment = &dal.Model{
+	Ident:        "compose_city311_staged_attachment",
+	ResourceType: types.City311StagedAttachmentResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "TokenHash",
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "token_hash"},
+		},
+
+		&dal.Attribute{
+			Ident: "OwnerID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "owner_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "Filename",
+			Type:  &dal.TypeText{Length: 120},
+			Store: &dal.CodecAlias{Ident: "filename"},
+		},
+
+		&dal.Attribute{
+			Ident: "MediaType",
+			Type:  &dal.TypeText{Length: 128},
+			Store: &dal.CodecAlias{Ident: "media_type"},
+		},
+
+		&dal.Attribute{
+			Ident: "Content",
+			Type:  &dal.TypeBlob{},
+			Store: &dal.CodecAlias{Ident: "content"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "ExpiresAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "expires_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "compose_city311_staged_attachment_expiry",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ExpiresAt",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_staged_attachment_uniqueTokenHash",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "TokenHash",
+				},
+			},
+		},
+	},
+}
+
 var Module = &dal.Model{
 	Ident:        "compose_module",
 	ResourceType: types.ModuleResourceType,
@@ -2343,6 +2436,7 @@ func init() {
 		City311RequestAttachment,
 		City311RequestSequence,
 		City311ServiceRequest,
+		City311StagedAttachment,
 		Module,
 		ModuleField,
 		Namespace,

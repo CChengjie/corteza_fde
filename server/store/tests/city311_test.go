@@ -72,6 +72,20 @@ func testCity311AuditEvents(t *testing.T, s store.City311AuditEvents) {
 	require.NoError(t, s.DeleteCity311AuditEvent(ctx, event))
 }
 
+func testCity311StagedAttachments(t *testing.T, s store.City311StagedAttachments) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311StagedAttachments(ctx))
+	item := &composeTypes.City311StagedAttachment{ID: 250, TokenHash: "digest", OwnerID: 42, Filename: "note.txt", MediaType: "text/plain", Content: []byte{0, 255}, CreatedAt: *now(), ExpiresAt: now().Add(time.Hour)}
+	require.NoError(t, s.CreateCity311StagedAttachment(ctx, item))
+	loaded, err := s.LookupCity311StagedAttachmentByTokenHash(ctx, item.TokenHash)
+	require.NoError(t, err)
+	require.Equal(t, item, loaded)
+	items, _, err := s.SearchCity311StagedAttachments(ctx, composeTypes.City311StagedAttachmentFilter{OwnerID: 42})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.NoError(t, s.DeleteCity311StagedAttachmentByID(ctx, item.ID))
+}
+
 func testCity311RequestAttachments(t *testing.T, s store.City311RequestAttachments) {
 	ctx := context.Background()
 	require.NoError(t, s.TruncateCity311RequestAttachments(ctx))

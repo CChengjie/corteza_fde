@@ -68,6 +68,7 @@ type (
 		City311RequestAttachments
 		City311RequestSequences
 		City311ServiceRequests
+		City311StagedAttachments
 		ComposeAttachments
 		ComposeCharts
 		ComposeModules
@@ -413,6 +414,19 @@ type (
 		TruncateCity311ServiceRequests(ctx context.Context) error
 		LookupCity311ServiceRequestByID(ctx context.Context, id uint64) (*composeType.City311ServiceRequest, error)
 		LookupCity311ServiceRequestByRequestNumber(ctx context.Context, requestNumber string) (*composeType.City311ServiceRequest, error)
+	}
+
+	City311StagedAttachments interface {
+		SearchCity311StagedAttachments(ctx context.Context, f composeType.City311StagedAttachmentFilter) (composeType.City311StagedAttachmentSet, composeType.City311StagedAttachmentFilter, error)
+		CreateCity311StagedAttachment(ctx context.Context, rr ...*composeType.City311StagedAttachment) error
+		UpdateCity311StagedAttachment(ctx context.Context, rr ...*composeType.City311StagedAttachment) error
+		UpsertCity311StagedAttachment(ctx context.Context, rr ...*composeType.City311StagedAttachment) error
+		DeleteCity311StagedAttachment(ctx context.Context, rr ...*composeType.City311StagedAttachment) error
+
+		DeleteCity311StagedAttachmentByID(ctx context.Context, id uint64) error
+		TruncateCity311StagedAttachments(ctx context.Context) error
+		LookupCity311StagedAttachmentByID(ctx context.Context, id uint64) (*composeType.City311StagedAttachment, error)
+		LookupCity311StagedAttachmentByTokenHash(ctx context.Context, tokenHash string) (*composeType.City311StagedAttachment, error)
 	}
 
 	ComposeAttachments interface {
@@ -2370,6 +2384,69 @@ func LookupCity311ServiceRequestByID(ctx context.Context, s City311ServiceReques
 // This function is auto-generated
 func LookupCity311ServiceRequestByRequestNumber(ctx context.Context, s City311ServiceRequests, requestNumber string) (*composeType.City311ServiceRequest, error) {
 	return s.LookupCity311ServiceRequestByRequestNumber(ctx, requestNumber)
+}
+
+// SearchCity311StagedAttachments returns all matching City311StagedAttachments from store
+//
+// This function is auto-generated
+func SearchCity311StagedAttachments(ctx context.Context, s City311StagedAttachments, f composeType.City311StagedAttachmentFilter) (composeType.City311StagedAttachmentSet, composeType.City311StagedAttachmentFilter, error) {
+	return s.SearchCity311StagedAttachments(ctx, f)
+}
+
+// CreateCity311StagedAttachment creates one or more City311StagedAttachments in store
+//
+// This function is auto-generated
+func CreateCity311StagedAttachment(ctx context.Context, s City311StagedAttachments, rr ...*composeType.City311StagedAttachment) error {
+	return s.CreateCity311StagedAttachment(ctx, rr...)
+}
+
+// UpdateCity311StagedAttachment updates one or more (existing) City311StagedAttachments in store
+//
+// This function is auto-generated
+func UpdateCity311StagedAttachment(ctx context.Context, s City311StagedAttachments, rr ...*composeType.City311StagedAttachment) error {
+	return s.UpdateCity311StagedAttachment(ctx, rr...)
+}
+
+// UpsertCity311StagedAttachment creates new or updates existing one or more City311StagedAttachments in store
+//
+// This function is auto-generated
+func UpsertCity311StagedAttachment(ctx context.Context, s City311StagedAttachments, rr ...*composeType.City311StagedAttachment) error {
+	return s.UpsertCity311StagedAttachment(ctx, rr...)
+}
+
+// DeleteCity311StagedAttachment deletes one or more City311StagedAttachments from store
+//
+// This function is auto-generated
+func DeleteCity311StagedAttachment(ctx context.Context, s City311StagedAttachments, rr ...*composeType.City311StagedAttachment) error {
+	return s.DeleteCity311StagedAttachment(ctx, rr...)
+}
+
+// DeleteCity311StagedAttachmentByID deletes one or more City311StagedAttachments from store
+//
+// This function is auto-generated
+func DeleteCity311StagedAttachmentByID(ctx context.Context, s City311StagedAttachments, id uint64) error {
+	return s.DeleteCity311StagedAttachmentByID(ctx, id)
+}
+
+// TruncateCity311StagedAttachments Deletes all City311StagedAttachments from store
+//
+// This function is auto-generated
+func TruncateCity311StagedAttachments(ctx context.Context, s City311StagedAttachments) error {
+	return s.TruncateCity311StagedAttachments(ctx)
+}
+
+// LookupCity311StagedAttachmentByID
+//
+// This function is auto-generated
+func LookupCity311StagedAttachmentByID(ctx context.Context, s City311StagedAttachments, id uint64) (*composeType.City311StagedAttachment, error) {
+	return s.LookupCity311StagedAttachmentByID(ctx, id)
+}
+
+// LookupCity311StagedAttachmentByTokenHash
+//
+// This function is auto-generated
+func LookupCity311StagedAttachmentByTokenHash(ctx context.Context, s City311StagedAttachments, tokenHash string) (*composeType.City311StagedAttachment, error) {
+	return s.LookupCity311StagedAttachmentByTokenHash(ctx, tokenHash)
 }
 
 // SearchComposeAttachments returns all matching ComposeAttachments from store

@@ -94,8 +94,8 @@ func NewContractDocument() ContractDocument {
 			Scheme:                "semantic_versioning",
 			Stability:             "frozen",
 			EffectiveAt:           "merge_to_2024.9.x",
-			FirstPublishedVersion: ContractVersion,
-			SupportedMajor:        1,
+			FirstPublishedVersion: "1.0.0",
+			SupportedMajor:        2,
 			MajorVersionRule:      "after first publication, any consumer-incompatible contract revision increments the major version",
 		},
 		Maintainer: "Developer 1 - backend, integrations, and runtime",
@@ -302,7 +302,8 @@ func contractSchemas() map[string]map[string]interface{} {
 			"custom_fields": map[string]interface{}{"type": "object", "additional_properties": true, "keys_must_be_active": true},
 		}),
 		"service_request_response": object([]string{"request_id", "request_number", "status", "version", "created_at", "links"}, map[string]interface{}{
-			"request_id": map[string]interface{}{"type": "string"}, "request_number": requestNumberProperty(), "status": map[string]interface{}{"const": "SUBMITTED"},
+			"attachments": map[string]interface{}{"type": "array", "max_items": 5, "items_ref": "attachment_metadata"},
+			"request_id":  map[string]interface{}{"type": "string"}, "request_number": requestNumberProperty(), "status": map[string]interface{}{"const": "SUBMITTED"},
 			"version": map[string]interface{}{"type": "integer", "minimum": 1}, "created_at": timestampProperty(),
 			"links": object([]string{"self"}, map[string]interface{}{"self": map[string]interface{}{"type": "string"}}),
 		}),
@@ -315,6 +316,7 @@ func contractSchemas() map[string]map[string]interface{} {
 			"primary_requester": map[string]interface{}{"schema_ref": "constituent"}, "location": map[string]interface{}{"schema_ref": "service_request_location"},
 			"duplicate_group_id": map[string]interface{}{"type": "string"}, "version": map[string]interface{}{"type": "integer", "minimum": 1},
 			"created_at": timestampProperty(), "updated_at": timestampProperty(), "custom_fields": map[string]interface{}{"type": "object", "additional_properties": true},
+			"attachments": map[string]interface{}{"type": "array", "max_items": 5, "items_ref": "attachment_metadata"},
 		}),
 		"reminder": object([]string{"reminder_id", "request_id", "title", "due_at", "timezone", "recipient_staff_id", "channel", "status"}, map[string]interface{}{
 			"reminder_id": map[string]interface{}{"type": "string"}, "request_id": map[string]interface{}{"type": "string"}, "title": map[string]interface{}{"type": "string"},

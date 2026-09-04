@@ -348,7 +348,7 @@ func openAPIKeyword(key string) string {
 	if mapped := standard[key]; mapped != "" {
 		return mapped
 	}
-	for _, name := range []string{"type", "required", "properties", "items", "enum", "const", "format", "pattern", "minimum", "maximum", "default", "description", "examples", "example", "allOf", "anyOf", "oneOf", "additionalProperties"} {
+	for _, name := range []string{"type", "required", "properties", "items", "enum", "const", "format", "contentEncoding", "pattern", "minimum", "maximum", "default", "description", "examples", "example", "allOf", "anyOf", "oneOf", "additionalProperties"} {
 		if key == name {
 			return key
 		}

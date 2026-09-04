@@ -186,6 +186,32 @@ auditEvent: {
 	store: {ident: "city311AuditEvent", api: lookups: [{fields: ["id"]}]}
 }
 
+stagedAttachment: {
+	model: {
+		ident: "compose_city311_staged_attachment"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			token_hash: {goType: "string", dal: {type: "Text", length: 64}}
+			owner_id: {ident: "ownerID", goType: "uint64", dal: {type: "ID"}}
+			filename: {goType: "string", dal: {type: "Text", length: 120}}
+			media_type: {goType: "string", dal: {type: "Text", length: 128}}
+			content: {goType: "[]byte", dal: {type: "Blob"}}
+			created_at: schema.SortableTimestampNowField
+			expires_at: schema.SortableTimestampField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_token_hash: {attribute: "token_hash"}
+			expiry: {attribute: "expires_at"}
+		}
+	}
+	filter: {struct: {owner_id: {ident: "ownerID", goType: "uint64"}}, byValue: ["owner_id"]}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {ident: "city311StagedAttachment", api: lookups: [{fields: ["id"]}, {fields: ["token_hash"], constraintCheck: true}]}
+}
+
 requestAttachment: {
 	model: {
 		ident:            "compose_city311_request_attachment"

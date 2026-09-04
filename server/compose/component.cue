@@ -22,6 +22,7 @@ component: schema.#component & {
 		"city311-request-attachment":    requestAttachment
 		"city311-request-sequence":      requestSequence
 		"city311-service-request":       serviceRequest
+		"city311-staged-attachment":     stagedAttachment
 		"module":                        module
 		"module-field":                  moduleField
 		"namespace":                     namespace

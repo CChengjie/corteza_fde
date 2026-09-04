@@ -2,6 +2,31 @@ package city311
 
 import "time"
 
+// PortalAttachment is a single-use upload receipt, not a download credential.
+type PortalAttachment struct {
+	AttachmentToken string    `json:"attachment_token"`
+	Filename        string    `json:"filename"`
+	MediaType       string    `json:"media_type"`
+	Size            uint64    `json:"size"`
+	ExpiresAt       time.Time `json:"expires_at"`
+}
+
+type AttachmentMetadata struct {
+	AttachmentID string `json:"attachment_id"`
+	Filename     string `json:"filename"`
+	MediaType    string `json:"media_type"`
+	Size         uint64 `json:"size"`
+}
+
+// BinaryAttachment keeps the existing JSON envelope. The encoding discriminator
+// requires RFC 4648 base64 decoding before clients construct file bytes.
+type BinaryAttachment struct {
+	ContentType        string `json:"content_type"`
+	ContentDisposition string `json:"content_disposition"`
+	Body               string `json:"body"`
+	BodyEncoding       string `json:"body_encoding"`
+}
+
 // PortalServiceRequestSubmit is the public-portal submission DTO.
 type PortalServiceRequestSubmit struct {
 	Summary          string         `json:"summary"`

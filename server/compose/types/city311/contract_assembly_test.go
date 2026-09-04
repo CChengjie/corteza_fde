@@ -306,7 +306,7 @@ func TestSemanticVersioningStartsAtFirstPublication(t *testing.T) {
 	if versioning.EffectiveAt != "merge_to_2024.9.x" {
 		t.Fatal("the initial semantic-version scheme must take effect at merge")
 	}
-	if versioning.FirstPublishedVersion != ContractVersion || versioning.MajorVersionRule == "" {
+	if versioning.FirstPublishedVersion != "1.0.0" || versioning.MajorVersionRule == "" {
 		t.Fatal("the first publication and post-publication major-version rule must be explicit")
 	}
 }

@@ -102,6 +102,9 @@ type (
 		// optional city311ServiceRequest filter function called after the generated function
 		City311ServiceRequest func(*Store, composeType.City311ServiceRequestFilter) ([]goqu.Expression, composeType.City311ServiceRequestFilter, error)
 
+		// optional city311StagedAttachment filter function called after the generated function
+		City311StagedAttachment func(*Store, composeType.City311StagedAttachmentFilter) ([]goqu.Expression, composeType.City311StagedAttachmentFilter, error)
+
 		// optional composeAttachment filter function called after the generated function
 		ComposeAttachment func(*Store, composeType.AttachmentFilter) ([]goqu.Expression, composeType.AttachmentFilter, error)
 
@@ -780,6 +783,22 @@ func City311ServiceRequestFilter(d drivers.Dialect, f composeType.City311Service
 
 	if f.PrimaryAssigneeID > 0 {
 		ee = append(ee, goqu.C("primary_assignee_id").Eq(f.PrimaryAssigneeID))
+	}
+
+	return ee, f, err
+}
+
+// City311StagedAttachmentFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311StagedAttachments() and can be extended
+// by setting Store.Filters.City311StagedAttachment. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311StagedAttachmentFilter(d drivers.Dialect, f composeType.City311StagedAttachmentFilter) (ee []goqu.Expression, _ composeType.City311StagedAttachmentFilter, err error) {
+
+	if f.OwnerID > 0 {
+		ee = append(ee, goqu.C("owner_id").Eq(f.OwnerID))
 	}
 
 	return ee, f, err

@@ -201,6 +201,9 @@ func Initialize(ctx context.Context, log *zap.Logger, s store.Storer, c Config) 
 	if err = city311Service.Initialize(ctx, DefaultStore); err != nil {
 		return fmt.Errorf("could not initialize City 311 services: %w", err)
 	}
+	city311Service.Default.StartAttachmentCleanup(ctx, func(err error) {
+		DefaultLogger.Error("could not clean up expired City 311 uploads", zap.Error(err))
+	})
 	if configErr := city311Service.DefaultIdentity.ConfigurationError(); configErr != nil {
 		DefaultLogger.Error("City 311 identity configuration is unavailable", zap.Error(configErr))
 	} else {

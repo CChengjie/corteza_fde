@@ -1,11 +1,47 @@
 package city311
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
 )
+
+func TestAttachmentContractRequiresBinarySafeRepresentation(t *testing.T) {
+	document := NewContractDocument()
+	if document.ContractVersion != "2.0.0" || document.Versioning.SupportedMajor != 2 {
+		t.Fatal("the mandatory base64 body contract must identify supported major 2")
+	}
+	schema := document.Schemas["binary_attachment"]
+	wantRequired := []string{"content_type", "content_disposition", "body", "body_encoding"}
+	if !reflect.DeepEqual(schema["required"], wantRequired) {
+		t.Fatal("every download must include the encoding discriminator")
+	}
+	properties := schema["properties"].(map[string]interface{})
+	if properties["body"].(map[string]interface{})["contentEncoding"] != "base64" || !reflect.DeepEqual(properties["body_encoding"].(map[string]interface{})["enum"], []string{"base64"}) {
+		t.Fatal("the body has exactly one supported representation: RFC 4648 base64")
+	}
+	for _, content := range [][]byte{[]byte("hello"), {0, 255, 128}} {
+		encoded, err := json.Marshal(BinaryAttachment{ContentType: "text/plain", ContentDisposition: "attachment; filename=file.txt", Body: base64.StdEncoding.EncodeToString(content), BodyEncoding: "base64"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wire map[string]interface{}
+		if err = json.Unmarshal(encoded, &wire); err != nil || wire["body_encoding"] != "base64" {
+			t.Fatalf("DTO omitted its required encoding: %s, %v", encoded, err)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(wire["body"].(string))
+		if err != nil || !reflect.DeepEqual(decoded, content) {
+			t.Fatal("current consumer must reconstruct exact file bytes")
+		}
+	}
+	example := normalizedJSON(document.Mocks["attachment_download_binary"].Body).(map[string]interface{})
+	decoded, err := base64.StdEncoding.DecodeString(example["body"].(string))
+	if err != nil || example["body_encoding"] != "base64" || !reflect.DeepEqual(decoded, []byte{0, 255, 128}) {
+		t.Fatal("download mock must demonstrate arbitrary binary bytes")
+	}
+}
 
 func TestContractSnapshotMatchesEntireGoDocument(t *testing.T) {
 	actual := decodeJSON(t, mustReadContract(t))

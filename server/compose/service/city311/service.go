@@ -55,6 +55,8 @@ type (
 		StaffActor            *contract.Actor
 		ExistingConstituentID string
 		RequireIdempotency    bool
+		AttachmentTokens      []string
+		AttachmentField       string
 	}
 
 	RequestFilter struct {
@@ -81,6 +83,7 @@ type (
 	}
 
 	validatedAttachment struct {
+		ID        uint64
 		Filename  string
 		MediaType string
 		Content   []byte
@@ -289,7 +292,9 @@ func (svc *Service) Submit(ctx context.Context, in contract.ServiceRequestCreate
 
 	result := &submissionResult{status: http.StatusCreated}
 	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
-		return svc.submitPrepared(ctx, tx, prepared, result)
+		attempt := *prepared
+		attempt.attachments = append([]validatedAttachment(nil), prepared.attachments...)
+		return svc.submitPrepared(ctx, tx, &attempt, result)
 	})
 	return result.response, result.status, err
 }
@@ -312,13 +317,19 @@ func (svc *Service) prepareSubmission(ctx context.Context, in contract.ServiceRe
 	if err = validateIdempotencyKey(idempotencyKey, options.RequireIdempotency); err != nil {
 		return nil, err
 	}
+	if len(options.AttachmentTokens)+len(attachments) > 5 {
+		return nil, validationError(contract.FieldError{Field: attachmentField(options), Code: contract.ValidationTooManyItems})
+	}
 	if options.Operation == "" {
 		options.Operation = "service_request_create"
 	}
+	// Replay is bound to the submitting actor, with or without staged files.
 	requestHash, err := hashJSON(struct {
 		Request               contract.ServiceRequestCreate `json:"request"`
 		ExistingConstituentID string                        `json:"existing_constituent_id,omitempty"`
-	}{Request: in, ExistingConstituentID: options.ExistingConstituentID})
+		AttachmentTokens      []string                      `json:"attachment_tokens,omitempty"`
+		ActorID               uint64                        `json:"actor_id,omitempty"`
+	}{Request: in, ExistingConstituentID: options.ExistingConstituentID, AttachmentTokens: options.AttachmentTokens, ActorID: options.ActorID})
 	if err != nil {
 		return nil, err
 	}
@@ -374,6 +385,13 @@ func (svc *Service) submitPrepared(ctx context.Context, tx store.Storer, prepare
 	if err != nil || replayed {
 		return err
 	}
+	// Replays are resolved first: an accepted request remains replayable after
+	// its single-use uploads have been consumed or their staging expiry passes.
+	staged, err := svc.resolveStagedAttachments(ctx, tx, prepared.options, now)
+	if err != nil {
+		return err
+	}
+	prepared.attachments = append(prepared.attachments, staged...)
 	referenced, err := refreshReferencedConstituent(ctx, tx, prepared)
 	if err != nil {
 		return err
@@ -386,7 +404,17 @@ func (svc *Service) submitPrepared(ctx context.Context, tx store.Storer, prepare
 	if err != nil {
 		return err
 	}
+	for _, item := range staged {
+		if err = store.DeleteCity311StagedAttachmentByID(ctx, tx, item.ID); err != nil {
+			return err
+		}
+	}
 	result.response = responseFor(stored)
+	for _, item := range prepared.attachments {
+		result.response.Attachments = append(result.response.Attachments, contract.AttachmentMetadata{
+			AttachmentID: strconv.FormatUint(item.ID, 10), Filename: item.Filename, MediaType: item.MediaType, Size: uint64(len(item.Content)),
+		})
+	}
 	return svc.persistIdempotencyRecord(ctx, tx, prepared, result.response, keyHash, stored.ID, now)
 }
 
@@ -459,7 +487,7 @@ func allocateRequestNumber(ctx context.Context, tx store.Storer, now time.Time) 
 func (svc *Service) persistSubmission(ctx context.Context, tx store.Storer, prepared *preparedSubmission, referenced *composeTypes.City311Constituent, year, number uint64, now time.Time) (*composeTypes.City311ServiceRequest, error) {
 	requestID := svc.nextID()
 	department, _ := departmentForServiceType(prepared.input.ServiceType)
-	profile, err := svc.persistSubmissionConstituent(ctx, tx, prepared.input.Requester, referenced, requestID, department, now)
+	profile, err := svc.persistSubmissionConstituent(ctx, tx, prepared, referenced, requestID, department, now)
 	if err != nil {
 		return nil, err
 	}
@@ -470,19 +498,36 @@ func (svc *Service) persistSubmission(ctx context.Context, tx store.Storer, prep
 	if err = svc.persistSubmissionAttachments(ctx, tx, requestID, prepared.attachments, now); err != nil {
 		return nil, err
 	}
+	if err = svc.persistAttachmentEvents(ctx, tx, requestID, prepared.attachments, prepared.options, now); err != nil {
+		return nil, err
+	}
 	if err = svc.persistSubmissionEvents(ctx, tx, stored, prepared.options, now); err != nil {
 		return nil, err
 	}
 	return stored, nil
 }
 
-func (svc *Service) persistSubmissionConstituent(ctx context.Context, tx store.Storer, requester contract.RequesterInput, referenced *composeTypes.City311Constituent, requestID uint64, department contract.DepartmentCode, now time.Time) (map[string]any, error) {
+func (svc *Service) persistSubmissionConstituent(ctx context.Context, tx store.Storer, prepared *preparedSubmission, referenced *composeTypes.City311Constituent, requestID uint64, department contract.DepartmentCode, now time.Time) (map[string]any, error) {
 	if referenced != nil {
 		profile := cloneMap(referenced.Profile)
 		profile["constituent_id"] = referenced.ConstituentID
 		return profile, nil
 	}
-	profile := requesterMap(requestID, requester)
+	profile := requesterMap(requestID, prepared.input.Requester)
+	options := prepared.options
+	if options.SourceChannel == contract.SourceChannelPortalAuthenticated && options.ActorID != 0 {
+		constituentID := "C-" + strconv.FormatUint(options.ActorID, 10)
+		_, err := store.LookupCity311ConstituentByConstituentID(ctx, tx, constituentID)
+		if err == nil {
+			// The snapshot retains submitted contact values, while ownership
+			// comes from the session, never from an unverified email match.
+			profile["constituent_id"] = constituentID
+			return profile, nil
+		}
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+	}
 	constituent := &composeTypes.City311Constituent{
 		ID: svc.nextID(), ConstituentID: fmt.Sprint(profile["constituent_id"]), Profile: cloneMap(profile),
 		OwningDepartment: department, CreatedAt: now, UpdatedAt: now,
@@ -506,9 +551,13 @@ func newStoredRequest(prepared *preparedSubmission, profile map[string]any, requ
 }
 
 func (svc *Service) persistSubmissionAttachments(ctx context.Context, tx store.Storer, requestID uint64, attachments []validatedAttachment, now time.Time) error {
-	for _, item := range attachments {
+	for index := range attachments {
+		item := &attachments[index]
+		if item.ID == 0 {
+			item.ID = svc.nextID()
+		}
 		if err := store.CreateCity311RequestAttachment(ctx, tx, &composeTypes.City311RequestAttachment{
-			ID: svc.nextID(), RequestID: requestID, Filename: item.Filename, MediaType: item.MediaType,
+			ID: item.ID, RequestID: requestID, Filename: item.Filename, MediaType: item.MediaType,
 			Size: uint64(len(item.Content)), Content: item.Content, CreatedAt: now,
 		}); err != nil {
 			return err
@@ -665,8 +714,8 @@ func transitionAllowed(from, to contract.ServiceRequestStatus) bool {
 }
 
 func (svc *Service) List(ctx context.Context, actor contract.Actor, requested RequestFilter) (*contract.ListResponse, error) {
-	if !isStaff(actor) {
-		return nil, apiError(403, contract.ErrorForbidden, "A staff role is required.")
+	if !canOperateRequest(actor) {
+		return nil, apiError(403, contract.ErrorForbidden, "A CRM record role is required.")
 	}
 	if fieldErrors := validateRequestFilter(requested); len(fieldErrors) > 0 {
 		return nil, validationError(fieldErrors...)
@@ -986,12 +1035,16 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 		Request: toContract(stored), AvailableActions: availableActions(actor, stored), PrimaryAssigneeID: primaryAssignee,
 		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: []any{}, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: nil,
 	}
+	result.Request.Attachments, err = svc.attachmentMetadata(ctx, stored.ID)
+	if err != nil {
+		return nil, err
+	}
 	for _, item := range history {
 		result.History = append(result.History, contract.PublicHistoryItem{Action: item.Action, OccurredAt: item.OccurredAt, ResponsibleDepartment: string(item.ResponsibleDepartment)})
 	}
 	for _, audit := range audits {
 		result.Audit = append(result.Audit, contract.AuditEvent{
-			EntityType: "service_request", EntityID: strconv.FormatUint(audit.RequestID, 10), EventType: audit.EventType,
+			EntityType: audit.EntityType, EntityID: audit.EntityID, EventType: audit.EventType,
 			ActorType: audit.ActorType, ActorID: strconv.FormatUint(audit.ActorID, 10), OccurredAt: audit.CreatedAt,
 			SourceChannel: audit.SourceChannel, Before: audit.Before, After: audit.After,
 		})
@@ -1003,7 +1056,7 @@ func canRead(actor contract.Actor, request *composeTypes.City311ServiceRequest) 
 	if hasRole(actor, contract.ApplicationRolePlatformAdministrator) {
 		return true
 	}
-	if !isStaff(actor) || actor.Department != request.OwningDepartment {
+	if !canOperateRequest(actor) || actor.Department != request.OwningDepartment {
 		return false
 	}
 	if hasRole(actor, contract.ApplicationRoleDepartmentManager) || request.CouncilDistrict == "" {
@@ -1021,7 +1074,7 @@ func canReadConstituent(actor contract.Actor, constituent *composeTypes.City311C
 	if hasRole(actor, contract.ApplicationRolePlatformAdministrator) {
 		return true
 	}
-	if !isStaff(actor) || actor.Department != constituent.OwningDepartment {
+	if !canOperateRequest(actor) || actor.Department != constituent.OwningDepartment {
 		return false
 	}
 	if hasRole(actor, contract.ApplicationRoleDepartmentManager) || constituent.CouncilDistrict == "" {
@@ -1033,10 +1086,6 @@ func canReadConstituent(actor contract.Actor, constituent *composeTypes.City311C
 		}
 	}
 	return false
-}
-
-func isStaff(actor contract.Actor) bool {
-	return hasRole(actor, contract.ApplicationRoleServiceAgent) || hasRole(actor, contract.ApplicationRoleSupervisor) || hasRole(actor, contract.ApplicationRoleDepartmentManager) || hasRole(actor, contract.ApplicationRolePlatformAdministrator) || hasRole(actor, contract.ApplicationRoleWorkflowDesigner)
 }
 
 func canOperateRequest(actor contract.Actor) bool {

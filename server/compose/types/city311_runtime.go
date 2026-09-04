@@ -17,6 +17,7 @@ type (
 	OriginClass          = city311Types.OriginClass
 	ServiceRequestStatus = city311Types.ServiceRequestStatus
 	AuditActorType       = city311Types.AuditActorType
+	RelationshipType     = city311Types.RelationshipType
 
 	City311Uint64Set          []uint64
 	City311ApplicationRoleSet []city311Types.ApplicationRole
@@ -169,6 +170,26 @@ type (
 		filter.Paging
 	}
 	City311RequestAttachmentSet []*City311RequestAttachment
+
+	City311RequestConstituent struct {
+		ID               uint64                        `json:"id,string"`
+		RequestID        uint64                        `json:"requestID,string"`
+		ConstituentID    string                        `json:"constituentID"`
+		RelationshipType city311Types.RelationshipType `json:"relationshipType"`
+		PortalVisible    bool                          `json:"portalVisible"`
+		NotifyStatus     bool                          `json:"notifyStatus"`
+		CreatedAt        time.Time                     `json:"createdAt"`
+		UpdatedAt        time.Time                     `json:"updatedAt"`
+	}
+	City311RequestConstituentFilter struct {
+		RequestID        uint64
+		ConstituentID    string
+		RelationshipType string
+		Check            func(*City311RequestConstituent) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311RequestConstituentSet []*City311RequestConstituent
 
 	City311PublicHistoryItem struct {
 		ID                    uint64                      `json:"id,string"`

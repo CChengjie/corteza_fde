@@ -274,6 +274,8 @@ func writePresentationResult(w http.ResponseWriter, status int, value any, err e
 			version = typed.Version
 		case *contract.CustomFieldDefinition:
 			version = typed.Version
+		case *contract.ReportDefinition:
+			version = typed.Version
 		}
 		if version > 0 {
 			w.Header().Set("ETag", `"`+strconv.FormatUint(version, 10)+`"`)

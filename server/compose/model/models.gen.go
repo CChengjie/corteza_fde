@@ -1931,6 +1931,269 @@ var City311StagedAttachment = &dal.Model{
 	},
 }
 
+var City311WorkflowDefinition = &dal.Model{
+	Ident:        "compose_city311_workflow_definition",
+	ResourceType: types.City311WorkflowDefinitionResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "WorkflowID", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "workflow_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "Name", Sortable: true,
+			Type:  &dal.TypeText{Length: 120},
+			Store: &dal.CodecAlias{Ident: "name"},
+		},
+
+		&dal.Attribute{
+			Ident: "Trigger", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "trigger"},
+		},
+
+		&dal.Attribute{
+			Ident: "Active", Sortable: true,
+			Type: &dal.TypeBoolean{HasDefault: true,
+				DefaultValue: false,
+			},
+			Store: &dal.CodecAlias{Ident: "active"},
+		},
+
+		&dal.Attribute{
+			Ident: "Definition",
+			Type: &dal.TypeJSON{
+				DefaultValue: "{}",
+			},
+			Store: &dal.CodecAlias{Ident: "definition"},
+		},
+
+		&dal.Attribute{
+			Ident: "Version", Sortable: true,
+			Type: &dal.TypeNumber{HasDefault: true,
+				DefaultValue: 1,
+				Precision:    -1, Scale: -1, Meta: map[string]interface{}{"rdbms:type": "integer"},
+			},
+			Store: &dal.CodecAlias{Ident: "version"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "UpdatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "updated_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_workflow_definition_triggerActive",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "Trigger",
+				},
+
+				{
+					AttributeIdent: "Active",
+				},
+
+				{
+					AttributeIdent: "UpdatedAt",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_workflow_definition_uniqueWorkflowId",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "WorkflowID",
+				},
+			},
+		},
+	},
+}
+
+var City311WorkflowExecution = &dal.Model{
+	Ident:        "compose_city311_workflow_execution",
+	ResourceType: types.City311WorkflowExecutionResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "ExecutionID", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "execution_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "WorkflowID", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "workflow_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "WorkflowVersion", Sortable: true,
+			Type:  &dal.TypeNumber{Precision: -1, Scale: -1, Meta: map[string]interface{}{"rdbms:type": "integer"}},
+			Store: &dal.CodecAlias{Ident: "workflow_version"},
+		},
+
+		&dal.Attribute{
+			Ident: "RequestID", Sortable: true,
+			Type: &dal.TypeID{HasDefault: true,
+				DefaultValue: 0,
+			},
+			Store: &dal.CodecAlias{Ident: "request_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "Trigger", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "trigger"},
+		},
+
+		&dal.Attribute{
+			Ident: "Outcome",
+			Type:  &dal.TypeText{Length: 160},
+			Store: &dal.CodecAlias{Ident: "outcome"},
+		},
+
+		&dal.Attribute{
+			Ident: "ActionsAttempted",
+			Type: &dal.TypeJSON{
+				DefaultValue: "{}",
+			},
+			Store: &dal.CodecAlias{Ident: "actions_attempted"},
+		},
+
+		&dal.Attribute{
+			Ident: "Succeeded", Sortable: true,
+			Type: &dal.TypeBoolean{HasDefault: true,
+				DefaultValue: false,
+			},
+			Store: &dal.CodecAlias{Ident: "succeeded"},
+		},
+
+		&dal.Attribute{
+			Ident: "ResponseStatus",
+			Type: &dal.TypeNumber{HasDefault: true,
+				DefaultValue: 0,
+				Precision:    -1, Scale: -1, Meta: map[string]interface{}{"rdbms:type": "integer"},
+			},
+			Store: &dal.CodecAlias{Ident: "response_status"},
+		},
+
+		&dal.Attribute{
+			Ident: "Error",
+			Type: &dal.TypeJSON{
+				DefaultValue: "{}",
+			},
+			Store: &dal.CodecAlias{Ident: "error"},
+		},
+
+		&dal.Attribute{
+			Ident: "OccurredAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "occurred_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_workflow_execution_requestTime",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "RequestID",
+				},
+
+				{
+					AttributeIdent: "OccurredAt",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_workflow_execution_uniqueExecutionId",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ExecutionID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_workflow_execution_workflowTime",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "WorkflowID",
+				},
+
+				{
+					AttributeIdent: "OccurredAt",
+				},
+			},
+		},
+	},
+}
+
 var Module = &dal.Model{
 	Ident:        "compose_module",
 	ResourceType: types.ModuleResourceType,
@@ -2915,6 +3178,8 @@ func init() {
 		City311RequestSequence,
 		City311ServiceRequest,
 		City311StagedAttachment,
+		City311WorkflowDefinition,
+		City311WorkflowExecution,
 		Module,
 		ModuleField,
 		Namespace,

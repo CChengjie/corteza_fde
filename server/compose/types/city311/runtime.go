@@ -265,6 +265,48 @@ type MailDelivery struct {
 	Error      *APIError `json:"error,omitempty"`
 }
 
+type WorkflowDefinition struct {
+	WorkflowID string           `json:"workflow_id"`
+	Name       string           `json:"name"`
+	Trigger    string           `json:"trigger"`
+	Active     bool             `json:"active"`
+	Conditions []map[string]any `json:"conditions"`
+	Actions    []map[string]any `json:"actions"`
+	Version    uint64           `json:"version"`
+	UpdatedAt  time.Time        `json:"updated_at"`
+}
+
+type WorkflowTest struct {
+	RequestID string `json:"request_id"`
+}
+
+type WorkflowDefinitionList struct {
+	Items          []WorkflowDefinition `json:"items"`
+	NextPageToken  *string              `json:"next_page_token"`
+	TotalCount     int                  `json:"total_count"`
+	AppliedFilters map[string]any       `json:"applied_filters"`
+	Sort           []string             `json:"sort"`
+}
+
+type WorkflowExecutionList struct {
+	Items          []WorkflowExecution `json:"items"`
+	NextPageToken  *string             `json:"next_page_token"`
+	TotalCount     int                 `json:"total_count"`
+	AppliedFilters map[string]any      `json:"applied_filters"`
+	Sort           []string            `json:"sort"`
+}
+
+type WorkflowActionRequest struct {
+	Action    string         `json:"action"`
+	RequestID string         `json:"request_id"`
+	Payload   map[string]any `json:"payload"`
+}
+
+type WorkflowActionAccepted struct {
+	ExecutionID string    `json:"execution_id"`
+	AcceptedAt  time.Time `json:"accepted_at"`
+}
+
 type FollowUpAction struct {
 	ActionType       string         `json:"action_type"`
 	Actor            string         `json:"actor"`

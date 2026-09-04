@@ -101,6 +101,12 @@ func testAllGenerated(t *testing.T, s store.Storer) {
 	t.Run("city311StagedAttachment", func(t *testing.T) {
 		testCity311StagedAttachments(t, s)
 	})
+	t.Run("city311WorkflowDefinition", func(t *testing.T) {
+		testCity311WorkflowDefinitions(t, s)
+	})
+	t.Run("city311WorkflowExecution", func(t *testing.T) {
+		testCity311WorkflowExecutions(t, s)
+	})
 	t.Run("composeAttachment", func(t *testing.T) {
 		testComposeAttachments(t, s)
 	})

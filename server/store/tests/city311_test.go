@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -375,4 +376,55 @@ func testCity311Operations(t *testing.T, s store.City311Operations) {
 	require.Len(t, set, 1)
 	require.Equal(t, []byte("header\r\nvalue\r\n"), set[0].Content)
 	require.NoError(t, s.DeleteCity311OperationByID(ctx, operation.ID))
+}
+
+func testCity311WorkflowDefinitions(t *testing.T, s store.City311WorkflowDefinitions) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311WorkflowDefinitions(ctx))
+	createdAt := *now()
+	definition := &composeTypes.City311WorkflowDefinition{
+		ID: 701, WorkflowID: "workflow-701", Name: "Escalate urgent requests", Trigger: "SERVICE_REQUEST_CREATED",
+		Definition: composeTypes.City311JSON{
+			"conditions": []any{map[string]any{"field": "custom_fields.urgent", "operator": "EQUALS", "value": true}},
+			"actions":    []any{map[string]any{"type": "FIELD_UPDATE", "field": "custom_fields.priority", "value": "HIGH"}},
+		},
+		Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	require.NoError(t, s.CreateCity311WorkflowDefinition(ctx, definition))
+	fetched, err := s.LookupCity311WorkflowDefinitionByWorkflowID(ctx, definition.WorkflowID)
+	require.NoError(t, err)
+	require.Equal(t, "Escalate urgent requests", fetched.Name)
+	fetched.Active = true
+	fetched.Version++
+	require.NoError(t, s.UpdateCity311WorkflowDefinition(ctx, fetched))
+	set, _, err := s.SearchCity311WorkflowDefinitions(ctx, composeTypes.City311WorkflowDefinitionFilter{Trigger: definition.Trigger, Active: true})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	duplicate := *definition
+	duplicate.ID++
+	require.Error(t, s.CreateCity311WorkflowDefinition(ctx, &duplicate))
+	require.NoError(t, s.DeleteCity311WorkflowDefinitionByID(ctx, definition.ID))
+}
+
+func testCity311WorkflowExecutions(t *testing.T, s store.City311WorkflowExecutions) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311WorkflowExecutions(ctx))
+	occurredAt := *now()
+	execution := &composeTypes.City311WorkflowExecution{
+		ID: 702, ExecutionID: "wfx-702", WorkflowID: "workflow-701", WorkflowVersion: 2, RequestID: 301,
+		Trigger: "SERVICE_REQUEST_STATUS_CHANGED", Outcome: "ACTIONS_SUCCEEDED",
+		ActionsAttempted: composeTypes.City311JSON{"items": []any{"AUTHENTICATED_HTTP"}}, Succeeded: true,
+		ResponseStatus: http.StatusAccepted, Error: composeTypes.City311JSON{}, OccurredAt: occurredAt,
+	}
+	require.NoError(t, s.CreateCity311WorkflowExecution(ctx, execution))
+	fetched, err := s.LookupCity311WorkflowExecutionByExecutionID(ctx, execution.ExecutionID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusAccepted, fetched.ResponseStatus)
+	set, _, err := s.SearchCity311WorkflowExecutions(ctx, composeTypes.City311WorkflowExecutionFilter{WorkflowID: execution.WorkflowID, RequestID: execution.RequestID, Succeeded: true})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	duplicate := *execution
+	duplicate.ID++
+	require.Error(t, s.CreateCity311WorkflowExecution(ctx, &duplicate))
+	require.NoError(t, s.DeleteCity311WorkflowExecutionByID(ctx, execution.ID))
 }

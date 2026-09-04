@@ -73,6 +73,8 @@ type (
 		City311RequestSequences
 		City311ServiceRequests
 		City311StagedAttachments
+		City311WorkflowDefinitions
+		City311WorkflowExecutions
 		ComposeAttachments
 		ComposeCharts
 		ComposeModules
@@ -479,6 +481,32 @@ type (
 		TruncateCity311StagedAttachments(ctx context.Context) error
 		LookupCity311StagedAttachmentByID(ctx context.Context, id uint64) (*composeType.City311StagedAttachment, error)
 		LookupCity311StagedAttachmentByTokenHash(ctx context.Context, tokenHash string) (*composeType.City311StagedAttachment, error)
+	}
+
+	City311WorkflowDefinitions interface {
+		SearchCity311WorkflowDefinitions(ctx context.Context, f composeType.City311WorkflowDefinitionFilter) (composeType.City311WorkflowDefinitionSet, composeType.City311WorkflowDefinitionFilter, error)
+		CreateCity311WorkflowDefinition(ctx context.Context, rr ...*composeType.City311WorkflowDefinition) error
+		UpdateCity311WorkflowDefinition(ctx context.Context, rr ...*composeType.City311WorkflowDefinition) error
+		UpsertCity311WorkflowDefinition(ctx context.Context, rr ...*composeType.City311WorkflowDefinition) error
+		DeleteCity311WorkflowDefinition(ctx context.Context, rr ...*composeType.City311WorkflowDefinition) error
+
+		DeleteCity311WorkflowDefinitionByID(ctx context.Context, id uint64) error
+		TruncateCity311WorkflowDefinitions(ctx context.Context) error
+		LookupCity311WorkflowDefinitionByID(ctx context.Context, id uint64) (*composeType.City311WorkflowDefinition, error)
+		LookupCity311WorkflowDefinitionByWorkflowID(ctx context.Context, workflowID string) (*composeType.City311WorkflowDefinition, error)
+	}
+
+	City311WorkflowExecutions interface {
+		SearchCity311WorkflowExecutions(ctx context.Context, f composeType.City311WorkflowExecutionFilter) (composeType.City311WorkflowExecutionSet, composeType.City311WorkflowExecutionFilter, error)
+		CreateCity311WorkflowExecution(ctx context.Context, rr ...*composeType.City311WorkflowExecution) error
+		UpdateCity311WorkflowExecution(ctx context.Context, rr ...*composeType.City311WorkflowExecution) error
+		UpsertCity311WorkflowExecution(ctx context.Context, rr ...*composeType.City311WorkflowExecution) error
+		DeleteCity311WorkflowExecution(ctx context.Context, rr ...*composeType.City311WorkflowExecution) error
+
+		DeleteCity311WorkflowExecutionByID(ctx context.Context, id uint64) error
+		TruncateCity311WorkflowExecutions(ctx context.Context) error
+		LookupCity311WorkflowExecutionByID(ctx context.Context, id uint64) (*composeType.City311WorkflowExecution, error)
+		LookupCity311WorkflowExecutionByExecutionID(ctx context.Context, executionID string) (*composeType.City311WorkflowExecution, error)
 	}
 
 	ComposeAttachments interface {
@@ -2723,6 +2751,132 @@ func LookupCity311StagedAttachmentByID(ctx context.Context, s City311StagedAttac
 // This function is auto-generated
 func LookupCity311StagedAttachmentByTokenHash(ctx context.Context, s City311StagedAttachments, tokenHash string) (*composeType.City311StagedAttachment, error) {
 	return s.LookupCity311StagedAttachmentByTokenHash(ctx, tokenHash)
+}
+
+// SearchCity311WorkflowDefinitions returns all matching City311WorkflowDefinitions from store
+//
+// This function is auto-generated
+func SearchCity311WorkflowDefinitions(ctx context.Context, s City311WorkflowDefinitions, f composeType.City311WorkflowDefinitionFilter) (composeType.City311WorkflowDefinitionSet, composeType.City311WorkflowDefinitionFilter, error) {
+	return s.SearchCity311WorkflowDefinitions(ctx, f)
+}
+
+// CreateCity311WorkflowDefinition creates one or more City311WorkflowDefinitions in store
+//
+// This function is auto-generated
+func CreateCity311WorkflowDefinition(ctx context.Context, s City311WorkflowDefinitions, rr ...*composeType.City311WorkflowDefinition) error {
+	return s.CreateCity311WorkflowDefinition(ctx, rr...)
+}
+
+// UpdateCity311WorkflowDefinition updates one or more (existing) City311WorkflowDefinitions in store
+//
+// This function is auto-generated
+func UpdateCity311WorkflowDefinition(ctx context.Context, s City311WorkflowDefinitions, rr ...*composeType.City311WorkflowDefinition) error {
+	return s.UpdateCity311WorkflowDefinition(ctx, rr...)
+}
+
+// UpsertCity311WorkflowDefinition creates new or updates existing one or more City311WorkflowDefinitions in store
+//
+// This function is auto-generated
+func UpsertCity311WorkflowDefinition(ctx context.Context, s City311WorkflowDefinitions, rr ...*composeType.City311WorkflowDefinition) error {
+	return s.UpsertCity311WorkflowDefinition(ctx, rr...)
+}
+
+// DeleteCity311WorkflowDefinition deletes one or more City311WorkflowDefinitions from store
+//
+// This function is auto-generated
+func DeleteCity311WorkflowDefinition(ctx context.Context, s City311WorkflowDefinitions, rr ...*composeType.City311WorkflowDefinition) error {
+	return s.DeleteCity311WorkflowDefinition(ctx, rr...)
+}
+
+// DeleteCity311WorkflowDefinitionByID deletes one or more City311WorkflowDefinitions from store
+//
+// This function is auto-generated
+func DeleteCity311WorkflowDefinitionByID(ctx context.Context, s City311WorkflowDefinitions, id uint64) error {
+	return s.DeleteCity311WorkflowDefinitionByID(ctx, id)
+}
+
+// TruncateCity311WorkflowDefinitions Deletes all City311WorkflowDefinitions from store
+//
+// This function is auto-generated
+func TruncateCity311WorkflowDefinitions(ctx context.Context, s City311WorkflowDefinitions) error {
+	return s.TruncateCity311WorkflowDefinitions(ctx)
+}
+
+// LookupCity311WorkflowDefinitionByID
+//
+// This function is auto-generated
+func LookupCity311WorkflowDefinitionByID(ctx context.Context, s City311WorkflowDefinitions, id uint64) (*composeType.City311WorkflowDefinition, error) {
+	return s.LookupCity311WorkflowDefinitionByID(ctx, id)
+}
+
+// LookupCity311WorkflowDefinitionByWorkflowID
+//
+// This function is auto-generated
+func LookupCity311WorkflowDefinitionByWorkflowID(ctx context.Context, s City311WorkflowDefinitions, workflowID string) (*composeType.City311WorkflowDefinition, error) {
+	return s.LookupCity311WorkflowDefinitionByWorkflowID(ctx, workflowID)
+}
+
+// SearchCity311WorkflowExecutions returns all matching City311WorkflowExecutions from store
+//
+// This function is auto-generated
+func SearchCity311WorkflowExecutions(ctx context.Context, s City311WorkflowExecutions, f composeType.City311WorkflowExecutionFilter) (composeType.City311WorkflowExecutionSet, composeType.City311WorkflowExecutionFilter, error) {
+	return s.SearchCity311WorkflowExecutions(ctx, f)
+}
+
+// CreateCity311WorkflowExecution creates one or more City311WorkflowExecutions in store
+//
+// This function is auto-generated
+func CreateCity311WorkflowExecution(ctx context.Context, s City311WorkflowExecutions, rr ...*composeType.City311WorkflowExecution) error {
+	return s.CreateCity311WorkflowExecution(ctx, rr...)
+}
+
+// UpdateCity311WorkflowExecution updates one or more (existing) City311WorkflowExecutions in store
+//
+// This function is auto-generated
+func UpdateCity311WorkflowExecution(ctx context.Context, s City311WorkflowExecutions, rr ...*composeType.City311WorkflowExecution) error {
+	return s.UpdateCity311WorkflowExecution(ctx, rr...)
+}
+
+// UpsertCity311WorkflowExecution creates new or updates existing one or more City311WorkflowExecutions in store
+//
+// This function is auto-generated
+func UpsertCity311WorkflowExecution(ctx context.Context, s City311WorkflowExecutions, rr ...*composeType.City311WorkflowExecution) error {
+	return s.UpsertCity311WorkflowExecution(ctx, rr...)
+}
+
+// DeleteCity311WorkflowExecution deletes one or more City311WorkflowExecutions from store
+//
+// This function is auto-generated
+func DeleteCity311WorkflowExecution(ctx context.Context, s City311WorkflowExecutions, rr ...*composeType.City311WorkflowExecution) error {
+	return s.DeleteCity311WorkflowExecution(ctx, rr...)
+}
+
+// DeleteCity311WorkflowExecutionByID deletes one or more City311WorkflowExecutions from store
+//
+// This function is auto-generated
+func DeleteCity311WorkflowExecutionByID(ctx context.Context, s City311WorkflowExecutions, id uint64) error {
+	return s.DeleteCity311WorkflowExecutionByID(ctx, id)
+}
+
+// TruncateCity311WorkflowExecutions Deletes all City311WorkflowExecutions from store
+//
+// This function is auto-generated
+func TruncateCity311WorkflowExecutions(ctx context.Context, s City311WorkflowExecutions) error {
+	return s.TruncateCity311WorkflowExecutions(ctx)
+}
+
+// LookupCity311WorkflowExecutionByID
+//
+// This function is auto-generated
+func LookupCity311WorkflowExecutionByID(ctx context.Context, s City311WorkflowExecutions, id uint64) (*composeType.City311WorkflowExecution, error) {
+	return s.LookupCity311WorkflowExecutionByID(ctx, id)
+}
+
+// LookupCity311WorkflowExecutionByExecutionID
+//
+// This function is auto-generated
+func LookupCity311WorkflowExecutionByExecutionID(ctx context.Context, s City311WorkflowExecutions, executionID string) (*composeType.City311WorkflowExecution, error) {
+	return s.LookupCity311WorkflowExecutionByExecutionID(ctx, executionID)
 }
 
 // SearchComposeAttachments returns all matching ComposeAttachments from store

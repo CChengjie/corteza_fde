@@ -212,6 +212,17 @@ func (app *CortezaApp) healthz(w http.ResponseWriter, request *http.Request) {
 		})
 		return
 	}
+	if err := city311Service.ValidateWorkflowEnvironment(); err != nil {
+		if app.Log != nil {
+			app.Log.Error("City 311 workflow configuration is unavailable", zap.Error(err))
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(city311Contract.APIError{
+			Error:   city311Contract.ErrorTemporarilyUnavailable,
+			Message: "A required City 311 workflow configuration is unavailable.", Retryable: true,
+		})
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "database": "ok"})
 }

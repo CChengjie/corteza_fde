@@ -223,6 +223,29 @@ type ContactEmailExport struct {
 	Filters map[string][]string `json:"filters"`
 }
 
+type MailCompose struct {
+	TemplateID  *string           `json:"template_id,omitempty"`
+	To          []string          `json:"to"`
+	Subject     string            `json:"subject"`
+	Text        string            `json:"text"`
+	HTML        string            `json:"html,omitempty"`
+	Attachments []AttachmentInput `json:"attachments,omitempty"`
+}
+
+type MailPreview struct {
+	Subject string `json:"subject"`
+	Text    string `json:"text"`
+	HTML    string `json:"html"`
+}
+
+type MailDelivery struct {
+	DeliveryID string    `json:"delivery_id"`
+	Status     string    `json:"status"`
+	Attempts   int       `json:"attempts"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	Error      *APIError `json:"error,omitempty"`
+}
+
 type FollowUpAction struct {
 	ActionType       string         `json:"action_type"`
 	Actor            string         `json:"actor"`

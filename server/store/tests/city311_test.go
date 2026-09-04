@@ -88,6 +88,42 @@ func testCity311RequestAttachments(t *testing.T, s store.City311RequestAttachmen
 	require.NoError(t, s.DeleteCity311RequestAttachmentByID(ctx, attachment.ID))
 }
 
+func testCity311RequestConstituentLinks(t *testing.T, s store.City311RequestConstituentLinks) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311RequestConstituentLinks(ctx))
+	link := &composeTypes.City311RequestConstituent{
+		ID: 275, RequestID: 301, ConstituentID: "C-151",
+		RelationshipType: contract.RelationshipAffectedResident, PortalVisible: true, NotifyStatus: true,
+		CreatedAt: *now(), UpdatedAt: *now(),
+	}
+	require.NoError(t, s.CreateCity311RequestConstituentLink(ctx, link))
+	duplicate := *link
+	duplicate.ID++
+	require.Error(t, s.CreateCity311RequestConstituentLink(ctx, &duplicate))
+	primary := &composeTypes.City311RequestConstituent{
+		ID: 277, RequestID: 301, ConstituentID: "C-151",
+		RelationshipType: contract.RelationshipPrimaryRequester, PortalVisible: true, NotifyStatus: true,
+		CreatedAt: *now(), UpdatedAt: *now(),
+	}
+	require.NoError(t, s.CreateCity311RequestConstituentLink(ctx, primary))
+	secondPrimary := *primary
+	secondPrimary.ID++
+	secondPrimary.ConstituentID = "C-152"
+	require.Error(t, s.CreateCity311RequestConstituentLink(ctx, &secondPrimary))
+	fetched, err := s.LookupCity311RequestConstituentLinkByID(ctx, link.ID)
+	require.NoError(t, err)
+	require.Equal(t, contract.RelationshipAffectedResident, fetched.RelationshipType)
+	set, _, err := s.SearchCity311RequestConstituentLinks(ctx, composeTypes.City311RequestConstituentFilter{
+		RequestID: link.RequestID, ConstituentID: link.ConstituentID,
+	})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	fetched.NotifyStatus = false
+	require.NoError(t, s.UpdateCity311RequestConstituentLink(ctx, fetched))
+	require.NoError(t, s.DeleteCity311RequestConstituentLinkByID(ctx, link.ID))
+	require.NoError(t, s.DeleteCity311RequestConstituentLinkByID(ctx, primary.ID))
+}
+
 func testCity311PublicHistoryItems(t *testing.T, s store.City311PublicHistoryItems) {
 	ctx := context.Background()
 	require.NoError(t, s.TruncateCity311PublicHistoryItems(ctx))

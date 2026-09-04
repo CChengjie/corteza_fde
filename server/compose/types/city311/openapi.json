@@ -233,6 +233,47 @@
         ],
         "type": "object"
       },
+      "audit_event_list_response": {
+        "properties": {
+          "applied_filters": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/audit_event"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-city311-opaque": true
+          },
+          "sort": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "next_page_token",
+          "total_count",
+          "applied_filters",
+          "sort"
+        ],
+        "type": "object"
+      },
       "audit_export": {
         "properties": {
           "filters": {
@@ -796,6 +837,47 @@
           "relationship_type",
           "portal_visible",
           "notify_status"
+        ],
+        "type": "object"
+      },
+      "constituent_list_response": {
+        "properties": {
+          "applied_filters": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/constituent"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-city311-opaque": true
+          },
+          "sort": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "next_page_token",
+          "total_count",
+          "applied_filters",
+          "sort"
         ],
         "type": "object"
       },
@@ -17308,6 +17390,41 @@
             "name": "filters",
             "required": false,
             "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "actor_id": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "entity_id": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "entity_type": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "event_type": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "from": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "request_id": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "source_channel": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "to": {
+                  "maxLength": 500,
+                  "type": "string"
+                }
+              },
               "type": "object"
             }
           },
@@ -17328,6 +17445,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "x-city311-binding": "operation, actor/record scope, filters and sort; re-evaluate permission before each page",
               "x-city311-opaque": true
             }
           },
@@ -17336,7 +17454,15 @@
             "name": "sort",
             "required": false,
             "schema": {
+              "default": "occurred_at",
               "type": "string",
+              "x-city311-allowed-fields": [
+                "occurred_at",
+                "entity_type",
+                "entity_id",
+                "event_type",
+                "actor_id"
+              ],
               "x-city311-maximum-fields": 3
             }
           }
@@ -17350,7 +17476,17 @@
                     "value": {
                       "applied_filters": {},
                       "items": [
-                        {}
+                        {
+                          "actor_id": "xxxxxx",
+                          "actor_type": "constituent",
+                          "after": {},
+                          "before": {},
+                          "entity_id": "xxxxxx",
+                          "entity_type": "xxxxxx",
+                          "event_type": "xxxxxx",
+                          "occurred_at": "2026-08-25T12:00:00Z",
+                          "source_channel": "PORTAL_ANONYMOUS"
+                        }
                       ],
                       "next_page_token": "xxxxxx",
                       "sort": [
@@ -17361,7 +17497,7 @@
                   }
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/list_response"
+                  "$ref": "#/components/schemas/audit_event_list_response"
                 }
               }
             },
@@ -17370,7 +17506,17 @@
               "body": {
                 "applied_filters": {},
                 "items": [
-                  {}
+                  {
+                    "actor_id": "xxxxxx",
+                    "actor_type": "constituent",
+                    "after": {},
+                    "before": {},
+                    "entity_id": "xxxxxx",
+                    "entity_type": "xxxxxx",
+                    "event_type": "xxxxxx",
+                    "occurred_at": "2026-08-25T12:00:00Z",
+                    "source_channel": "PORTAL_ANONYMOUS"
+                  }
                 ],
                 "next_page_token": "xxxxxx",
                 "sort": [
@@ -18065,6 +18211,29 @@
             "name": "filters",
             "required": false,
             "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "category": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "department": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "district": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "email": {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "q": {
+                  "maxLength": 500,
+                  "type": "string"
+                }
+              },
               "type": "object"
             }
           },
@@ -18085,6 +18254,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "x-city311-binding": "operation, actor/record scope, filters and sort; re-evaluate permission before each page",
               "x-city311-opaque": true
             }
           },
@@ -18093,7 +18263,14 @@
             "name": "sort",
             "required": false,
             "schema": {
+              "default": "constituent_id",
               "type": "string",
+              "x-city311-allowed-fields": [
+                "constituent_id",
+                "display_name",
+                "primary_category",
+                "updated_at"
+              ],
               "x-city311-maximum-fields": 3
             }
           }
@@ -18107,7 +18284,31 @@
                     "value": {
                       "applied_filters": {},
                       "items": [
-                        {}
+                        {
+                          "addresses": [
+                            {
+                              "city": "xxxxxx",
+                              "country": "xx",
+                              "line1": "xxxxxx",
+                              "postal_code": "xxxxxx",
+                              "region": "xxxxxx"
+                            }
+                          ],
+                          "constituent_id": "xxxxxx",
+                          "display_name": "xxxxxx",
+                          "email_opt_out": false,
+                          "emails": [
+                            "resident@example.test"
+                          ],
+                          "phone_numbers": [
+                            {
+                              "label": "MOBILE",
+                              "value": "xxxxxx"
+                            }
+                          ],
+                          "preferred_language": "EN",
+                          "primary_category": "RESIDENT"
+                        }
                       ],
                       "next_page_token": "xxxxxx",
                       "sort": [
@@ -18118,7 +18319,7 @@
                   }
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/list_response"
+                  "$ref": "#/components/schemas/constituent_list_response"
                 }
               }
             },
@@ -18127,7 +18328,31 @@
               "body": {
                 "applied_filters": {},
                 "items": [
-                  {}
+                  {
+                    "addresses": [
+                      {
+                        "city": "xxxxxx",
+                        "country": "xx",
+                        "line1": "xxxxxx",
+                        "postal_code": "xxxxxx",
+                        "region": "xxxxxx"
+                      }
+                    ],
+                    "constituent_id": "xxxxxx",
+                    "display_name": "xxxxxx",
+                    "email_opt_out": false,
+                    "emails": [
+                      "resident@example.test"
+                    ],
+                    "phone_numbers": [
+                      {
+                        "label": "MOBILE",
+                        "value": "xxxxxx"
+                      }
+                    ],
+                    "preferred_language": "EN",
+                    "primary_category": "RESIDENT"
+                  }
                 ],
                 "next_page_token": "xxxxxx",
                 "sort": [
@@ -18265,8 +18490,7 @@
                 "service_agent",
                 "supervisor",
                 "department_manager",
-                "platform_administrator",
-                "workflow_designer"
+                "platform_administrator"
               ],
               "record_scope_required": true
             }
@@ -18484,8 +18708,7 @@
                 "service_agent",
                 "supervisor",
                 "department_manager",
-                "platform_administrator",
-                "workflow_designer"
+                "platform_administrator"
               ],
               "record_scope_required": true
             }

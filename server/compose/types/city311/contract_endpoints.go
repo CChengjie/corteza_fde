@@ -204,6 +204,7 @@ func configureEndpointMechanics(document *ContractDocument) {
 		"type": "object", "fields": []string{"status", "service_type", "department", "district", "origin_class", "source_channel", "assignee", "collaborator", "category", "created_from", "created_to", "duplicate_group"},
 	}
 	document.Endpoints["staff_request_queue"] = queue
+	configureScopedReadContracts(document)
 
 	for _, name := range []string{"workflow_test", "report_run", "report_export", "contact_email_export", "audit_export", "mail_send", "calendar_import"} {
 		endpoint := document.Endpoints[name]

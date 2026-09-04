@@ -611,6 +611,16 @@ func (svc *Service) transitionRequest(ctx context.Context, tx store.Storer, acto
 		return err
 	}
 	before := requestSnapshot(request)
+	if request.Status == contract.ServiceRequestStatusDraft && toStatus == contract.ServiceRequestStatusSubmitted {
+		if validationErr := validateWrite(draftSubmissionInput(request)); validationErr != nil {
+			return validationErr
+		}
+		year, number, allocateErr := allocateRequestNumber(ctx, tx, svc.now())
+		if allocateErr != nil {
+			return allocateErr
+		}
+		request.RequestNumber = fmt.Sprintf("SR-%04d-%05d", year, number)
+	}
 	request.Status = toStatus
 	request.Version++
 	request.UpdatedAt = svc.now()

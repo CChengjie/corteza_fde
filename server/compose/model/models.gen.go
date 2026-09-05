@@ -637,6 +637,97 @@ var City311Constituent = &dal.Model{
 	},
 }
 
+var City311EmailReplacementToken = &dal.Model{
+	Ident:        "compose_city311_email_replacement_token",
+	ResourceType: types.City311EmailReplacementTokenResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "TokenHash",
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "token_hash"},
+		},
+
+		&dal.Attribute{
+			Ident: "UserID", Sortable: true,
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "user_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "PendingEmail",
+			Type:  &dal.TypeText{Length: 254},
+			Store: &dal.CodecAlias{Ident: "pending_email"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "ExpiresAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "expires_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "UsedAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Nullable: true, Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "used_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident:  "compose_city311_email_replacement_token_uniqueTokenHash",
+			Type:   "BTREE",
+			Unique: true,
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "TokenHash",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "compose_city311_email_replacement_token_userExpiry",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "UserID",
+				},
+
+				{
+					AttributeIdent: "ExpiresAt",
+				},
+			},
+		},
+	},
+}
+
 var City311IdempotencyRecord = &dal.Model{
 	Ident:        "compose_city311_idempotency",
 	ResourceType: types.City311IdempotencyRecordResourceType,
@@ -3285,6 +3376,7 @@ func init() {
 		City311AuditEvent,
 		City311ConfigurationRevision,
 		City311Constituent,
+		City311EmailReplacementToken,
 		City311IdempotencyRecord,
 		City311IdentityNotification,
 		City311IdentitySession,

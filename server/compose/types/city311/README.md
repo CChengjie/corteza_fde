@@ -14,7 +14,15 @@ The exact leaf provisions implemented or verified are recorded in `contract.json
 
 The contract records explicit integration decisions where the specification fixes behavior but not internal routes or representation details. Notably, CivicWorks direct completion is normalised atomically through the legal CRM lifecycle, terminal redelivery is acknowledged idempotently, portal attachments use staged uploads while the integration API retains inline base64, anonymous lookup uses a privacy-safe projection, and application roles are kept distinct from identity-provider and audit actor vocabularies. This package defines the contract only; runtime routes and persistence implement it elsewhere.
 
-Public endpoint errors describe only reachable outcomes. Local sign-in does not distinguish an unknown identifier from an incorrect password, registration does not distinguish a new identifier from one already associated with a verified account, and `/healthz` publishes its required `503 TEMPORARILY_UNAVAILABLE` response. The current contract is `2.0.0`, supported major `2`; first publication was `1.0.0`. Semantic versions identify incompatible consumer requirements, not a promise to support older versions. This benchmark reference implementation has no backward-compatibility requirement and provides only the current contract.
+Public endpoint errors describe only reachable outcomes. Local sign-in does not distinguish an unknown identifier from an incorrect password, registration does not distinguish a new identifier from one already associated with a verified account, and `/healthz` publishes its required `503 TEMPORARILY_UNAVAILABLE` response. The current contract is `2.1.0`, supported major `2`; first publication was `1.0.0`. Semantic versions identify incompatible consumer requirements, not a promise to support older versions. This benchmark reference implementation has no backward-compatibility requirement and provides only the current contract.
+
+Contract `2.1.0` adds the provision 9.1.2(b) verified-email replacement
+handoff. An authenticated constituent requests an address, receives a
+privacy-preserving 202 acknowledgement, and proves control through the public
+single-use confirmation operation. The current email remains unchanged before
+confirmation. The contract publishes the DTOs, capability, 30-minute lifetime,
+validation and token errors, supersession behavior, and deterministic examples;
+neither operation uses `Idempotency-Key` or `If-Match`.
 
 Optional-session endpoints discard an absent, expired or invalid cookie and continue anonymously. Their error sets therefore exclude authentication and authorization failures; the browser geocode proxy instead exposes the actionable `ADDRESS_NOT_FOUND`, `MAP_TEMPORARILY_UNAVAILABLE` and `VALIDATION_ERROR` outcomes. Every deterministic mock identifies its endpoint and whether it represents a request or response, and the contract tests verify every response status and error code against that endpoint.
 
@@ -22,7 +30,7 @@ Identity-provider endpoints, client identifiers, role mappings and secrets are s
 
 Developer 1 is the designated maintainer for this package and its generated or shared contract artifacts.
 
-Contract `2.0.0` includes the attachment runtime handoff: optional `attachments`
+Contract `2.1.0` includes the attachment runtime handoff: optional `attachments`
 metadata on submission responses and request records exposes stable
 `attachment_id` values. The JSON download envelope requires
 `body_encoding=base64`; decode `body` as RFC 4648 base64 to bytes before creating
@@ -41,7 +49,7 @@ and periodic cleanup remove only expired, unconsumed bytes. A receipt is not a
 download ID or permission to view a submitted request.
 
 The frontend mock remains a separate, explicitly mock-only consumer. Developer 2
-must align its DTOs and fixtures to `2.0.0`, use returned attachment IDs, and replace
+must align its DTOs and fixtures to `2.1.0`, use returned attachment IDs, and replace
 `new Blob([response.body])` with base64 decoding into a byte array before creating
 the Blob. For example, `hello` is transported as `aGVsbG8=`; the saved file must
 contain `hello`, not the encoded text. Reject a missing/unsupported encoding;

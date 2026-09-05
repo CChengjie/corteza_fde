@@ -60,6 +60,7 @@ type (
 		City311AuditEvents
 		City311ConfigurationRevisions
 		City311Constituents
+		City311EmailReplacementTokens
 		City311IdempotencyRecords
 		City311IdentityNotifications
 		City311IdentitySessions
@@ -319,6 +320,19 @@ type (
 		TruncateCity311Constituents(ctx context.Context) error
 		LookupCity311ConstituentByID(ctx context.Context, id uint64) (*composeType.City311Constituent, error)
 		LookupCity311ConstituentByConstituentID(ctx context.Context, constituentID string) (*composeType.City311Constituent, error)
+	}
+
+	City311EmailReplacementTokens interface {
+		SearchCity311EmailReplacementTokens(ctx context.Context, f composeType.City311EmailReplacementTokenFilter) (composeType.City311EmailReplacementTokenSet, composeType.City311EmailReplacementTokenFilter, error)
+		CreateCity311EmailReplacementToken(ctx context.Context, rr ...*composeType.City311EmailReplacementToken) error
+		UpdateCity311EmailReplacementToken(ctx context.Context, rr ...*composeType.City311EmailReplacementToken) error
+		UpsertCity311EmailReplacementToken(ctx context.Context, rr ...*composeType.City311EmailReplacementToken) error
+		DeleteCity311EmailReplacementToken(ctx context.Context, rr ...*composeType.City311EmailReplacementToken) error
+
+		DeleteCity311EmailReplacementTokenByID(ctx context.Context, id uint64) error
+		TruncateCity311EmailReplacementTokens(ctx context.Context) error
+		LookupCity311EmailReplacementTokenByID(ctx context.Context, id uint64) (*composeType.City311EmailReplacementToken, error)
+		LookupCity311EmailReplacementTokenByTokenHash(ctx context.Context, tokenHash string) (*composeType.City311EmailReplacementToken, error)
 	}
 
 	City311IdempotencyRecords interface {
@@ -1987,6 +2001,69 @@ func LookupCity311ConstituentByID(ctx context.Context, s City311Constituents, id
 // This function is auto-generated
 func LookupCity311ConstituentByConstituentID(ctx context.Context, s City311Constituents, constituentID string) (*composeType.City311Constituent, error) {
 	return s.LookupCity311ConstituentByConstituentID(ctx, constituentID)
+}
+
+// SearchCity311EmailReplacementTokens returns all matching City311EmailReplacementTokens from store
+//
+// This function is auto-generated
+func SearchCity311EmailReplacementTokens(ctx context.Context, s City311EmailReplacementTokens, f composeType.City311EmailReplacementTokenFilter) (composeType.City311EmailReplacementTokenSet, composeType.City311EmailReplacementTokenFilter, error) {
+	return s.SearchCity311EmailReplacementTokens(ctx, f)
+}
+
+// CreateCity311EmailReplacementToken creates one or more City311EmailReplacementTokens in store
+//
+// This function is auto-generated
+func CreateCity311EmailReplacementToken(ctx context.Context, s City311EmailReplacementTokens, rr ...*composeType.City311EmailReplacementToken) error {
+	return s.CreateCity311EmailReplacementToken(ctx, rr...)
+}
+
+// UpdateCity311EmailReplacementToken updates one or more (existing) City311EmailReplacementTokens in store
+//
+// This function is auto-generated
+func UpdateCity311EmailReplacementToken(ctx context.Context, s City311EmailReplacementTokens, rr ...*composeType.City311EmailReplacementToken) error {
+	return s.UpdateCity311EmailReplacementToken(ctx, rr...)
+}
+
+// UpsertCity311EmailReplacementToken creates new or updates existing one or more City311EmailReplacementTokens in store
+//
+// This function is auto-generated
+func UpsertCity311EmailReplacementToken(ctx context.Context, s City311EmailReplacementTokens, rr ...*composeType.City311EmailReplacementToken) error {
+	return s.UpsertCity311EmailReplacementToken(ctx, rr...)
+}
+
+// DeleteCity311EmailReplacementToken deletes one or more City311EmailReplacementTokens from store
+//
+// This function is auto-generated
+func DeleteCity311EmailReplacementToken(ctx context.Context, s City311EmailReplacementTokens, rr ...*composeType.City311EmailReplacementToken) error {
+	return s.DeleteCity311EmailReplacementToken(ctx, rr...)
+}
+
+// DeleteCity311EmailReplacementTokenByID deletes one or more City311EmailReplacementTokens from store
+//
+// This function is auto-generated
+func DeleteCity311EmailReplacementTokenByID(ctx context.Context, s City311EmailReplacementTokens, id uint64) error {
+	return s.DeleteCity311EmailReplacementTokenByID(ctx, id)
+}
+
+// TruncateCity311EmailReplacementTokens Deletes all City311EmailReplacementTokens from store
+//
+// This function is auto-generated
+func TruncateCity311EmailReplacementTokens(ctx context.Context, s City311EmailReplacementTokens) error {
+	return s.TruncateCity311EmailReplacementTokens(ctx)
+}
+
+// LookupCity311EmailReplacementTokenByID
+//
+// This function is auto-generated
+func LookupCity311EmailReplacementTokenByID(ctx context.Context, s City311EmailReplacementTokens, id uint64) (*composeType.City311EmailReplacementToken, error) {
+	return s.LookupCity311EmailReplacementTokenByID(ctx, id)
+}
+
+// LookupCity311EmailReplacementTokenByTokenHash
+//
+// This function is auto-generated
+func LookupCity311EmailReplacementTokenByTokenHash(ctx context.Context, s City311EmailReplacementTokens, tokenHash string) (*composeType.City311EmailReplacementToken, error) {
+	return s.LookupCity311EmailReplacementTokenByTokenHash(ctx, tokenHash)
 }
 
 // SearchCity311IdempotencyRecords returns all matching City311IdempotencyRecords from store

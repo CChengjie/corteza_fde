@@ -339,6 +339,23 @@ type (
 	}
 	City311PasswordResetTokenSet []*City311PasswordResetToken
 
+	City311EmailReplacementToken struct {
+		ID           uint64     `json:"tokenID,string"`
+		TokenHash    string     `json:"-"`
+		UserID       uint64     `json:"userID,string"`
+		PendingEmail string     `json:"pendingEmail"`
+		CreatedAt    time.Time  `json:"createdAt"`
+		ExpiresAt    time.Time  `json:"expiresAt"`
+		UsedAt       *time.Time `json:"usedAt,omitempty"`
+	}
+	City311EmailReplacementTokenFilter struct {
+		UserID uint64
+		Check  func(*City311EmailReplacementToken) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311EmailReplacementTokenSet []*City311EmailReplacementToken
+
 	City311IdentityNotification struct {
 		ID          uint64      `json:"notificationID,string"`
 		UserID      uint64      `json:"userID,string"`

@@ -291,10 +291,10 @@ export default {
     openBulkConfirmation () { if (this.selectedItems.length) { this.selectedRequestIds = this.selectedItems.map(item => item.request_id); this.bulkIdempotencyKey = `bulk-${Date.now()}`; this.bulkConflictReloaded = false; this.bulkConfirmOpen = true } },
     async submitBulk () {
       if (!this.selectedItems.length || this.bulkBusy) return
-      const request_items = this.selectedItems.map(item => ({ request_id: item.request_id, expected_version: item.version }))
+      const requestItems = this.selectedItems.map(item => ({ request_id: item.request_id, expected_version: item.version }))
       const changes = this.bulkChanges
       this.bulkBusy = true; this.bulkError = null; this.bulkMessage = ''
-      try { const result = await this.$C311.provider.bulkStaffRequests({ action: this.bulkForm.action, changes, request_items }, { idempotencyKey: this.bulkIdempotencyKey || `bulk-${Date.now()}` }); this.bulkMessage = `${result.updated_count} ${this.t('staff.updated', 'requests updated.')}`; this.selectedRequestIds = []; this.bulkConfirmOpen = false; this.bulkConflictReloaded = false; await this.load() } catch (error) { this.bulkError = error; this.bulkConflictReloaded = false } finally { this.bulkBusy = false }
+      try { const result = await this.$C311.provider.bulkStaffRequests({ action: this.bulkForm.action, changes, request_items: requestItems }, { idempotencyKey: this.bulkIdempotencyKey || `bulk-${Date.now()}` }); this.bulkMessage = `${result.updated_count} ${this.t('staff.updated', 'requests updated.')}`; this.selectedRequestIds = []; this.bulkConfirmOpen = false; this.bulkConflictReloaded = false; await this.load() } catch (error) { this.bulkError = error; this.bulkConflictReloaded = false } finally { this.bulkBusy = false }
     },
     async reloadBulkConflict () { const selected = [...this.selectedRequestIds]; await this.load(); this.selectedRequestIds = selected.filter(id => this.items.some(item => item.request_id === id)); this.bulkConflictReloaded = true },
     reapplyBulk () { if (this.bulkConflictReloaded) return this.submitBulk() },

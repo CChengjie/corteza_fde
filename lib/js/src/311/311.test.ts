@@ -1133,12 +1133,113 @@ describe('FE-06 staff queue and detail contract', () => {
     expect((await provider.getStaffRequest(page.items[0].request_id)).primary_assignee_id).to.equal('actor-fixture-agent')
   })
 
+  it('rejects a CLOSE batch that also requests a second status transition', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.requests[0].status = 'RESOLVED'
+    fixtures.queue[0].status = 'RESOLVED'
+    fixtures.details['request-fixture-001'].request.status = 'RESOLVED'
+    const provider = new MockC311Provider({ role: 'supervisor', fixtures })
+
+    await expectError(() => provider.bulkStaffRequests({
+      action: 'CLOSE',
+      changes: { status: 'REOPENED' },
+      request_items: [{ request_id: 'request-fixture-001', expected_version: 1 }],
+    }, { idempotencyKey: 'bulk-close-status-fixture' }), 'VALIDATION_ERROR')
+
+    const unchanged = await provider.getStaffRequest('request-fixture-001')
+    expect(unchanged.request.status).to.equal('RESOLVED')
+    expect(unchanged.request.version).to.equal(1)
+    expect(provider.getWriteCount('staff_request_bulk')).to.equal(0)
+  })
+
+  it('applies bulk priority and appends staff notes to the detail note collection', async () => {
+    const provider = new MockC311Provider({ role: 'supervisor' })
+    const result = await provider.bulkStaffRequests({
+      action: 'UPDATE',
+      changes: { priority: 'HIGH', staff_note: 'Reviewed by the bulk desk.' },
+      request_items: [{ request_id: 'request-fixture-001', expected_version: 1 }],
+    }, { idempotencyKey: 'bulk-priority-note-fixture' })
+
+    expect(result.updated_count).to.equal(1)
+    const detail = await provider.getStaffRequest('request-fixture-001')
+    expect((detail.request as typeof detail.request & { priority?: string }).priority).to.equal('HIGH')
+    expect(detail.notes?.map(note => note.body)).to.include('Reviewed by the bulk desk.')
+    expect(detail.audit.some(event => String(event.action).startsWith('BULK_NOTE:'))).to.equal(false)
+  })
+
+  it('rolls back every bulk record when a later selected record fails', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.requests[0].status = 'RESOLVED'
+    fixtures.queue[0].status = 'RESOLVED'
+    fixtures.details['request-fixture-001'].request.status = 'RESOLVED'
+    fixtures.queue.push({ ...fixtures.queue[0], request_id: 'request-fixture-002', request_number: 'SR-2026-00002' })
+    fixtures.details['request-fixture-002'] = { ...cloneFixtureSet(fixtures).details['request-fixture-001'], request: { ...fixtures.details['request-fixture-001'].request, request_id: 'request-fixture-002', request_number: 'SR-2026-00002' } }
+    const provider = new MockC311Provider({ role: 'supervisor', fixtures })
+    const page = await provider.listStaffRequests({ page_size: 2 })
+
+    const error = await expectError(() => provider.bulkStaffRequests({
+      action: 'CLOSE',
+      changes: {},
+      request_items: page.items.map(item => ({ request_id: item.request_id, expected_version: item.version })),
+    }, { idempotencyKey: 'bulk-rollback-fixture' }), 'NOT_FOUND')
+
+    expect(error.failingRequestID).to.equal('request-fixture-002')
+    const unchanged = await provider.getStaffRequest('request-fixture-001')
+    expect(unchanged.request.status).to.equal('RESOLVED')
+    expect(unchanged.request.version).to.equal(1)
+    expect(provider.getWriteCount('staff_request_bulk')).to.equal(0)
+  })
+
+  it('rejects bulk records from different departments or duplicate groups before changing data', async () => {
+    for (const mismatch of ['department', 'duplicate-group'] as const) {
+      const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+      const first = fixtures.details['request-fixture-001']
+      first.request.duplicate_group_id = 'duplicate-fixture-001'
+      fixtures.requests[0].duplicate_group_id = 'duplicate-fixture-001'
+      fixtures.queue[0].duplicate_group_id = 'duplicate-fixture-001'
+      const secondRequest = {
+        ...fixtures.requests[0],
+        request_id: 'request-fixture-002',
+        request_number: 'SR-2026-00002',
+        owning_department: mismatch === 'department' ? 'PUBLIC_WORKS' : 'STREETS',
+        duplicate_group_id: mismatch === 'duplicate-group' ? 'duplicate-fixture-002' : 'duplicate-fixture-001',
+      } as typeof fixtures.requests[number]
+      fixtures.requests.push(secondRequest)
+      fixtures.queue.push({ ...fixtures.queue[0], request_id: secondRequest.request_id, request_number: secondRequest.request_number || '', owning_department: secondRequest.owning_department, duplicate_group_id: secondRequest.duplicate_group_id })
+      fixtures.details[secondRequest.request_id] = { ...cloneFixtureSet(fixtures).details['request-fixture-001'], request: secondRequest }
+      const provider = new MockC311Provider({ role: 'department_manager', fixtures })
+      const items = fixtures.queue.map(item => ({ request_id: item.request_id, expected_version: item.version }))
+
+      const error = await expectError(() => provider.bulkStaffRequests({ action: 'UPDATE', changes: { priority: 'HIGH' }, request_items: items }, { idempotencyKey: `bulk-${mismatch}-fixture` }), 'VALIDATION_ERROR')
+      expect(error.failingRequestID).to.equal('request-fixture-002')
+      expect((await provider.getStaffRequest('request-fixture-001')).request.version).to.equal(1)
+      expect((await provider.getStaffRequest('request-fixture-002')).request.version).to.equal(1)
+      expect(provider.getWriteCount('staff_request_bulk')).to.equal(0)
+    }
+  })
+
+  it('keeps the frozen bulk role matrix limited to supervisors and department managers', async () => {
+    const fixtures = createDefaultFixtureSet()
+    expect(fixtures.role_fixtures.platform_administrator.session.actor?.capabilities).to.not.include('staff_request_bulk')
+    await expectError(() => new MockC311Provider({ role: 'platform_administrator' }).bulkStaffRequests({
+      action: 'UPDATE',
+      changes: { priority: 'HIGH' },
+      request_items: [{ request_id: 'request-fixture-001', expected_version: 1 }],
+    }, { idempotencyKey: 'bulk-admin-forbidden' }), 'FORBIDDEN')
+  })
+
   it('models reminder lifecycle and CivicWorks event idempotency', async () => {
     const fixtures = createDefaultFixtureSet()
     fixtures.details['request-fixture-001'].reminders = [{ reminder_id: 'reminder-fixture-001', request_id: 'request-fixture-001', title: 'Existing', due_at: '2026-01-16T15:00:00.000Z', timezone: 'America/New_York', recipient_staff_id: 'actor-fixture-supervisor', channel: 'IN_APP', status: 'SCHEDULED', completed_at: null }]
     const supervisor = new MockC311Provider({ role: 'supervisor', fixtures })
     const snoozed = await supervisor.actionStaffReminder('reminder-fixture-001', 'SNOOZE', { due_at: '2026-01-17T15:00:00.000Z' })
     expect(snoozed.status).to.equal('SNOOZED')
+    expect((snoozed as typeof snoozed & { history?: Array<Record<string, unknown>> }).history).to.deep.equal([{
+      action: 'SNOOZE',
+      previous_due_at: '2026-01-16T15:00:00.000Z',
+      due_at: '2026-01-17T15:00:00.000Z',
+      occurred_at: '2026-01-15T15:00:00.000Z',
+    }])
     const completed = await supervisor.actionStaffReminder('reminder-fixture-001', 'COMPLETE')
     expect(completed.status).to.equal('COMPLETED')
     expect(await supervisor.actionStaffReminder('reminder-fixture-001', 'COMPLETE')).to.deep.equal(completed)
@@ -1149,6 +1250,121 @@ describe('FE-06 staff queue and detail contract', () => {
     expect((await supervisor.processCivicWorksEvent(event, event.event_id, 'fixture-signature')).duplicate).to.equal(true)
     expect(supervisor.getWriteCount('civicworks_event_callback')).to.equal(1)
     await expectError(() => new MockC311Provider({ scenario: 'civicworks-invalid-signature' }).processCivicWorksEvent(event, event.event_id, 'bad'), 'INVALID_SIGNATURE')
+  })
+
+  it('keeps reassignment available after assignment and records complete audit context', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.details['request-fixture-001'].primary_assignee_id = 'staff-fixture-former'
+    const provider = new MockC311Provider({ role: 'supervisor', fixtures })
+    const submitted = await provider.getStaffRequest('request-fixture-001')
+    const triaged = await provider.transitionStaffRequest('request-fixture-001', { to_status: 'TRIAGED', reason: 'triaged' }, { expectedVersion: submitted.request.version })
+    const assigned = await provider.transitionStaffRequest('request-fixture-001', { to_status: 'ASSIGNED', reason: 'assigned' }, { expectedVersion: triaged.request.version })
+    const reassigned = await provider.reassignStaffRequest('request-fixture-001', { assignee_id: 'staff-fixture-new', reason: 'Balance the workload' }, { expectedVersion: assigned.request.version })
+
+    expect(reassigned.request.status).to.equal('ASSIGNED')
+    expect(reassigned.audit[reassigned.audit.length - 1]).to.include({ action: 'ASSIGN', reason: 'Balance the workload', previous_assignee_id: 'staff-fixture-former', assignee_id: 'staff-fixture-new' })
+    expect(reassigned.assignment_notifications).to.deep.include.members([
+      { notification_id: 'assignment-notification-fixture-001', request_id: 'request-fixture-001', recipient_staff_id: 'staff-fixture-former', recipient_role: 'FORMER_PRIMARY_ASSIGNEE', result: 'SENT', occurred_at: '2026-01-15T15:00:00.000Z' },
+      { notification_id: 'assignment-notification-fixture-002', request_id: 'request-fixture-001', recipient_staff_id: 'staff-fixture-new', recipient_role: 'NEW_PRIMARY_ASSIGNEE', result: 'SENT', occurred_at: '2026-01-15T15:00:00.000Z' },
+    ])
+    expect(reassigned.external_work_order).to.deep.include({
+      source_case_id: 'request-fixture-001',
+      service_request_number: 'SR-2026-00001',
+      status: 'ASSIGNED',
+      version: 1,
+      created_at: '2026-01-15T15:00:00.000Z',
+      updated_at: '2026-01-15T15:00:00.000Z',
+    })
+    expect(reassigned.external_work_order?.external_status_url).to.match(/^https?:\/\//)
+    const started = await provider.transitionStaffRequest('request-fixture-001', { to_status: 'IN_PROGRESS', reason: 'started' }, { expectedVersion: reassigned.request.version })
+    const movedAgain = await provider.reassignStaffRequest('request-fixture-001', { assignee_id: 'staff-fixture-other', reason: 'Specialist required' }, { expectedVersion: started.request.version })
+    expect(movedAgain.request.status).to.equal('IN_PROGRESS')
+    expect(movedAgain.audit[movedAgain.audit.length - 1]).to.include({ previous_assignee_id: 'staff-fixture-new', assignee_id: 'staff-fixture-other', reason: 'Specialist required' })
+  })
+
+  it('rejects unsupported reminder channels and malformed timestamps', async () => {
+    const agent = new MockC311Provider({ role: 'service_agent' })
+    const base = { title: 'Fixture reminder', timezone: 'America/New_York', recipient_staff_id: 'actor-fixture-agent' }
+    await expectError(() => agent.createStaffReminder('request-fixture-001', { ...base, due_at: '2026-01-16T15:00:00.000Z', channel: 'SMS' as never }), 'VALIDATION_ERROR')
+    await expectError(() => agent.createStaffReminder('request-fixture-001', { ...base, due_at: 'not-a-date', channel: 'IN_APP' }), 'VALIDATION_ERROR')
+
+    const supervisor = new MockC311Provider({ role: 'supervisor' })
+    await expectError(() => supervisor.actionStaffReminder('reminder-fixture-001', 'SNOOZE', { due_at: 'not-a-date' }), 'VALIDATION_ERROR')
+  })
+
+  it('allows a real retry after single and bulk version conflicts are reloaded', async () => {
+    const single = new MockC311Provider({ role: 'supervisor', scenario: 'version-conflict' })
+    await expectError(() => single.reassignStaffRequest('request-fixture-001', { assignee_id: 'staff-fixture-new', reason: 'Keep this input' }, { expectedVersion: 1 }), 'VERSION_CONFLICT')
+    const current = await single.getStaffRequest('request-fixture-001')
+    expect(current.request.version).to.equal(2)
+    const reapplied = await single.reassignStaffRequest('request-fixture-001', { assignee_id: 'staff-fixture-new', reason: 'Keep this input' }, { expectedVersion: current.request.version })
+    expect(reapplied.primary_assignee_id).to.equal('staff-fixture-new')
+    expect(reapplied.request.version).to.equal(3)
+
+    const bulk = new MockC311Provider({ role: 'supervisor', scenario: 'bulk-version-conflict' })
+    const input = { action: 'UPDATE' as const, changes: { priority: 'HIGH' }, request_items: [{ request_id: 'request-fixture-001', expected_version: 1 }] }
+    await expectError(() => bulk.bulkStaffRequests(input, { idempotencyKey: 'bulk-retry-fixture' }), 'VERSION_CONFLICT')
+    const bulkCurrent = await bulk.getStaffRequest('request-fixture-001')
+    expect(bulkCurrent.request.version).to.equal(2)
+    const bulkResult = await bulk.bulkStaffRequests({ ...input, request_items: [{ request_id: 'request-fixture-001', expected_version: bulkCurrent.request.version }] }, { idempotencyKey: 'bulk-retry-fixture' })
+    expect(bulkResult.updated_count).to.equal(1)
+    expect((await bulk.getStaffRequest('request-fixture-001')).request.version).to.equal(3)
+  })
+
+  it('normalizes direct CivicWorks completion through the legal CRM lifecycle', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.requests[0].status = 'ASSIGNED'
+    fixtures.queue[0].status = 'ASSIGNED'
+    fixtures.details['request-fixture-001'].request.status = 'ASSIGNED'
+    const provider = new MockC311Provider({ role: 'supervisor', fixtures })
+    const event = { event_id: 'cw-direct-completion', event_type: 'work_order.status_changed' as const, work_order_id: 'cw-001', source_case_id: 'request-fixture-001', previous_status: 'ASSIGNED' as const, status: 'COMPLETED' as const, version: 2, occurred_at: '2026-01-15T15:00:00.000Z' }
+
+    await provider.processCivicWorksEvent(event, event.event_id, 'fixture-signature')
+
+    const detail = await provider.getStaffRequest('request-fixture-001')
+    expect(detail.request.status).to.equal('RESOLVED')
+    expect(detail.request.version).to.equal(3)
+    expect(detail.history.slice(-2).map(item => item.action)).to.deep.equal(['IN_PROGRESS', 'RESOLVED'])
+    expect(detail.external_work_order).to.deep.equal({
+      work_order_id: 'cw-001',
+      source_case_id: 'request-fixture-001',
+      service_request_number: 'SR-2026-00001',
+      status: 'COMPLETED',
+      external_status_url: 'https://civicworks.fixture.invalid/ui/work-orders/cw-001',
+      version: 2,
+      created_at: '2026-01-15T15:00:00.000Z',
+      updated_at: '2026-01-15T15:00:00.000Z',
+    })
+  })
+
+  it('rejects malformed CivicWorks events and applies new versions exactly once', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.requests[0].status = 'ASSIGNED'
+    fixtures.queue[0].status = 'ASSIGNED'
+    fixtures.details['request-fixture-001'].request.status = 'ASSIGNED'
+    fixtures.details['request-fixture-001'].external_work_order = {
+      work_order_id: 'cw-001', source_case_id: 'request-fixture-001', service_request_number: 'SR-2026-00001', status: 'ASSIGNED', external_status_url: 'https://civicworks.fixture.invalid/ui/work-orders/cw-001', version: 2, created_at: '2026-01-15T14:00:00.000Z', updated_at: '2026-01-15T14:00:00.000Z',
+    }
+    const provider = new MockC311Provider({ role: 'supervisor', fixtures })
+    const base = { event_type: 'work_order.status_changed' as const, work_order_id: 'cw-001', source_case_id: 'request-fixture-001', previous_status: 'ASSIGNED' as const, version: 3, occurred_at: '2026-01-15T15:00:00.000Z' }
+
+    await expectError(() => provider.processCivicWorksEvent({ ...base, event_id: 'cw-invalid-signature', status: 'IN_PROGRESS' }, 'cw-invalid-signature', 'not-the-fixture-signature'), 'INVALID_SIGNATURE')
+    await expectError(() => provider.processCivicWorksEvent({ ...base, event_id: 'cw-invalid-status', status: 'BOGUS' as never }, 'cw-invalid-status', 'fixture-signature'), 'VALIDATION_ERROR')
+    await expectError(() => provider.processCivicWorksEvent({ ...base, event_id: 'cw-invalid-date', status: 'IN_PROGRESS', occurred_at: 'not-a-date' }, 'cw-invalid-date', 'fixture-signature'), 'VALIDATION_ERROR')
+    expect((await provider.getStaffRequest('request-fixture-001')).request.status).to.equal('ASSIGNED')
+
+    const old = { ...base, event_id: 'cw-old', status: 'IN_PROGRESS' as const, version: 2 }
+    expect(await provider.processCivicWorksEvent(old, old.event_id, 'fixture-signature')).to.deep.equal({ acknowledged: true })
+    expect(await provider.processCivicWorksEvent(old, old.event_id, 'fixture-signature')).to.deep.equal({ acknowledged: true, duplicate: true })
+    expect((await provider.getStaffRequest('request-fixture-001')).request.status).to.equal('ASSIGNED')
+
+    const current = { ...base, event_id: 'cw-current', status: 'IN_PROGRESS' as const }
+    expect(await provider.processCivicWorksEvent(current, current.event_id, 'fixture-signature')).to.deep.equal({ acknowledged: true })
+    expect(await provider.processCivicWorksEvent(current, current.event_id, 'fixture-signature')).to.deep.equal({ acknowledged: true, duplicate: true })
+    const detail = await provider.getStaffRequest('request-fixture-001')
+    expect(detail.request.status).to.equal('IN_PROGRESS')
+    expect(detail.history.filter(item => item.action === 'IN_PROGRESS')).to.have.length(1)
+    expect(provider.getWriteCount('civicworks_event_callback')).to.equal(1)
   })
 
   it('maps FE-07 bulk and CivicWorks HTTP contracts', async () => {

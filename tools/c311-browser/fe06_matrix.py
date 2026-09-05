@@ -189,12 +189,17 @@ def check_detail(page: Page, width: int, role: str) -> None:
         check(page.locator('[data-c311-action="override-origin"]').count() == 0, f"{role} saw unauthorized origin override entry")
     check(page.locator('[data-c311-status-label]').inner_text() == "(Submitted)", "localized status value label missing")
 
-    # FE-07 executes the transition through the mock provider with If-Match.
+    # Triage requires an explicit review before FE-07 executes the transition
+    # through the mock provider with If-Match.
     transition = page.locator('[data-c311-action="transition-request"]')
     if transition.count():
         transition.click()
-        page.locator('[data-c311-status-label]').wait_for(state="visible")
-        check("Triaged" in page.locator('[data-c311-status-label]').inner_text(), "triage transition did not update status")
+        page.locator('[data-c311-form="triage"]').wait_for(state="visible")
+        page.locator("#c311-triage-reason").fill("Reviewed by FE-06 regression gate")
+        page.locator('[data-c311-action="confirm-triage-details"]').check()
+        page.locator('[data-c311-action="submit-triage"]').click()
+        page.locator('[data-c311-status-value]').wait_for(state="visible")
+        check(page.locator('[data-c311-status-value]').inner_text() == "TRIAGED", "triage transition did not update status")
 
     # Detail reload must remain on the detail route and load the same record.
     page.reload(wait_until="domcontentloaded")

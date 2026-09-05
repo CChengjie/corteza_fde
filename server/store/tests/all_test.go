@@ -62,6 +62,9 @@ func testAllGenerated(t *testing.T, s store.Storer) {
 	t.Run("city311Constituent", func(t *testing.T) {
 		testCity311Constituents(t, s)
 	})
+	t.Run("city311EmailReplacementToken", func(t *testing.T) {
+		testCity311EmailReplacementTokens(t, s)
+	})
 	t.Run("city311IdempotencyRecord", func(t *testing.T) {
 		testCity311IdempotencyRecords(t, s)
 	})

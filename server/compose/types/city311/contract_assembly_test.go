@@ -160,7 +160,7 @@ func TestApplicationAndIdentityRoleVocabulariesStayDistinct(t *testing.T) {
 func TestRequiredClientSurfaceInventoryIsFrozen(t *testing.T) {
 	contract := NewContractDocument()
 	required := []string{
-		"session_current", "session_sign_in", "account_register", "account_delete", "federated_sign_in_start", "portal_service_request_submit",
+		"session_current", "session_sign_in", "account_register", "account_delete", "email_replacement_request", "email_replacement_confirm", "federated_sign_in_start", "portal_service_request_submit",
 		"portal_draft_create", "portal_my_requests", "portal_link_anonymous_request", "profile_get", "password_change",
 		"geocode_proxy", "portal_attachment_upload", "public_branding_get", "public_content_get", "public_help_get",
 		"staff_request_queue", "staff_request_detail", "staff_request_transition", "staff_request_bulk",

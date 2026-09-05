@@ -608,6 +608,22 @@ type LoginIdentifierChange struct {
 	LoginIdentifier string `json:"login_identifier"`
 }
 
+type EmailReplacementRequest struct {
+	Email string `json:"email"`
+}
+
+type EmailReplacementAcknowledgement struct {
+	Accepted bool `json:"accepted"`
+}
+
+type EmailReplacementConfirm struct {
+	Token string `json:"token"`
+}
+
+type EmailReplacementResult struct {
+	VerifiedEmail string `json:"verified_email"`
+}
+
 // FederatedRedirect describes the provider authorization hand-off. Account
 // linking is never inferred from a matching email address; callers must first
 // establish a local session and deliberately start another federated flow.

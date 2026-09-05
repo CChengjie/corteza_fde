@@ -262,6 +262,17 @@ type (
 		UpdatedAt        time.Time                  `db:"updated_at"`
 	}
 
+	// auxCity311EmailReplacementToken is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311EmailReplacementToken struct {
+		ID           uint64     `db:"id"`
+		TokenHash    string     `db:"token_hash"`
+		UserID       uint64     `db:"user_id"`
+		PendingEmail string     `db:"pending_email"`
+		CreatedAt    time.Time  `db:"created_at"`
+		ExpiresAt    time.Time  `db:"expires_at"`
+		UsedAt       *time.Time `db:"used_at"`
+	}
+
 	// auxCity311IdempotencyRecord is an auxiliary structure used for transporting to/from RDBMS store
 	auxCity311IdempotencyRecord struct {
 		ID             uint64                  `db:"id"`
@@ -1829,6 +1840,50 @@ func (aux *auxCity311Constituent) scan(row scanner) error {
 		&aux.CouncilDistrict,
 		&aux.CreatedAt,
 		&aux.UpdatedAt,
+	)
+}
+
+// encodes City311EmailReplacementToken to auxCity311EmailReplacementToken
+//
+// This function is auto-generated
+func (aux *auxCity311EmailReplacementToken) encode(res *composeType.City311EmailReplacementToken) (_ error) {
+	aux.ID = res.ID
+	aux.TokenHash = res.TokenHash
+	aux.UserID = res.UserID
+	aux.PendingEmail = res.PendingEmail
+	aux.CreatedAt = res.CreatedAt
+	aux.ExpiresAt = res.ExpiresAt
+	aux.UsedAt = res.UsedAt
+	return
+}
+
+// decodes City311EmailReplacementToken from auxCity311EmailReplacementToken
+//
+// This function is auto-generated
+func (aux auxCity311EmailReplacementToken) decode() (res *composeType.City311EmailReplacementToken, _ error) {
+	res = new(composeType.City311EmailReplacementToken)
+	res.ID = aux.ID
+	res.TokenHash = aux.TokenHash
+	res.UserID = aux.UserID
+	res.PendingEmail = aux.PendingEmail
+	res.CreatedAt = aux.CreatedAt
+	res.ExpiresAt = aux.ExpiresAt
+	res.UsedAt = aux.UsedAt
+	return
+}
+
+// scans row and fills auxCity311EmailReplacementToken fields
+//
+// This function is auto-generated
+func (aux *auxCity311EmailReplacementToken) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.TokenHash,
+		&aux.UserID,
+		&aux.PendingEmail,
+		&aux.CreatedAt,
+		&aux.ExpiresAt,
+		&aux.UsedAt,
 	)
 }
 

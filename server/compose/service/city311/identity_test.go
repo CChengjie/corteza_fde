@@ -22,11 +22,15 @@ import (
 )
 
 type identityNotifierCapture struct {
-	resetTokens          []string
-	resetRecipients      []string
-	resetDeliveryKeys    []string
-	securityNotices      []string
-	securityDeliveryKeys []string
+	resetTokens             []string
+	resetRecipients         []string
+	resetDeliveryKeys       []string
+	replacementTokens       []string
+	replacementRecipients   []string
+	replacementDeliveryKeys []string
+	securityNotices         []string
+	securityBodies          []string
+	securityDeliveryKeys    []string
 }
 
 type failingIdentityNotifier struct{ err error }
@@ -49,6 +53,10 @@ func (notifier failingIdentityNotifier) PasswordReset(context.Context, string, s
 	return notifier.err
 }
 
+func (notifier failingIdentityNotifier) EmailReplacementVerification(context.Context, string, string, string) error {
+	return notifier.err
+}
+
 func (notifier failingIdentityNotifier) SecurityNotice(context.Context, string, string, string, string) error {
 	return notifier.err
 }
@@ -68,6 +76,10 @@ func (notifier *sequencedIdentityNotifier) SecurityNotice(context.Context, strin
 	return nil
 }
 
+func (notifier *sequencedIdentityNotifier) EmailReplacementVerification(ctx context.Context, recipient, token, deliveryKey string) error {
+	return notifier.PasswordReset(ctx, recipient, token, deliveryKey)
+}
+
 func (notifier *blockingIdentityNotifier) PasswordReset(ctx context.Context, _, _, _ string) error {
 	notifier.calls.Add(1)
 	notifier.once.Do(func() { close(notifier.started) })
@@ -83,6 +95,10 @@ func (notifier *blockingIdentityNotifier) SecurityNotice(context.Context, string
 	return nil
 }
 
+func (notifier *blockingIdentityNotifier) EmailReplacementVerification(context.Context, string, string, string) error {
+	return nil
+}
+
 type failingIdentityReader struct{ err error }
 
 func (reader failingIdentityReader) Read([]byte) (int, error) { return 0, reader.err }
@@ -94,8 +110,16 @@ func (capture *identityNotifierCapture) PasswordReset(_ context.Context, recipie
 	return nil
 }
 
-func (capture *identityNotifierCapture) SecurityNotice(_ context.Context, recipient, subject, _ string, deliveryKey string) error {
+func (capture *identityNotifierCapture) EmailReplacementVerification(_ context.Context, recipient, token, deliveryKey string) error {
+	capture.replacementRecipients = append(capture.replacementRecipients, recipient)
+	capture.replacementTokens = append(capture.replacementTokens, token)
+	capture.replacementDeliveryKeys = append(capture.replacementDeliveryKeys, deliveryKey)
+	return nil
+}
+
+func (capture *identityNotifierCapture) SecurityNotice(_ context.Context, recipient, subject, body string, deliveryKey string) error {
 	capture.securityNotices = append(capture.securityNotices, recipient+":"+subject)
+	capture.securityBodies = append(capture.securityBodies, body)
 	capture.securityDeliveryKeys = append(capture.securityDeliveryKeys, deliveryKey)
 	return nil
 }

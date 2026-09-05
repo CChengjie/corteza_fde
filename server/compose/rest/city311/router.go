@@ -115,6 +115,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Delete(sessionRoute, h.sessionSignOut)
 		r.Post("/auth/password-reset/request", h.passwordResetRequest)
 		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
+		r.Post("/auth/email-replacement/confirm", h.emailReplacementConfirm)
 		r.Patch("/preferences/language", h.languageUpdate)
 		r.Get("/auth/{provider}/start", h.federatedSignInStart)
 		r.Get("/auth/{provider}/callback", h.federatedSignInCallback)
@@ -125,6 +126,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.With(requireProfileConstituent).Delete("/", h.accountDelete)
 			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
 			r.With(requireProfileConstituent).Patch("/profile", h.profileUpdate)
+			r.With(requireProfileConstituent).Post("/email-replacement", h.emailReplacementRequest)
 			r.Post("/password", h.passwordChange)
 			r.Post("/login-identifier", h.loginIdentifierChange)
 		})
@@ -259,6 +261,7 @@ func identitySessionFromContext(ctx context.Context) *city311Service.ResolvedSes
 
 func requireCityIdentitySession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if identitySessionFromContext(r.Context()) == nil {
 			writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: authenticationRequiredMessage, Retryable: false})
 			return

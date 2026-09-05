@@ -76,12 +76,20 @@ func validPortalBody() map[string]any {
 }
 
 type routerIdentityNotifier struct {
-	resetTokens []string
-	notices     int
+	resetTokens       []string
+	replacementTokens []string
+	replacementEmails []string
+	notices           int
 }
 
 func (notifier *routerIdentityNotifier) PasswordReset(_ context.Context, _ string, token, _ string) error {
 	notifier.resetTokens = append(notifier.resetTokens, token)
+	return nil
+}
+
+func (notifier *routerIdentityNotifier) EmailReplacementVerification(_ context.Context, recipient, token, _ string) error {
+	notifier.replacementEmails = append(notifier.replacementEmails, recipient)
+	notifier.replacementTokens = append(notifier.replacementTokens, token)
 	return nil
 }
 

@@ -3,7 +3,7 @@ package city311
 import "time"
 
 // ContractVersion identifies the frozen City 311 client/server contract.
-const ContractVersion = "2.1.0"
+const ContractVersion = "3.0.0"
 
 type (
 	ServiceRequestStatus string
@@ -593,7 +593,12 @@ type (
 		WorkOrderID          string           `json:"work_order_id"`
 		SourceCaseID         string           `json:"source_case_id"`
 		ServiceRequestNumber string           `json:"service_request_number"`
+		ServiceType          ServiceType      `json:"service_type"`
+		Summary              string           `json:"summary"`
+		DepartmentCode       DepartmentCode   `json:"department_code"`
+		FulfilmentSource     string           `json:"fulfilment_source"`
 		Status               CivicWorksStatus `json:"status"`
+		Location             map[string]any   `json:"location,omitempty"`
 		ExternalStatusURL    string           `json:"external_status_url"`
 		Version              uint64           `json:"version"`
 		CreatedAt            time.Time        `json:"created_at"`

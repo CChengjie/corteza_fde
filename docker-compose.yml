@@ -17,6 +17,32 @@ services:
       retries: 20
       start_period: 5s
 
+  civicworks:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-city311-development}
+    restart: unless-stopped
+    init: true
+    entrypoint: ["/usr/local/bin/civicworks-fixture"]
+    command: []
+    ports:
+      - "127.0.0.1:${CIVICWORKS_FIXTURE_PORT:-8081}:8080"
+    environment:
+      CIVICWORKS_FIXTURE_ADDR: 0.0.0.0:8080
+      CIVICWORKS_PUBLIC_BASE_URL: http://civicworks:8080
+      CIVICWORKS_API_TOKEN: ${CIVICWORKS_API_TOKEN:-local-only-civicworks-token}
+      CIVICWORKS_CONTROL_TOKEN: ${CIVICWORKS_CONTROL_TOKEN:-local-only-civicworks-control-token}
+      CIVICWORKS_WEBHOOK_SECRET: ${CIVICWORKS_WEBHOOK_SECRET:-local-only-civicworks-webhook-secret}
+      BENCHMARK_RUN_ID: ${BENCHMARK_RUN_ID:-city311-local}
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8080/healthz | grep --quiet '\"status\":\"ok\"'"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
   app:
     build:
       context: .
@@ -27,6 +53,8 @@ services:
     init: true
     depends_on:
       postgres:
+        condition: service_healthy
+      civicworks:
         condition: service_healthy
     ports:
       - "${APP_PORT:-8080}:80"
@@ -55,7 +83,8 @@ services:
       CITY311_SEED_CONSTITUENT_TWO_PASSWORD: ${CITY311_SEED_CONSTITUENT_TWO_PASSWORD:-City311-Local-Constituent-2!}
       MAP_BASE_URL: ${MAP_BASE_URL:-https://mapping.example.invalid}
       MAP_API_TOKEN: ${MAP_API_TOKEN:-local-only-mapping-token}
-      CIVICWORKS_BASE_URL: ${CIVICWORKS_BASE_URL:-https://civicworks.example.invalid}
+      CIVICWORKS_BASE_URL: ${CIVICWORKS_BASE_URL:-http://civicworks:8080}
+      CIVICWORKS_CALLBACK_BASE_URL: ${CIVICWORKS_CALLBACK_BASE_URL:-http://app:80}
       CIVICWORKS_API_TOKEN: ${CIVICWORKS_API_TOKEN:-local-only-civicworks-token}
       CIVICWORKS_WEBHOOK_SECRET: ${CIVICWORKS_WEBHOOK_SECRET:-local-only-civicworks-webhook-secret}
       BENCHMARK_RUN_ID: ${BENCHMARK_RUN_ID:-city311-local}

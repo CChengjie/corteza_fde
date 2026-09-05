@@ -65,12 +65,13 @@ type integrationConnectionPayload struct {
 type integrationSecretBundle map[string]string
 
 type preparedIntegrationRuntime struct {
-	civicWorks       CivicWorksClient
-	civicWorksSecret string
-	mapping          *MappingService
-	workflow         WorkflowHTTPClient
-	mail             MailSender
-	identity         *IdentityRuntimeConfiguration
+	civicWorks         CivicWorksClient
+	civicWorksSecret   string
+	civicWorksCallback string
+	mapping            *MappingService
+	workflow           WorkflowHTTPClient
+	mail               MailSender
+	identity           *IdentityRuntimeConfiguration
 }
 
 type disabledMailSender struct{}
@@ -134,6 +135,7 @@ func integrationEnvironment(kind contract.IntegrationKind) (map[string]any, inte
 	switch kind {
 	case contract.IntegrationKindCivicWorks:
 		setConfiguration("base_url", "CIVICWORKS_BASE_URL")
+		setConfiguration("callback_base_url", "CIVICWORKS_CALLBACK_BASE_URL")
 		setConfiguration("benchmark_run_id", "BENCHMARK_RUN_ID")
 		setSecret("api_token", "CIVICWORKS_API_TOKEN")
 		setSecret("webhook_secret", "CIVICWORKS_WEBHOOK_SECRET")
@@ -470,7 +472,7 @@ func validateIntegrationConfiguration(kind contract.IntegrationKind, input map[s
 func integrationConfigurationKeys(kind contract.IntegrationKind) map[string]bool {
 	switch kind {
 	case contract.IntegrationKindCivicWorks:
-		return map[string]bool{"base_url": true, "benchmark_run_id": true}
+		return map[string]bool{"base_url": true, "callback_base_url": true, "benchmark_run_id": true}
 	case contract.IntegrationKindMapping:
 		return map[string]bool{"base_url": true}
 	case contract.IntegrationKindWorkflowOAuth:
@@ -505,7 +507,11 @@ func prepareIntegrationRuntime(kind contract.IntegrationKind, active bool, confi
 		client, err := NewCivicWorks(CivicWorksOptions{
 			BaseURL: value("base_url"), APIToken: secrets["api_token"], WebhookSecret: secrets["webhook_secret"], BenchmarkRunID: value("benchmark_run_id"),
 		})
-		return preparedIntegrationRuntime{civicWorks: client, civicWorksSecret: secrets["webhook_secret"]}, err
+		if err != nil {
+			return preparedIntegrationRuntime{}, err
+		}
+		callbackURL, err := civicWorksCallbackURL(value("callback_base_url"))
+		return preparedIntegrationRuntime{civicWorks: client, civicWorksSecret: secrets["webhook_secret"], civicWorksCallback: callbackURL}, err
 	case contract.IntegrationKindMapping:
 		client, err := NewMapping(MappingOptions{BaseURL: value("base_url"), APIToken: secrets["api_token"]})
 		return preparedIntegrationRuntime{mapping: client}, err
@@ -557,9 +563,9 @@ func (svc *Service) applyIntegrationRuntime(kind contract.IntegrationKind, activ
 	switch kind {
 	case contract.IntegrationKindCivicWorks:
 		if !active {
-			svc.SetCivicWorks(nil, "")
+			svc.setCivicWorks(nil, "", "", nil)
 		} else {
-			svc.SetCivicWorks(runtime.civicWorks, runtime.civicWorksSecret)
+			svc.setCivicWorks(runtime.civicWorks, runtime.civicWorksSecret, runtime.civicWorksCallback, nil)
 		}
 	case contract.IntegrationKindMapping:
 		svc.runtimeMu.Lock()

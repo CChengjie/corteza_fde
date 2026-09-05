@@ -25,6 +25,7 @@ func testService(t *testing.T) (*Service, store.Storer) {
 	t.Helper()
 	t.Setenv(seedConstituentPasswordEnv, "SeedConstituentPassword1!")
 	t.Setenv(seedConstituentTwoPasswordEnv, "SeedConstituentPassword2!")
+	t.Setenv("CIVICWORKS_CALLBACK_BASE_URL", "https://city311.example.test")
 	ctx := context.Background()
 	dsn := fmt.Sprintf("sqlite3://file:%s?mode=memory&cache=shared", t.Name())
 	st, err := sqlite.Connect(ctx, dsn)

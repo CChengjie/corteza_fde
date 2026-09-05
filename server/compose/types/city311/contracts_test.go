@@ -10,8 +10,8 @@ import (
 
 func TestAttachmentContractRequiresBinarySafeRepresentation(t *testing.T) {
 	document := NewContractDocument()
-	if document.ContractVersion != "2.1.0" || document.Versioning.SupportedMajor != 2 {
-		t.Fatal("the mandatory base64 body contract must identify supported major 2")
+	if document.ContractVersion != "3.0.0" || document.Versioning.SupportedMajor != 3 {
+		t.Fatal("the sole current contract must identify supported major 3")
 	}
 	schema := document.Schemas["binary_attachment"]
 	wantRequired := []string{"content_type", "content_disposition", "body", "body_encoding"}

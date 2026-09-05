@@ -7,8 +7,8 @@ import (
 
 func TestVerifiedEmailReplacementContractIsComplete(t *testing.T) {
 	contract := NewContractDocument()
-	if contract.ContractVersion != "2.1.0" {
-		t.Fatalf("email replacement contract must be published as additive version 2.1.0, got %s", contract.ContractVersion)
+	if contract.ContractVersion != "3.0.0" {
+		t.Fatalf("email replacement must remain in the sole current contract 3.0.0, got %s", contract.ContractVersion)
 	}
 	if !contains(contract.Provisions, "9.1.2") {
 		t.Fatal("contract does not identify original provision 9.1.2")

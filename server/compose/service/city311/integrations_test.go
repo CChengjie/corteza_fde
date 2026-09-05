@@ -17,6 +17,7 @@ func setIntegrationEnvironment(t *testing.T) {
 	t.Setenv("SESSION_SECRET", "integration-persistence-secret")
 	t.Setenv("APP_BASE_URL", "https://city311.example.test")
 	t.Setenv("CIVICWORKS_BASE_URL", "https://civicworks.example.test")
+	t.Setenv("CIVICWORKS_CALLBACK_BASE_URL", "https://city311.example.test")
 	t.Setenv("CIVICWORKS_API_TOKEN", "civicworks-api-token")
 	t.Setenv("CIVICWORKS_WEBHOOK_SECRET", "civicworks-webhook-secret")
 	t.Setenv("BENCHMARK_RUN_ID", "integration-run")
@@ -202,6 +203,7 @@ func TestEveryIntegrationKindReloadsAndValidatesWrites(t *testing.T) {
 
 	svc.runtimeMu.RLock()
 	require.NotNil(t, svc.civicWorksClient)
+	require.Equal(t, "https://city311.example.test/integrations/civicworks/events", svc.civicWorksCallback)
 	require.NotNil(t, svc.mappingService)
 	require.NotNil(t, svc.workflowHTTP)
 	require.IsType(t, smtpMailSender{}, svc.mailSender)
@@ -209,6 +211,11 @@ func TestEveryIntegrationKindReloadsAndValidatesWrites(t *testing.T) {
 	identity.runtimeMu.RLock()
 	require.Equal(t, "identity-client-secret", identity.runtime.OIDCClientSecret)
 	identity.runtimeMu.RUnlock()
+	civicWorksRevision, err := svc.integrationRevision(ctx, IntegrationCivicWorksID)
+	require.NoError(t, err)
+	civicWorksPayload := integrationConnectionPayload{}
+	decodeConfigurationPayload(civicWorksRevision.Payload, &civicWorksPayload)
+	require.Equal(t, "https://city311.example.test", civicWorksPayload.Configuration["callback_base_url"])
 
 	for _, integrationID := range []string{IntegrationCivicWorksID, IntegrationMappingID, IntegrationWorkflowID, IntegrationMailID, IntegrationIdentityID} {
 		rotated, err := svc.RotateIntegrationSecret(ctx, administrator, integrationID, 1, contract.SecretRotation{NewSecret: "replacement-" + integrationID})
@@ -218,7 +225,7 @@ func TestEveryIntegrationKindReloadsAndValidatesWrites(t *testing.T) {
 
 	active := true
 	badSecret := " malformed "
-	_, err := svc.UpdateIntegration(ctx, administrator, IntegrationMappingID, 2, contract.IntegrationConnectionWrite{Active: &active, Secret: &badSecret})
+	_, err = svc.UpdateIntegration(ctx, administrator, IntegrationMappingID, 2, contract.IntegrationConnectionWrite{Active: &active, Secret: &badSecret})
 	requireServiceError(t, err, integrationHTTPStatusUnprocessableEntity, contract.ErrorValidation)
 	_, err = svc.UpdateIntegration(ctx, administrator, IntegrationMappingID, 2, contract.IntegrationConnectionWrite{
 		Active: &active, Configuration: map[string]any{"unknown": "value"},
@@ -226,6 +233,12 @@ func TestEveryIntegrationKindReloadsAndValidatesWrites(t *testing.T) {
 	requireServiceError(t, err, integrationHTTPStatusUnprocessableEntity, contract.ErrorValidation)
 	_, err = svc.UpdateIntegration(ctx, administrator, IntegrationMappingID, 2, contract.IntegrationConnectionWrite{
 		Active: &active, Configuration: map[string]any{"base_url": "relative"},
+	})
+	requireServiceError(t, err, integrationHTTPStatusUnprocessableEntity, contract.ErrorValidation)
+	_, err = svc.UpdateIntegration(ctx, administrator, IntegrationCivicWorksID, 2, contract.IntegrationConnectionWrite{
+		Active: &active, Configuration: map[string]any{
+			"base_url": "https://civicworks.example.test", "callback_base_url": "relative", "benchmark_run_id": "integration-run",
+		},
 	})
 	requireServiceError(t, err, integrationHTTPStatusUnprocessableEntity, contract.ErrorValidation)
 }

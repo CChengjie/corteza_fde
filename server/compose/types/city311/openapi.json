@@ -656,13 +656,27 @@
             "type": "string",
             "x-city311-explicit-utc-offset": true
           },
+          "department_code": {
+            "$ref": "#/components/schemas/enum_department_code",
+            "x-city311-enum-ref": "department_code"
+          },
           "external_status_url": {
             "format": "uri",
             "type": "string"
           },
+          "fulfilment_source": {
+            "const": "CIVICWORKS"
+          },
+          "location": {
+            "$ref": "#/components/schemas/location_input"
+          },
           "service_request_number": {
             "pattern": "^SR-[0-9]{4}-[0-9]{5}$",
             "type": "string"
+          },
+          "service_type": {
+            "$ref": "#/components/schemas/enum_service_type",
+            "x-city311-enum-ref": "service_type"
           },
           "source_case_id": {
             "type": "string"
@@ -670,6 +684,11 @@
           "status": {
             "$ref": "#/components/schemas/enum_civicworks_status",
             "x-city311-enum-ref": "civicworks_status"
+          },
+          "summary": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
           },
           "updated_at": {
             "format": "date-time",
@@ -688,6 +707,10 @@
           "work_order_id",
           "source_case_id",
           "service_request_number",
+          "service_type",
+          "summary",
+          "department_code",
+          "fulfilment_source",
           "status",
           "external_status_url",
           "version",
@@ -699,7 +722,9 @@
       "civicworks_work_order_create": {
         "properties": {
           "callback_url": {
-            "const": "/integrations/civicworks/events"
+            "format": "uri",
+            "pattern": "^https?://",
+            "type": "string"
           },
           "department_code": {
             "$ref": "#/components/schemas/enum_department_code",
@@ -3897,7 +3922,7 @@
   "info": {
     "description": "Developer 1-owned BE-contract-v1 generated from NewContractDocument().",
     "title": "City 311 CRM client/server API",
-    "version": "2.1.0"
+    "version": "3.0.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -22340,10 +22365,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -22438,10 +22467,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -22958,10 +22991,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -23056,10 +23093,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -23333,10 +23374,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -23431,10 +23476,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -23765,10 +23814,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -23863,10 +23916,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -24195,10 +24252,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -24293,10 +24354,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -24622,10 +24687,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -24720,10 +24789,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -25053,10 +25126,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -25151,10 +25228,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -25476,10 +25557,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -25574,10 +25659,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -25898,10 +25987,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -25996,10 +26089,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -26512,10 +26609,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -26610,10 +26711,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -27141,10 +27246,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -27239,10 +27348,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -27569,10 +27682,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -27667,10 +27784,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -27993,10 +28114,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -28091,10 +28216,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -28608,7 +28737,7 @@
               "examples": {
                 "request": {
                   "value": {
-                    "callback_url": "/integrations/civicworks/events",
+                    "callback_url": "https://city311.example.test/resource",
                     "department_code": "PUBLIC_WORKS",
                     "service_request_number": "SR-2026-00041",
                     "service_type": "TREE_MAINTENANCE",
@@ -28632,10 +28761,14 @@
                   "equivalent_replay": {
                     "value": {
                       "created_at": "2026-08-25T12:00:00Z",
+                      "department_code": "PUBLIC_WORKS",
                       "external_status_url": "https://city311.example.test/resource",
+                      "fulfilment_source": "CIVICWORKS",
                       "service_request_number": "SR-2026-00041",
+                      "service_type": "TREE_MAINTENANCE",
                       "source_case_id": "xxxxxx",
                       "status": "ASSIGNED",
+                      "summary": "xxxxxx",
                       "updated_at": "2026-08-25T12:00:00Z",
                       "version": 1,
                       "work_order_id": "xxxxxx"
@@ -28651,10 +28784,14 @@
             "x-city311-example": {
               "body": {
                 "created_at": "2026-08-25T12:00:00Z",
+                "department_code": "PUBLIC_WORKS",
                 "external_status_url": "https://city311.example.test/resource",
+                "fulfilment_source": "CIVICWORKS",
                 "service_request_number": "SR-2026-00041",
+                "service_type": "TREE_MAINTENANCE",
                 "source_case_id": "xxxxxx",
                 "status": "ASSIGNED",
+                "summary": "xxxxxx",
                 "updated_at": "2026-08-25T12:00:00Z",
                 "version": 1,
                 "work_order_id": "xxxxxx"
@@ -28669,10 +28806,19 @@
                   "civicworks_created": {
                     "value": {
                       "created_at": "2026-08-20T10:00:00Z",
+                      "department_code": "PUBLIC_WORKS",
                       "external_status_url": "http://civicworks:8080/ui/work-orders/WO-000001",
+                      "fulfilment_source": "CIVICWORKS",
+                      "location": {
+                        "address": "100 Example Street",
+                        "latitude": 42.9001,
+                        "longitude": -78.8801
+                      },
                       "service_request_number": "SR-2026-00041",
+                      "service_type": "TREE_MAINTENANCE",
                       "source_case_id": "case-7c58d2",
                       "status": "ASSIGNED",
+                      "summary": "Fallen branch obstructing pavement",
                       "updated_at": "2026-08-20T10:00:00Z",
                       "version": 1,
                       "work_order_id": "WO-000001"
@@ -28681,10 +28827,19 @@
                   "created": {
                     "value": {
                       "created_at": "2026-08-20T10:00:00Z",
+                      "department_code": "PUBLIC_WORKS",
                       "external_status_url": "http://civicworks:8080/ui/work-orders/WO-000001",
+                      "fulfilment_source": "CIVICWORKS",
+                      "location": {
+                        "address": "100 Example Street",
+                        "latitude": 42.9001,
+                        "longitude": -78.8801
+                      },
                       "service_request_number": "SR-2026-00041",
+                      "service_type": "TREE_MAINTENANCE",
                       "source_case_id": "case-7c58d2",
                       "status": "ASSIGNED",
+                      "summary": "Fallen branch obstructing pavement",
                       "updated_at": "2026-08-20T10:00:00Z",
                       "version": 1,
                       "work_order_id": "WO-000001"
@@ -28700,10 +28855,19 @@
             "x-city311-example": {
               "body": {
                 "created_at": "2026-08-20T10:00:00Z",
+                "department_code": "PUBLIC_WORKS",
                 "external_status_url": "http://civicworks:8080/ui/work-orders/WO-000001",
+                "fulfilment_source": "CIVICWORKS",
+                "location": {
+                  "address": "100 Example Street",
+                  "latitude": 42.9001,
+                  "longitude": -78.8801
+                },
                 "service_request_number": "SR-2026-00041",
+                "service_type": "TREE_MAINTENANCE",
                 "source_case_id": "case-7c58d2",
                 "status": "ASSIGNED",
+                "summary": "Fallen branch obstructing pavement",
                 "updated_at": "2026-08-20T10:00:00Z",
                 "version": 1,
                 "work_order_id": "WO-000001"
@@ -29190,7 +29354,7 @@
     "stability": "frozen",
     "effective_at": "merge_to_2024.9.x",
     "first_published_version": "1.0.0",
-    "supported_major": 2,
+    "supported_major": 3,
     "major_version_rule": "after first publication, any consumer-incompatible contract revision increments the major version"
   },
   "x-city311-server-error-policy": {

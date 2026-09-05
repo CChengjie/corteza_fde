@@ -133,11 +133,18 @@ func MockCivicWorksCreated() CivicWorksWorkOrder {
 		WorkOrderID:          "WO-000001",
 		SourceCaseID:         "case-7c58d2",
 		ServiceRequestNumber: "SR-2026-00041",
+		ServiceType:          ServiceTypeTreeMaintenance,
+		Summary:              "Fallen branch obstructing pavement",
+		DepartmentCode:       DepartmentPublicWorks,
+		FulfilmentSource:     "CIVICWORKS",
 		Status:               CivicWorksStatusAssigned,
-		ExternalStatusURL:    "http://civicworks:8080/ui/work-orders/WO-000001",
-		Version:              1,
-		CreatedAt:            createdAt,
-		UpdatedAt:            createdAt,
+		Location: map[string]any{
+			"address": "100 Example Street", "latitude": 42.9001, "longitude": -78.8801,
+		},
+		ExternalStatusURL: "http://civicworks:8080/ui/work-orders/WO-000001",
+		Version:           1,
+		CreatedAt:         createdAt,
+		UpdatedAt:         createdAt,
 	}
 }
 

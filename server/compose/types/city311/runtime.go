@@ -2,17 +2,27 @@ package city311
 
 import "time"
 
-// PortalDraftWrite is a partial draft update. Missing fields preserve the
-// existing draft value; a draft may be created before any required submission
-// fields are complete.
-type PortalDraftWrite struct {
-	Summary          *string         `json:"summary,omitempty"`
-	Description      *string         `json:"description,omitempty"`
-	ServiceType      *ServiceType    `json:"service_type,omitempty"`
-	Requester        *RequesterInput `json:"requester,omitempty"`
-	Location         *LocationInput  `json:"location,omitempty"`
-	CustomFields     *map[string]any `json:"custom_fields,omitempty"`
-	AttachmentTokens *[]string       `json:"attachment_tokens,omitempty"`
+// PortalAttachment is a single-use upload receipt, not a download credential.
+type PortalAttachment struct {
+	AttachmentToken string    `json:"attachment_token"`
+	Filename        string    `json:"filename"`
+	MediaType       string    `json:"media_type"`
+	Size            uint64    `json:"size"`
+	ExpiresAt       time.Time `json:"expires_at"`
+}
+
+type AttachmentMetadata struct {
+	AttachmentID string `json:"attachment_id"`
+	Filename     string `json:"filename"`
+	MediaType    string `json:"media_type"`
+	Size         uint64 `json:"size"`
+}
+
+type BinaryAttachment struct {
+	ContentType        string `json:"content_type"`
+	ContentDisposition string `json:"content_disposition"`
+	Body               string `json:"body"`
+	BodyEncoding       string `json:"body_encoding"`
 }
 
 // PortalDraftWrite is a partial draft update. Missing fields preserve the

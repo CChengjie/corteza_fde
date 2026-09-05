@@ -70,6 +70,7 @@ var (
 type (
 	IdentityNotifier interface {
 		PasswordReset(context.Context, string, string, string) error
+		EmailReplacementVerification(context.Context, string, string, string) error
 		SecurityNotice(context.Context, string, string, string, string) error
 	}
 
@@ -264,6 +265,15 @@ func (notifier defaultIdentityNotifier) PasswordReset(ctx context.Context, recip
 	message.SetHeader("Subject", "Reset your City 311 password")
 	message.SetHeader("X-City311-Delivery-Key", deliveryKey)
 	message.SetBody("text/plain", fmt.Sprintf("Use this link within 15 minutes: %s/reset-password?token=%s", notifier.baseURL, token))
+	return mailService.Send(message)
+}
+
+func (notifier defaultIdentityNotifier) EmailReplacementVerification(ctx context.Context, recipient, token, deliveryKey string) error {
+	message := mailService.New()
+	message.SetHeader("To", recipient)
+	message.SetHeader("Subject", "Verify your new City 311 email address")
+	message.SetHeader("X-City311-Delivery-Key", deliveryKey)
+	message.SetBody("text/plain", fmt.Sprintf("Use this link within 30 minutes: %s/verify-email?token=%s", notifier.baseURL, url.QueryEscape(token)))
 	return mailService.Send(message)
 }
 
@@ -1202,6 +1212,13 @@ func (svc *IdentityService) sendIdentityNotification(ctx context.Context, notifi
 			return err
 		}
 		return svc.notifier.PasswordReset(ctx, notification.Recipient, token, notification.DeliveryKey)
+	case emailReplacementKind:
+		sealedToken, _ := notification.Payload["sealed_token"].(string)
+		token, err := svc.openNotificationSecret(sealedToken, notification.DeliveryKey)
+		if err != nil {
+			return err
+		}
+		return svc.notifier.EmailReplacementVerification(ctx, notification.Recipient, token, notification.DeliveryKey)
 	case securityNoticeKind:
 		subject, _ := notification.Payload["subject"].(string)
 		body, _ := notification.Payload["body"].(string)

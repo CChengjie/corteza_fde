@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.0.0",
+  "contract_version": "2.1.0",
   "versioning": {
     "scheme": "semantic_versioning",
     "stability": "frozen",
@@ -110,6 +110,7 @@
     "8.2.4",
     "8.3.3",
     "9.1.1",
+    "9.1.2",
     "9.2.1",
     "9.2.4",
     "9.3.1",
@@ -267,6 +268,13 @@
         "12.2.3"
       ],
       "decision": "each session-protected CRM operation publishes its stable operation name as required_capability; current_actor publishes the granted capability, route, and OAuth-scope vocabularies, while record-specific lifecycle permissions remain in available_actions and the server remains authoritative"
+    },
+    {
+      "id": "VERIFIED-EMAIL-REPLACEMENT",
+      "provisions": [
+        "9.1.2"
+      ],
+      "decision": "a constituent requests a replacement address while authenticated; the current verified login email remains unchanged until a one-time token delivered to the replacement address is confirmed; the confirmation endpoint is public because possession of that token is the proof of control"
     }
   ],
   "protocol": {
@@ -374,6 +382,17 @@
       "field_path_format": "RFC 6901 JSON Pointer rooted at the request body, including zero-based array indexes; examples: /requester/email and /attachments/2/media_type",
       "ordering": "errors are returned in form order so the first item is the focus target",
       "translation_rule": "validation code is a stable translation-catalogue key; the client supplies the localized message"
+    },
+    "verified_email_replacement": {
+      "confirmation_endpoint": "email_replacement_confirm",
+      "confirmation_is_single_use": true,
+      "current_email_retained_before_confirm": true,
+      "idempotency_key_required": false,
+      "if_match_required": false,
+      "latest_request_invalidates_older": true,
+      "raw_token_persisted": false,
+      "request_endpoint": "email_replacement_request",
+      "verification_lifetime_minutes": 30
     }
   },
   "endpoints": {
@@ -1584,6 +1603,48 @@
       "response_headers": {
         "Retry-After": "required on HTTP 429; whole seconds until retry"
       }
+    },
+    "email_replacement_confirm": {
+      "method": "POST",
+      "path": "/api/v1/auth/email-replacement/confirm",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "none"
+      },
+      "request_schema": "email_replacement_confirm",
+      "response_schema": "email_replacement_result",
+      "success_statuses": {
+        "success": 200
+      },
+      "error_statuses": {
+        "EXPIRED_EMAIL_VERIFICATION_TOKEN": 422,
+        "INVALID_EMAIL_VERIFICATION_TOKEN": 422,
+        "TEMPORARILY_UNAVAILABLE": 503,
+        "VALIDATION_ERROR": 422
+      }
+    },
+    "email_replacement_request": {
+      "method": "POST",
+      "path": "/api/v1/account/email-replacement",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "session_cookie",
+        "actor_class": "constituent"
+      },
+      "required_capability": "email_replacement_request",
+      "request_schema": "email_replacement_request",
+      "response_schema": "email_replacement_acknowledgement",
+      "success_statuses": {
+        "accepted": 202,
+        "unavailable_address_indistinguishable": 202
+      },
+      "error_statuses": {
+        "FORBIDDEN": 403,
+        "TEMPORARILY_UNAVAILABLE": 503,
+        "UNAUTHENTICATED": 401,
+        "VALIDATION_ERROR": 422
+      },
+      "privacy_rule": "every syntactically valid replacement address receives the same 202 acknowledgement; an address already used as a verified login email is not disclosed and no token is issued"
     },
     "federated_sign_in_callback": {
       "method": "GET",
@@ -4236,6 +4297,7 @@
       "calendar_export",
       "calendar_import",
       "contact_email_export",
+      "email_replacement_request",
       "identity_configuration_get",
       "identity_configuration_update",
       "integration_get",
@@ -4348,6 +4410,8 @@
       "MAP_TEMPORARILY_UNAVAILABLE",
       "INVALID_RESET_TOKEN",
       "EXPIRED_RESET_TOKEN",
+      "INVALID_EMAIL_VERIFICATION_TOKEN",
+      "EXPIRED_EMAIL_VERIFICATION_TOKEN",
       "INSUFFICIENT_SCOPE",
       "INVALID_CLIENT",
       "INVALID_TOKEN",
@@ -4471,6 +4535,8 @@
       "civicworks_event_callback",
       "contact_email_export",
       "data_export",
+      "email_replacement_confirm",
+      "email_replacement_request",
       "federated_sign_in_callback",
       "federated_sign_in_start",
       "geocode_proxy",
@@ -5404,11 +5470,13 @@
           "type": "boolean"
         },
         "emails": {
+          "current_value_retained_until_verification": true,
           "items": {
             "format": "email",
             "type": "string"
           },
           "min_items_for_portal_account": 1,
+          "replacement_operation": "email_replacement_request followed by email_replacement_confirm",
           "type": "array",
           "verified_login_case_insensitive_unique": true
         },
@@ -5763,6 +5831,57 @@
       "required": [
         "duplicate_group_id",
         "reason"
+      ],
+      "type": "object"
+    },
+    "email_replacement_acknowledgement": {
+      "properties": {
+        "accepted": {
+          "const": true
+        }
+      },
+      "required": [
+        "accepted"
+      ],
+      "type": "object"
+    },
+    "email_replacement_confirm": {
+      "properties": {
+        "token": {
+          "max_length": 512,
+          "min_length": 1,
+          "type": "string",
+          "write_only": true
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "type": "object"
+    },
+    "email_replacement_request": {
+      "properties": {
+        "email": {
+          "format": "email",
+          "max_length": 254,
+          "type": "string"
+        }
+      },
+      "required": [
+        "email"
+      ],
+      "type": "object"
+    },
+    "email_replacement_result": {
+      "properties": {
+        "verified_email": {
+          "format": "email",
+          "max_length": 254,
+          "type": "string"
+        }
+      },
+      "required": [
+        "verified_email"
       ],
       "type": "object"
     },
@@ -7903,6 +8022,36 @@
         "retryable": false
       }
     },
+    "email_replacement_confirm_body": {
+      "endpoint": "email_replacement_confirm",
+      "role": "request",
+      "body": {
+        "token": "one-time-verification-token"
+      }
+    },
+    "email_replacement_confirmed": {
+      "endpoint": "email_replacement_confirm",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "verified_email": "replacement@example.test"
+      }
+    },
+    "email_replacement_request_body": {
+      "endpoint": "email_replacement_request",
+      "role": "request",
+      "body": {
+        "email": "replacement@example.test"
+      }
+    },
+    "email_replacement_requested": {
+      "endpoint": "email_replacement_request",
+      "role": "response",
+      "http_status": 202,
+      "body": {
+        "accepted": true
+      }
+    },
     "empty_list": {
       "endpoint": "staff_request_queue",
       "role": "response",
@@ -7928,6 +8077,16 @@
       "body": {
         "error": "EXPECTED_VERSION_REQUIRED",
         "message": "If-Match is required for this update.",
+        "retryable": false
+      }
+    },
+    "expired_email_verification_token": {
+      "endpoint": "email_replacement_confirm",
+      "role": "response",
+      "http_status": 422,
+      "body": {
+        "error": "EXPIRED_EMAIL_VERIFICATION_TOKEN",
+        "message": "The email verification token has expired.",
         "retryable": false
       }
     },
@@ -8040,6 +8199,16 @@
         "saml_sp_entity_id": "https://city311.example.test/saml",
         "updated_at": "2026-08-25T10:00:00Z",
         "version": 1
+      }
+    },
+    "invalid_email_verification_token": {
+      "endpoint": "email_replacement_confirm",
+      "role": "response",
+      "http_status": 422,
+      "body": {
+        "error": "INVALID_EMAIL_VERIFICATION_TOKEN",
+        "message": "The email verification token is invalid.",
+        "retryable": false
       }
     },
     "invalid_reset_token": {

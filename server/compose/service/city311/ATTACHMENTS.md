@@ -60,7 +60,7 @@ are never part of that cleanup. Upload progress belongs to the browser transport
 Pre-submission preview must use the locally selected file, not a download call
 with an upload token.
 
-The sole supported API contract is `2.0.0`. The benchmark reference implementation
+The sole supported API contract is `2.1.0`. The benchmark reference implementation
 does not provide backward-compatible download modes. Developer 2 must update
 literal-body DTOs, mocks, and Blob construction to require and decode RFC 4648
 base64; absence of `body_encoding` is invalid, not a legacy-text signal. Durable

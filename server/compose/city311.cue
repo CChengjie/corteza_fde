@@ -526,6 +526,40 @@ passwordResetToken: {
 	}
 }
 
+emailReplacementToken: {
+	model: {
+		ident:            "compose_city311_email_replacement_token"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			token_hash: {goType: "string", dal: {type: "Text", length: 64}}
+			user_id: {ident: "userID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			pending_email: {goType: "string", dal: {type: "Text", length: 254}}
+			created_at: schema.SortableTimestampNowField
+			expires_at: schema.SortableTimestampField
+			used_at:    schema.SortableTimestampNilField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_token_hash: {attribute: "token_hash"}
+			user_expiry: {attributes: ["user_id", "expires_at"]}
+		}
+	}
+	filter: {
+		struct: {user_id: {ident: "userID", goType: "uint64"}}
+		byValue: ["user_id"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {
+		ident: "city311EmailReplacementToken"
+		api: lookups: [
+			{fields: ["id"]},
+			{fields: ["token_hash"], constraintCheck: true},
+		]
+	}
+}
+
 identityNotification: {
 	model: {
 		ident:            "compose_city311_identity_notification"

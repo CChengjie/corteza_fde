@@ -130,6 +130,18 @@ func clientSchemas() map[string]map[string]interface{} {
 			"current_password": map[string]interface{}{"type": "string"},
 			"login_identifier": map[string]interface{}{"type": "string", "min_length": 3, "max_length": 64, "pattern": "^[a-z0-9._-]+$"},
 		}),
+		"email_replacement_request": object([]string{"email"}, map[string]interface{}{
+			"email": map[string]interface{}{"type": "string", "format": "email", "max_length": 254},
+		}),
+		"email_replacement_acknowledgement": object([]string{"accepted"}, map[string]interface{}{
+			"accepted": map[string]interface{}{"const": true},
+		}),
+		"email_replacement_confirm": object([]string{"token"}, map[string]interface{}{
+			"token": map[string]interface{}{"type": "string", "min_length": 1, "max_length": 512, "write_only": true},
+		}),
+		"email_replacement_result": object([]string{"verified_email"}, map[string]interface{}{
+			"verified_email": map[string]interface{}{"type": "string", "format": "email", "max_length": 254},
+		}),
 		"language_preference": object([]string{"language"}, map[string]interface{}{
 			"language": map[string]interface{}{"enum_ref": "language"},
 		}),

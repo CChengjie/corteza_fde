@@ -1218,6 +1218,7 @@
       },
       "enum_capability": {
         "enum": [
+          "account_delete",
           "admin_branding_get",
           "admin_branding_preview",
           "admin_branding_publish",
@@ -1536,6 +1537,7 @@
       },
       "enum_route": {
         "enum": [
+          "account_delete",
           "account_register",
           "admin_branding_get",
           "admin_branding_preview",
@@ -3842,6 +3844,143 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/account": {
+      "delete": {
+        "operationId": "account_delete",
+        "responses": {
+          "204": {
+            "description": "success",
+            "x-city311-example": {
+              "body": null,
+              "status": 204
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "account delete",
+        "tags": [
+          "account"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "constituent"
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-required-capability": "account_delete"
+      }
+    },
     "/api/v1/account/login-identifier": {
       "post": {
         "operationId": "login_identifier_change",

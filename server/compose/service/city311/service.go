@@ -696,6 +696,9 @@ func authorizeTransition(actor contract.Actor, request *composeTypes.City311Serv
 			Retryable: false, CurrentVersion: &current,
 		}}
 	}
+	if toStatus == contract.ServiceRequestStatusReopened {
+		return invalidStatusTransition("Service requests can only be reopened through the approval workflow.")
+	}
 	if !transitionAllowed(request.Status, toStatus) {
 		return validationError(contract.FieldError{Field: "/to_status", Code: contract.ValidationInvalidValue})
 	}

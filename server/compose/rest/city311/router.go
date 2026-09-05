@@ -85,19 +85,25 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 	return func(r chi.Router) {
 		h := &handler{service: service, identity: identity}
 		r.Use(h.optionalIdentitySession)
+		r.Post("/public/service-request-status", h.publicStatusLookup)
 		r.Post("/accounts", h.accountRegister)
 		r.Get(sessionRoute, h.sessionCurrent)
 		r.Post(sessionRoute, h.sessionSignIn)
 		r.Delete(sessionRoute, h.sessionSignOut)
 		r.Post("/auth/password-reset/request", h.passwordResetRequest)
 		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
+		r.Patch("/preferences/language", h.languageUpdate)
 		r.Route("/account", func(r chi.Router) {
 			r.Use(requireCityIdentitySession)
+			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
+			r.With(requireProfileConstituent).Patch("/profile", h.profileUpdate)
 			r.Post("/password", h.passwordChange)
 			r.Post("/login-identifier", h.loginIdentifierChange)
 		})
 		r.With(requireScope(contract.ScopeRequestWrite)).Post(serviceRequestsRoute, h.integrationSubmit)
 		r.Post("/portal/service-requests", h.portalSubmit)
+		r.Post("/portal/attachments", h.attachmentUpload)
+		r.With(requireIdentity).Get("/attachments/{attachment_id}", h.attachmentDownload)
 		r.With(requireConstituentIdentitySession).Post("/portal/service-request-drafts", h.draftCreate)
 		r.With(requireConstituentIdentitySession).Get("/portal/service-request-drafts/{request_id}", h.draftGet)
 		r.With(requireConstituentIdentitySession).Patch("/portal/service-request-drafts/{request_id}", h.draftUpdate)
@@ -297,10 +303,6 @@ func (h *handler) portalSubmit(w http.ResponseWriter, r *http.Request) {
 		writeValidation(w, "/attachment_tokens", contract.ValidationTooManyItems)
 		return
 	}
-	if len(input.AttachmentTokens) > 0 {
-		writeValidation(w, "/attachment_tokens", contract.ValidationInvalidValue)
-		return
-	}
 	identity := auth.GetIdentityFromContext(r.Context())
 	source := contract.SourceChannelPortalAnonymous
 	actorID := uint64(0)
@@ -314,6 +316,7 @@ func (h *handler) portalSubmit(w http.ResponseWriter, r *http.Request) {
 	}, r.Header.Get(contract.IdempotencyHeader), city311Service.SubmissionOptions{
 		Operation: "portal_service_request_submit", SourceChannel: source,
 		ActorType: contract.AuditActorConstituent, ActorID: actorID, RequireIdempotency: true,
+		AttachmentTokens: input.AttachmentTokens,
 	})
 	// This endpoint publishes one success status. Replays return the original
 	// representation with 201 while the integration endpoint distinguishes 200.
@@ -397,10 +400,6 @@ func (h *handler) staffSubmit(w http.ResponseWriter, r *http.Request) {
 		writeValidation(w, "/request/attachment_tokens", contract.ValidationTooManyItems)
 		return
 	}
-	if len(input.Request.AttachmentTokens) > 0 {
-		writeValidation(w, "/request/attachment_tokens", contract.ValidationInvalidValue)
-		return
-	}
 	requester, existingConstituentID, err := staffRequester(input.Constituent)
 	if err != nil {
 		writeResult(w, 0, nil, err)
@@ -412,6 +411,7 @@ func (h *handler) staffSubmit(w http.ResponseWriter, r *http.Request) {
 	}, "", city311Service.SubmissionOptions{
 		Operation: "staff_service_request_create", SourceChannel: contract.SourceChannelStaffInPerson,
 		ActorType: contract.AuditActorStaff, ActorID: actor.ID, StaffActor: &actor, ExistingConstituentID: existingConstituentID,
+		AttachmentTokens: input.Request.AttachmentTokens, AttachmentField: "/request/attachment_tokens",
 	})
 	if err != nil {
 		writeResult(w, 0, nil, err)

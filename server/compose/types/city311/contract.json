@@ -128,6 +128,7 @@
     "9.6.3",
     "9.7.2",
     "9.7.3",
+    "9.7.5",
     "9.8.4",
     "9.8.6"
   ],
@@ -376,6 +377,26 @@
     }
   },
   "endpoints": {
+    "account_delete": {
+      "method": "DELETE",
+      "path": "/api/v1/account",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "session_cookie",
+        "actor_class": "constituent"
+      },
+      "required_capability": "account_delete",
+      "response_schema": "empty_response",
+      "success_statuses": {
+        "success": 204
+      },
+      "error_statuses": {
+        "FORBIDDEN": 403,
+        "NOT_FOUND": 404,
+        "UNAUTHENTICATED": 401,
+        "VALIDATION_ERROR": 422
+      }
+    },
     "account_register": {
       "method": "POST",
       "path": "/api/v1/accounts",
@@ -4188,6 +4209,7 @@
       "request_signature"
     ],
     "capability": [
+      "account_delete",
       "admin_branding_get",
       "admin_branding_preview",
       "admin_branding_publish",
@@ -4418,6 +4440,7 @@
       "reminder_recipient"
     ],
     "route": [
+      "account_delete",
       "account_register",
       "admin_branding_get",
       "admin_branding_preview",

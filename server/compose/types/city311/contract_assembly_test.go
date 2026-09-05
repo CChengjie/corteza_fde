@@ -160,7 +160,7 @@ func TestApplicationAndIdentityRoleVocabulariesStayDistinct(t *testing.T) {
 func TestRequiredClientSurfaceInventoryIsFrozen(t *testing.T) {
 	contract := NewContractDocument()
 	required := []string{
-		"session_current", "session_sign_in", "account_register", "federated_sign_in_start", "portal_service_request_submit",
+		"session_current", "session_sign_in", "account_register", "account_delete", "federated_sign_in_start", "portal_service_request_submit",
 		"portal_draft_create", "portal_my_requests", "portal_link_anonymous_request", "profile_get", "password_change",
 		"geocode_proxy", "portal_attachment_upload", "public_branding_get", "public_content_get", "public_help_get",
 		"staff_request_queue", "staff_request_detail", "staff_request_transition", "staff_request_bulk",
@@ -172,6 +172,10 @@ func TestRequiredClientSurfaceInventoryIsFrozen(t *testing.T) {
 		if _, present := contract.Endpoints[name]; !present {
 			t.Errorf("required client surface %s is not frozen", name)
 		}
+	}
+	deleteEndpoint := contract.Endpoints["account_delete"]
+	if deleteEndpoint.Method != "DELETE" || deleteEndpoint.Path != "/api/v1/account" || deleteEndpoint.Authentication.Mode != "session_cookie" || deleteEndpoint.Authentication.ActorClass != "constituent" || deleteEndpoint.SuccessStatuses["success"] != 204 {
+		t.Fatal("account deletion must be a constituent-session DELETE with an empty 204 response")
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"testing"
+	"time"
 
 	composeTypes "github.com/cortezaproject/corteza/server/compose/types"
 	contract "github.com/cortezaproject/corteza/server/compose/types/city311"
@@ -24,6 +25,34 @@ func TestAccountDeletionAnonymisesIdentityAndPreservesRequests(t *testing.T) {
 	request, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
 	require.NoError(t, err)
 	original := cloneMap((mustConstituent(t, ctx, st, "C-"+strconv.FormatUint(userID, 10))).Profile)
+	// Seed all deletion-owned queues so the test exercises both pending and
+	// already-completed cleanup paths.
+	now := svc.now()
+	token := &composeTypes.City311PasswordResetToken{
+		ID: svc.nextID(), TokenHash: "reset-token-hash", UserID: userID,
+		CreatedAt: now, ExpiresAt: now.Add(time.Hour),
+	}
+	require.NoError(t, store.CreateCity311PasswordResetToken(ctx, st, token))
+	pending := &composeTypes.City311IdentityNotification{
+		ID: svc.nextID(), UserID: userID, Kind: passwordResetKind, Recipient: "constituent1@city311.example.invalid",
+		DeliveryKey: "password-reset:pending", Payload: composeTypes.City311JSON{"token_id": "pending"},
+		Status: notificationPending, CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, store.CreateCity311IdentityNotification(ctx, st, pending))
+	validPayload, err := mapFrom(requestNotificationPayload{
+		RequestID: request.ID, RequestNumber: request.RequestNumber, ConstituentID: "C-" + strconv.FormatUint(userID, 10),
+		Recipient: "constituent1@city311.example.invalid", DeliveryKey: "request:old", DeliveryStatus: mailStatusPending,
+	})
+	require.NoError(t, err)
+	matchingOperation := &composeTypes.City311Operation{
+		ID: svc.nextID(), Kind: requestNotificationOperationKind, Status: mailStatusPending,
+		Result: validPayload, Error: composeTypes.City311JSON{}, CreatedAt: now, UpdatedAt: now,
+	}
+	malformedOperation := &composeTypes.City311Operation{
+		ID: svc.nextID(), Kind: requestNotificationOperationKind, Status: mailStatusPending,
+		Result: composeTypes.City311JSON{"unexpected": true}, Error: composeTypes.City311JSON{}, CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, store.CreateCity311Operation(ctx, st, matchingOperation, malformedOperation))
 
 	require.NoError(t, identity.DeleteAccount(ctx, resolved))
 
@@ -55,6 +84,34 @@ func TestAccountDeletionAnonymisesIdentityAndPreservesRequests(t *testing.T) {
 	sessions, _, err := store.SearchCity311IdentitySessions(ctx, st, composeTypes.City311IdentitySessionFilter{UserID: userID})
 	require.NoError(t, err)
 	require.Empty(t, sessions)
+	tokens, _, err := store.SearchCity311PasswordResetTokens(ctx, st, composeTypes.City311PasswordResetTokenFilter{UserID: userID})
+	require.NoError(t, err)
+	require.NotEmpty(t, tokens)
+	for _, token := range tokens {
+		require.NotNil(t, token.UsedAt)
+	}
+	notifications, _, err := store.SearchCity311IdentityNotifications(ctx, st, composeTypes.City311IdentityNotificationFilter{UserID: userID})
+	require.NoError(t, err)
+	require.Len(t, notifications, 1)
+	for _, notification := range notifications {
+		require.Empty(t, notification.Recipient)
+		require.Empty(t, notification.DeliveryKey)
+		require.Empty(t, notification.Payload)
+	}
+	operations, _, err := store.SearchCity311Operations(ctx, st, composeTypes.City311OperationFilter{Kind: requestNotificationOperationKind})
+	require.NoError(t, err)
+	require.Len(t, operations, 2)
+	for _, operation := range operations {
+		if operation.ID == matchingOperation.ID {
+			require.Equal(t, mailStatusFailed, operation.Status)
+			require.Empty(t, operation.Result["recipient"])
+			require.Empty(t, operation.Result["delivery_key"])
+			require.Equal(t, mailStatusFailed, operation.Result["delivery_status"])
+		} else {
+			require.Equal(t, mailStatusPending, operation.Status)
+			require.Equal(t, true, operation.Result["unexpected"])
+		}
+	}
 	memberships, _, err := store.SearchRoleMembers(ctx, st, systemTypes.RoleMemberFilter{Resource: "corteza::system:user/" + strconv.FormatUint(userID, 10)})
 	require.NoError(t, err)
 	require.Empty(t, memberships)

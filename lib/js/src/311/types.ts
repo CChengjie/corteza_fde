@@ -15,6 +15,7 @@ import type {
   OriginClass,
   PhoneLabel,
   RequestAction,
+  ReminderAction,
   ReminderChannel,
   ReminderStatus,
   ServiceRequestStatus,
@@ -324,6 +325,14 @@ export interface Reminder {
   status: ReminderStatus
   completed_at?: ISODateTime | null
   completed_by?: string
+  history?: ReminderHistoryItem[]
+}
+
+export interface ReminderHistoryItem {
+  action: ReminderAction
+  occurred_at: ISODateTime
+  previous_due_at?: ISODateTime
+  due_at?: ISODateTime
 }
 
 export interface StaffServiceRequestDetail {
@@ -336,7 +345,9 @@ export interface StaffServiceRequestDetail {
   attachments?: PortalAttachment[]
   history: PublicHistoryItem[]
   audit: Record<string, unknown>[]
-  external_work_order?: Record<string, unknown> | null
+  external_work_order?: CivicWorksWorkOrder | null
+  /** Mock-observable delivery results required by the reassignment acceptance flow. */
+  assignment_notifications?: AssignmentNotification[]
   /** Optional adapter projection populated by MockC311Provider and future API responses. */
   relationships?: RequestRelationship[]
   notes?: RequestNote[]
@@ -455,9 +466,43 @@ export interface RequestTransition {
   reason?: string
 }
 
+export type BulkAction = 'UPDATE' | 'CLOSE'
+
+export interface BulkRequestItem {
+  request_id: string
+  expected_version: number
+}
+
+export interface BulkChanges {
+  primary_assignee_id?: string | null
+  priority?: string
+  status?: ServiceRequestStatus
+  staff_note?: string
+}
+
+export interface BulkRequest {
+  action: BulkAction
+  changes: BulkChanges
+  request_items: BulkRequestItem[]
+}
+
+export interface BulkResult {
+  updated_count: number
+  updated_request_ids: string[]
+}
+
 export interface Reassignment {
   assignee_id: string
   reason: string
+}
+
+export interface AssignmentNotification {
+  notification_id: string
+  request_id: string
+  recipient_staff_id: string
+  recipient_role: 'FORMER_PRIMARY_ASSIGNEE' | 'NEW_PRIMARY_ASSIGNEE'
+  result: 'QUEUED' | 'SENT' | 'FAILED'
+  occurred_at: ISODateTime
 }
 
 export interface CollaboratorChange {
@@ -490,6 +535,33 @@ export interface ScopeOverride {
 export interface DuplicateGroupChange {
   duplicate_group_id: string
   reason: string
+}
+
+export interface CivicWorksEvent {
+  event_id: string
+  event_type: 'work_order.status_changed'
+  work_order_id: string
+  source_case_id: string
+  previous_status: import('./enums').CivicWorksStatus
+  status: import('./enums').CivicWorksStatus
+  version: number
+  occurred_at: ISODateTime
+}
+
+export interface CivicWorksEventResult {
+  acknowledged: boolean
+  duplicate?: boolean
+}
+
+export interface CivicWorksWorkOrder {
+  work_order_id: string
+  source_case_id: string
+  service_request_number: string
+  status: import('./enums').CivicWorksStatus
+  external_status_url: string
+  version: number
+  created_at: ISODateTime
+  updated_at: ISODateTime
 }
 
 export interface ConstituentLink {

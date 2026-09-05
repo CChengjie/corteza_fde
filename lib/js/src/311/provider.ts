@@ -55,6 +55,10 @@ import type {
   DuplicateGroupChange,
   WorkflowDefinition,
   RequestTransition,
+  BulkRequest,
+  BulkResult,
+  CivicWorksEvent,
+  CivicWorksEventResult,
 } from './types'
 
 export interface C311RequestOptions {
@@ -262,6 +266,8 @@ export interface C311Provider {
   linkStaffConstituent (requestID: string, input: ConstituentLink, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   unlinkStaffConstituent (requestID: string, constituentID: string, input: ConstituentUnlink, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   createStaffNote (requestID: string, input: RequestNote): Promise<RequestNote>
+  bulkStaffRequests (input: BulkRequest, options?: C311RequestOptions): Promise<BulkResult>
+  processCivicWorksEvent (input: CivicWorksEvent, eventId: string, signature: string): Promise<CivicWorksEventResult>
 
   listReports (query?: ListQuery): Promise<PageResponse<ReportDefinition>>
   getReport (reportID: string): Promise<ReportDefinition>
@@ -544,6 +550,15 @@ export class C311HttpProvider implements C311Provider {
 
   createStaffNote (requestID: string, input: RequestNote): Promise<RequestNote> {
     return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/notes`, body: input })
+  }
+
+  bulkStaffRequests (input: BulkRequest, options: C311RequestOptions = {}): Promise<BulkResult> {
+    return this.request({ method: 'POST', path: '/api/v1/staff/service-requests/bulk', body: input, ...this.requestOptions(options, false) })
+  }
+
+  processCivicWorksEvent (input: CivicWorksEvent, eventId: string, signature: string): Promise<CivicWorksEventResult> {
+    return this.request<CivicWorksEventResult | undefined>({ method: 'POST', path: '/integrations/civicworks/events', body: input, headers: { 'Content-Type': 'application/json', 'X-CivicWorks-Event-Id': eventId, 'X-CivicWorks-Signature': signature }, acceptedStatuses: [204] })
+      .then(result => result || { acknowledged: true })
   }
 
   listReports (query: ListQuery = {}): Promise<PageResponse<ReportDefinition>> {

@@ -1,5 +1,5 @@
 import { C311ApiError } from './errors'
-import { APPLICATION_ROLES, CONTACT_CATEGORIES, C311_SCENARIOS, DEPARTMENT_CODES, DISTRICT_CODES, LANGUAGES, ORIGIN_CLASSES, PHONE_LABELS, RELATIONSHIP_TYPES, SERVICE_REQUEST_STATUSES, SERVICE_TYPES, SOURCE_CHANNELS, type ApplicationRole, type C311Scenario, type ContractCapability, type HelpKey, type IdentityProvider, type Language, type PublicContentKey } from './enums'
+import { APPLICATION_ROLES, CIVICWORKS_STATUSES, CONTACT_CATEGORIES, C311_SCENARIOS, DEPARTMENT_CODES, DISTRICT_CODES, LANGUAGES, ORIGIN_CLASSES, PHONE_LABELS, RELATIONSHIP_TYPES, REMINDER_CHANNELS, SERVICE_REQUEST_STATUSES, SERVICE_TYPES, SOURCE_CHANNELS, type ApplicationRole, type C311Scenario, type ContractCapability, type HelpKey, type IdentityProvider, type Language, type PublicContentKey } from './enums'
 import { cloneFixtureSet, createDefaultFixtureSet } from './fixtures'
 import type {
   AccountRegistration,
@@ -58,6 +58,11 @@ import type {
   RequestRelationship,
   RequestRelationshipAudit,
   WorkflowDefinition,
+  BulkRequest,
+  BulkResult,
+  CivicWorksEvent,
+  CivicWorksEventResult,
+  CivicWorksWorkOrder,
 } from './types'
 import { validatePortalAttachment, type C311Provider, type C311RequestOptions, type PortalAttachmentUpload, type ReportExportOptions } from './provider'
 
@@ -97,6 +102,15 @@ const statusByScenario: Partial<Record<C311Scenario, number>> = {
   'map-retryable': 503,
   'map-auth-failure': 401,
   'scope-denied': 403,
+  'invalid-status-transition': 422,
+  'bulk-validation': 422,
+  'bulk-version-conflict': 409,
+  'civicworks-invalid-signature': 401,
+  'civicworks-stale': 422,
+  'civicworks-duplicate': 204,
+  'reminder-validation': 422,
+  'reminder-retryable': 503,
+  'reminder-terminal': 500,
 }
 
 function copy<T> (value: T): T {
@@ -105,6 +119,10 @@ function copy<T> (value: T): T {
 
 function normalizeGeocodeAddress (value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').toLowerCase() : ''
+}
+
+function validISODateTime (value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value))
 }
 
 function validMockProfileInput (input: ProfileUpdate): boolean {
@@ -135,6 +153,8 @@ export class MockC311Provider implements C311Provider {
   private readonly draftRecords: Record<string, ServiceRequest> = {}
   private readonly draftPayloads: Record<string, DraftWrite> = {}
   private readonly idempotentResponses = new Map<string, { fingerprint: string; response: ServiceRequestResponse }>()
+  private readonly bulkIdempotentResponses = new Map<string, { fingerprint: string; response: BulkResult }>()
+  private readonly civicWorksEvents = new Map<string, string>()
   private readonly uploadedAttachmentTokens = new Set<string>()
   private readonly consumedAttachmentTokens = new Set<string>()
   private attachmentSerial = 0
@@ -153,6 +173,7 @@ export class MockC311Provider implements C311Provider {
   private readonly publicNotes: Record<string, RequestNote[]>
   private readonly requestVersions: Record<string, number> = {}
   private readonly relationshipAudits: Record<string, RequestRelationshipAudit[]> = {}
+  private readonly consumedScenarioFailures = new Set<string>()
   private noteSerial = 0
 
   constructor (options: MockC311ProviderOptions = {}) {
@@ -189,6 +210,15 @@ export class MockC311Provider implements C311Provider {
           council_district: 'SOUTH',
         }
         this.fixtures.details[foreignRequestID] = foreignDetail
+      }
+    }
+    if (this.scenario === 'pagination' && this.fixtures.queue[0]) {
+      const baseDetail = this.fixtures.details[this.fixtures.queue[0].request_id]
+      if (baseDetail) {
+        const secondDetail = copy(baseDetail)
+        secondDetail.request = { ...secondDetail.request, request_id: 'request-fixture-002', request_number: 'SR-2026-00002', summary: 'Second fixture request' }
+        this.fixtures.details['request-fixture-002'] = secondDetail
+        this.fixtures.requests.push(copy(secondDetail.request))
       }
     }
     Object.entries(this.relationships).forEach(([requestID, relationships]) => {
@@ -390,6 +420,46 @@ export class MockC311Provider implements C311Provider {
     return version
   }
 
+  private snapshotRequestState (): Pick<C311FixtureSet, 'requests' | 'queue' | 'details' | 'public_details'> & { requestVersions: Record<string, number>, notes: Record<string, RequestNote[]>, noteSerial: number } {
+    return {
+      requests: copy(this.fixtures.requests),
+      queue: copy(this.fixtures.queue),
+      details: copy(this.fixtures.details),
+      public_details: copy(this.fixtures.public_details),
+      requestVersions: copy(this.requestVersions),
+      notes: copy(this.notes),
+      noteSerial: this.noteSerial,
+    }
+  }
+
+  private restoreRequestState (snapshot: ReturnType<MockC311Provider['snapshotRequestState']>): void {
+    this.fixtures.requests.splice(0, this.fixtures.requests.length, ...snapshot.requests)
+    this.fixtures.queue.splice(0, this.fixtures.queue.length, ...snapshot.queue)
+    for (const key of Object.keys(this.fixtures.details)) delete this.fixtures.details[key]
+    Object.assign(this.fixtures.details, snapshot.details)
+    for (const key of Object.keys(this.fixtures.public_details)) delete this.fixtures.public_details[key]
+    Object.assign(this.fixtures.public_details, snapshot.public_details)
+    for (const key of Object.keys(this.requestVersions)) delete this.requestVersions[key]
+    Object.assign(this.requestVersions, snapshot.requestVersions)
+    for (const key of Object.keys(this.notes)) delete this.notes[key]
+    Object.assign(this.notes, snapshot.notes)
+    this.noteSerial = snapshot.noteSerial
+  }
+
+  private bulkError (error: unknown, requestID: string): never {
+    if (error instanceof C311ApiError) {
+      throw new C311ApiError({ ...error.toJSON(), failing_request_id: requestID }, error.status, error.headers)
+    }
+    throw error
+  }
+
+  private consumeScenarioFailure (operation: string): boolean {
+    const key = `${this.scenario}:${operation}`
+    if (this.consumedScenarioFailures.has(key)) return false
+    this.consumedScenarioFailures.add(key)
+    return true
+  }
+
   private portalRelationshipIDs (): Set<string> {
     return new Set([this.profile.constituent_id, this.currentSession.actor?.actor_id].filter(Boolean) as string[])
   }
@@ -505,8 +575,87 @@ export class MockC311Provider implements C311Provider {
     this.syncQueueItem(detail)
   }
 
-  private auditStaffRequest (detail: StaffServiceRequestDetail, action: string): void {
-    detail.audit = [...detail.audit, { action, actor_id: this.currentSession.actor?.actor_id || 'fixture', occurred_at: '2026-01-15T15:00:00.000Z' }]
+  private auditStaffRequest (detail: StaffServiceRequestDetail, action: string, context: Record<string, unknown> = {}): void {
+    detail.audit = [...detail.audit, { action, actor_id: this.currentSession.actor?.actor_id || 'fixture', occurred_at: '2026-01-15T15:00:00.000Z', ...context }]
+  }
+
+  private appendStaffNote (requestID: string, body: string, portalVisible = false): RequestNote {
+    const note: RequestNote = {
+      note_id: `note-fixture-${String(++this.noteSerial).padStart(3, '0')}`,
+      request_id: requestID,
+      author_constituent_id: this.currentSession.actor?.actor_id,
+      body,
+      portal_visible: portalVisible,
+      created_at: '2026-01-15T15:00:00.000Z',
+    }
+    this.notes[requestID] = (this.notes[requestID] || []).concat(note)
+    return note
+  }
+
+  private assignmentNotifications (detail: StaffServiceRequestDetail, previousAssigneeID: string | null, assigneeID: string): NonNullable<StaffServiceRequestDetail['assignment_notifications']> {
+    const occurredAt = '2026-01-15T15:00:00.000Z'
+    const recipients = [
+      ...(previousAssigneeID && previousAssigneeID !== assigneeID ? [{ recipient_staff_id: previousAssigneeID, recipient_role: 'FORMER_PRIMARY_ASSIGNEE' as const }] : []),
+      { recipient_staff_id: assigneeID, recipient_role: 'NEW_PRIMARY_ASSIGNEE' as const },
+    ]
+    const offset = detail.assignment_notifications?.length || 0
+    const notifications = recipients.map((recipient, index) => ({
+      notification_id: `assignment-notification-fixture-${String(offset + index + 1).padStart(3, '0')}`,
+      request_id: detail.request.request_id,
+      ...recipient,
+      result: 'SENT' as const,
+      occurred_at: occurredAt,
+    }))
+    detail.assignment_notifications = [...(detail.assignment_notifications || []), ...notifications]
+    return notifications
+  }
+
+  private ensureCivicWorksWorkOrder (detail: StaffServiceRequestDetail): CivicWorksWorkOrder {
+    if (!detail.external_work_order) {
+      const workOrderID = `WO-${detail.request.request_id}`
+      detail.external_work_order = {
+        work_order_id: workOrderID,
+        source_case_id: detail.request.request_id,
+        service_request_number: detail.request.request_number || detail.request.request_id,
+        status: 'ASSIGNED',
+        external_status_url: `https://civicworks.fixture.invalid/ui/work-orders/${encodeURIComponent(workOrderID)}`,
+        version: 1,
+        created_at: '2026-01-15T15:00:00.000Z',
+        updated_at: '2026-01-15T15:00:00.000Z',
+      }
+    }
+    return detail.external_work_order
+  }
+
+  private transitionTargets (status: ServiceRequest['status']): ServiceRequest['status'][] {
+    const targets: Record<ServiceRequest['status'], ServiceRequest['status'][]> = {
+      DRAFT: ['SUBMITTED'],
+      SUBMITTED: ['TRIAGED'],
+      TRIAGED: ['ASSIGNED'],
+      ASSIGNED: ['IN_PROGRESS'],
+      IN_PROGRESS: ['RESOLVED'],
+      RESOLVED: ['CLOSED', 'REOPENED'],
+      CLOSED: ['REOPENED'],
+      REOPENED: ['ASSIGNED', 'IN_PROGRESS'],
+    }
+    return targets[status] || []
+  }
+
+  private availableActionsFor (status: ServiceRequest['status']): import('./enums').RequestAction[] {
+    const actionByTarget: Partial<Record<ServiceRequest['status'], import('./enums').RequestAction[]>> = {
+      SUBMITTED: ['TRIAGE'],
+      TRIAGED: ['ASSIGN'],
+      ASSIGNED: ['START_PROGRESS'],
+      IN_PROGRESS: ['RESOLVE'],
+      RESOLVED: ['CLOSE', 'REQUEST_REOPEN'],
+      CLOSED: ['REQUEST_REOPEN'],
+      REOPENED: ['ASSIGN', 'START_PROGRESS'],
+    }
+    return actionByTarget[status] || []
+  }
+
+  private requireReason (reason: unknown): asserts reason is string {
+    if (typeof reason !== 'string' || !reason.trim()) this.failScenario('validation')
   }
 
   async getSession (): Promise<Session> {
@@ -1112,39 +1261,43 @@ export class MockC311Provider implements C311Provider {
     this.failIfNeeded(['forbidden', 'not-found', 'validation'])
     this.staffRequest(requestID, 'staff_note_create', {}, false)
     if (!input || typeof input.body !== 'string' || !input.body.trim() || input.body.length > 2000 || typeof input.portal_visible !== 'boolean') this.failScenario('validation')
-    const note: RequestNote = {
-      note_id: `note-fixture-${String(++this.noteSerial).padStart(3, '0')}`,
-      request_id: requestID,
-      author_constituent_id: this.currentSession.actor?.actor_id,
-      body: input.body,
-      portal_visible: input.portal_visible,
-      created_at: '2026-01-15T15:00:00.000Z',
-    }
-    this.notes[requestID] = (this.notes[requestID] || []).concat(note)
+    const note = this.appendStaffNote(requestID, input.body, input.portal_visible)
     this.syncPublicNotes(requestID, note)
     this.countWrite('staff_note_create')
     return copy(note)
   }
 
   async transitionStaffRequest (requestID: string, input: RequestTransition, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
-    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required', 'invalid-status-transition'])
     const detail = this.staffRequest(requestID, 'staff_request_transition', options)
-    const allowed: Record<string, string[]> = { DRAFT: ['SUBMITTED'], SUBMITTED: ['TRIAGED'], TRIAGED: ['ASSIGNED'], ASSIGNED: ['IN_PROGRESS'], IN_PROGRESS: ['RESOLVED'], RESOLVED: ['CLOSED', 'REOPENED'], CLOSED: ['REOPENED'], REOPENED: ['ASSIGNED', 'IN_PROGRESS'] }
-    if (!allowed[detail.request.status]?.includes(input.to_status)) throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'The requested status transition is not allowed.', retryable: false, errors: [{ field: '/to_status', code: 'INVALID_VALUE' }] }, 422)
+    if (!input || !SERVICE_REQUEST_STATUSES.includes(input.to_status) || !this.transitionTargets(detail.request.status).includes(input.to_status)) {
+      throw new C311ApiError(this.fixtures.errors['invalid-status-transition'], 422)
+    }
+    if (input.reason !== undefined) this.requireReason(input.reason)
+    this.updateRequestStatus(requestID, input.to_status)
     detail.request.status = input.to_status
-    detail.available_actions = detail.available_actions.filter(action => action !== 'TRIAGE' || input.to_status !== 'TRIAGED')
-    this.bumpStaffRequest(detail)
-    this.auditStaffRequest(detail, `STATUS_${input.to_status}`)
+    if (input.to_status === 'ASSIGNED') this.ensureCivicWorksWorkOrder(detail)
+    detail.available_actions = this.availableActionsFor(input.to_status)
+    this.syncQueueItem(detail)
+    this.auditStaffRequest(detail, `STATUS_${input.to_status}`, input.reason ? { reason: input.reason } : {})
     this.countWrite('staff_request_transition')
     return copy(detail)
   }
 
   async reassignStaffRequest (requestID: string, input: Reassignment, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
-    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'expected-version-required'])
     const detail = this.staffRequest(requestID, 'staff_request_reassign', options)
+    if (this.scenario === 'version-conflict' && this.consumeScenarioFailure('staff_request_reassign')) {
+      this.bumpStaffRequest(detail)
+      throw new C311ApiError({ ...this.fixtures.errors['version-conflict'], current_version: detail.request.version }, 409)
+    }
+    if (!input || typeof input.assignee_id !== 'string' || !input.assignee_id.trim()) this.failScenario('validation')
+    this.requireReason(input.reason)
+    const previousAssigneeID = detail.primary_assignee_id || null
     detail.primary_assignee_id = input.assignee_id
     this.bumpStaffRequest(detail)
-    this.auditStaffRequest(detail, 'ASSIGN')
+    const notifications = this.assignmentNotifications(detail, previousAssigneeID, input.assignee_id)
+    this.auditStaffRequest(detail, 'ASSIGN', { reason: input.reason, previous_assignee_id: previousAssigneeID, assignee_id: input.assignee_id, notification_results: copy(notifications) })
     this.countWrite('staff_request_reassign')
     return copy(detail)
   }
@@ -1152,6 +1305,8 @@ export class MockC311Provider implements C311Provider {
   async addStaffCollaborator (requestID: string, staffID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
     const detail = this.staffRequest(requestID, 'staff_collaborator_add', options)
+    if (!staffID.trim()) this.failScenario('validation')
+    this.requireReason(input?.reason)
     if (!detail.collaborator_ids.includes(staffID)) detail.collaborator_ids.push(staffID)
     this.bumpStaffRequest(detail)
     this.auditStaffRequest(detail, 'COLLABORATOR_ADD')
@@ -1162,6 +1317,7 @@ export class MockC311Provider implements C311Provider {
   async removeStaffCollaborator (requestID: string, staffID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
     const detail = this.staffRequest(requestID, 'staff_collaborator_remove', options)
+    this.requireReason(input?.reason)
     detail.collaborator_ids = detail.collaborator_ids.filter(id => id !== staffID)
     this.bumpStaffRequest(detail)
     this.auditStaffRequest(detail, 'COLLABORATOR_REMOVE')
@@ -1170,8 +1326,9 @@ export class MockC311Provider implements C311Provider {
   }
 
   async createStaffReminder (requestID: string, input: ReminderWrite): Promise<Reminder> {
-    this.failIfNeeded(['forbidden', 'not-found', 'validation'])
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'reminder-validation', 'reminder-retryable', 'reminder-terminal'])
     const detail = this.staffRequest(requestID, 'staff_reminder_create', {}, false)
+    if (!input || !input.title?.trim() || !validISODateTime(input.due_at) || !input.timezone || !input.recipient_staff_id || !REMINDER_CHANNELS.includes(input.channel)) this.failScenario('reminder-validation')
     const reminder: Reminder = { reminder_id: `reminder-fixture-${detail.reminders.length + 1}`, request_id: requestID, ...input, status: 'SCHEDULED', completed_at: null }
     detail.reminders.push(reminder)
     this.countWrite('staff_reminder_create')
@@ -1179,14 +1336,27 @@ export class MockC311Provider implements C311Provider {
   }
 
   async actionStaffReminder (reminderID: string, action: import('./enums').ReminderAction, input: ReminderActionInput = {}): Promise<Reminder> {
-    this.failIfNeeded(['forbidden', 'not-found', 'validation'])
+    this.failIfNeeded(['forbidden', 'not-found', 'validation', 'reminder-validation', 'reminder-retryable', 'reminder-terminal'])
     this.requireCapability('staff_reminder_action')
     for (const detail of Object.values(this.fixtures.details)) {
       const reminder = detail.reminders.find(item => item.reminder_id === reminderID)
       if (reminder) {
         this.staffRequest(detail.request.request_id, 'staff_reminder_action', {}, false)
-        reminder.status = action === 'SNOOZE' ? 'SNOOZED' : action === 'COMPLETE' ? 'COMPLETED' : 'CANCELLED'
-        if (input.due_at) reminder.due_at = input.due_at
+        if (!['SNOOZE', 'COMPLETE', 'CANCEL'].includes(action)) this.failScenario('reminder-validation')
+        if (reminder.status === 'COMPLETED' || reminder.status === 'CANCELLED') return copy(reminder)
+        if (action === 'SNOOZE') {
+          const dueAt = input.due_at
+          if (!validISODateTime(dueAt) || Date.parse(dueAt) <= Date.parse(reminder.due_at)) throw new C311ApiError(this.fixtures.errors['reminder-validation'], 422)
+          const previousDueAt = reminder.due_at
+          reminder.due_at = dueAt
+          reminder.status = 'SNOOZED'
+          reminder.history = [...(reminder.history || []), { action, previous_due_at: previousDueAt, due_at: dueAt, occurred_at: '2026-01-15T15:00:00.000Z' }]
+        } else {
+          reminder.status = action === 'COMPLETE' ? 'COMPLETED' : 'CANCELLED'
+          reminder.completed_at = action === 'COMPLETE' ? '2026-01-15T15:00:00.000Z' : null
+          reminder.completed_by = action === 'COMPLETE' ? this.currentSession.actor?.actor_id : undefined
+          reminder.history = [...(reminder.history || []), { action, occurred_at: '2026-01-15T15:00:00.000Z' }]
+        }
         this.countWrite('staff_reminder_action')
         return copy(reminder)
       }
@@ -1197,6 +1367,8 @@ export class MockC311Provider implements C311Provider {
   async overrideStaffOrigin (requestID: string, input: OriginOverride, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
     const detail = this.staffRequest(requestID, 'staff_origin_override', options)
+    if (!input || !ORIGIN_CLASSES.includes(input.origin_class)) this.failScenario('validation')
+    this.requireReason(input.reason)
     detail.request.origin_class = input.origin_class
     this.bumpStaffRequest(detail)
     this.auditStaffRequest(detail, 'ORIGIN_OVERRIDE')
@@ -1207,6 +1379,8 @@ export class MockC311Provider implements C311Provider {
   async overrideStaffScope (requestID: string, input: ScopeOverride, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
     const detail = this.staffRequest(requestID, 'staff_scope_override', options)
+    if (!input || !DEPARTMENT_CODES.includes(input.department_code) || !Array.isArray(input.district_codes) || !input.district_codes.length || input.district_codes.some(district => !DISTRICT_CODES.includes(district))) this.failScenario('validation')
+    this.requireReason(input.reason)
     detail.request.owning_department = input.department_code
     detail.request.council_district = input.district_codes[0]
     this.bumpStaffRequest(detail)
@@ -1218,6 +1392,8 @@ export class MockC311Provider implements C311Provider {
   async confirmStaffDuplicateGroup (requestID: string, input: DuplicateGroupChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
     const detail = this.staffRequest(requestID, 'staff_duplicate_group_confirm', options)
+    if (!input?.duplicate_group_id?.trim()) this.failScenario('validation')
+    this.requireReason(input.reason)
     detail.request.duplicate_group_id = input.duplicate_group_id
     this.bumpStaffRequest(detail)
     this.auditStaffRequest(detail, 'DUPLICATE_GROUP_CONFIRM')
@@ -1228,6 +1404,7 @@ export class MockC311Provider implements C311Provider {
   async removeStaffDuplicateGroup (requestID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
     const detail = this.staffRequest(requestID, 'staff_duplicate_group_remove', options)
+    this.requireReason(input?.reason)
     delete detail.request.duplicate_group_id
     this.bumpStaffRequest(detail)
     this.auditStaffRequest(detail, 'DUPLICATE_GROUP_REMOVE')
@@ -1238,11 +1415,145 @@ export class MockC311Provider implements C311Provider {
   async approveStaffReopen (requestID: string, input: CollaboratorChange, options: C311RequestOptions = {}): Promise<StaffServiceRequestDetail> {
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'version-conflict', 'expected-version-required'])
     const detail = this.staffRequest(requestID, 'staff_reopen_approve', options)
+    this.requireReason(input?.reason)
+    if (!['RESOLVED', 'CLOSED'].includes(detail.request.status)) throw new C311ApiError(this.fixtures.errors['invalid-status-transition'], 422)
+    this.updateRequestStatus(requestID, 'REOPENED')
     detail.request.status = 'REOPENED'
-    this.bumpStaffRequest(detail)
+    detail.available_actions = this.availableActionsFor('REOPENED')
+    this.syncQueueItem(detail)
     this.auditStaffRequest(detail, 'REOPEN_APPROVE')
     this.countWrite('staff_reopen_approve')
     return copy(detail)
+  }
+
+  async bulkStaffRequests (input: BulkRequest, options: C311RequestOptions = {}): Promise<BulkResult> {
+    this.failIfNeeded(['forbidden', 'validation', 'idempotency-conflict', 'bulk-validation'])
+    this.requireStaffCapability('staff_request_bulk')
+    const key = options.idempotencyKey
+    if (!key) throw new C311ApiError(this.fixtures.errors['bulk-validation'], 422)
+    if (!input || !['UPDATE', 'CLOSE'].includes(input.action) || !Array.isArray(input.request_items) || !input.request_items.length || new Set(input.request_items.map(item => item.request_id)).size !== input.request_items.length) {
+      throw new C311ApiError(this.fixtures.errors['bulk-validation'], 422)
+    }
+    const fingerprint = this.fingerprint(input)
+    const previous = this.bulkIdempotentResponses.get(key)
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) throw new C311ApiError({ error: 'IDEMPOTENCY_CONFLICT', message: 'The idempotency key has already been used with different content.', retryable: false }, 409)
+      return copy(previous.response)
+    }
+    const allowedChanges = new Set(['primary_assignee_id', 'priority', 'status', 'staff_note'])
+    const changes = input.changes || {}
+    if (Object.keys(changes).some(keyName => !allowedChanges.has(keyName)) || (changes.status !== undefined && !SERVICE_REQUEST_STATUSES.includes(changes.status)) || (input.action === 'CLOSE' && changes.status !== undefined) || (changes.staff_note !== undefined && (typeof changes.staff_note !== 'string' || !changes.staff_note.trim() || changes.staff_note.length > 2000))) {
+      throw new C311ApiError({ ...this.fixtures.errors['bulk-validation'], failing_request_id: input.request_items[0].request_id }, 422)
+    }
+    const details = input.request_items.map(item => {
+      try {
+        const detail = this.staffRequest(item.request_id, 'staff_request_bulk', { expectedVersion: item.expected_version })
+        this.request(item.request_id)
+        return detail
+      } catch (error) {
+        return this.bulkError(error, item.request_id)
+      }
+    })
+    const department = details[0].request.owning_department
+    const duplicateGroup = details[0].request.duplicate_group_id || null
+    const incompatible = details.find(detail => detail.request.owning_department !== department || (detail.request.duplicate_group_id || null) !== duplicateGroup)
+    if (incompatible) {
+      throw new C311ApiError({ ...this.fixtures.errors['bulk-validation'], failing_request_id: incompatible.request.request_id }, 422)
+    }
+    if ((this.scenario === 'bulk-version-conflict' || this.scenario === 'version-conflict') && this.consumeScenarioFailure('staff_request_bulk')) {
+      const detail = details[0]
+      this.bumpStaffRequest(detail)
+      throw new C311ApiError({ ...this.fixtures.errors['bulk-version-conflict'], current_version: detail.request.version, failing_request_id: detail.request.request_id }, 409)
+    }
+    const invalidClose = input.action === 'CLOSE' ? details.find(detail => detail.request.status !== 'RESOLVED') : undefined
+    if (invalidClose) {
+      throw new C311ApiError({ ...this.fixtures.errors['bulk-validation'], failing_request_id: invalidClose.request.request_id }, 422)
+    }
+    const invalidTransition = changes.status !== undefined ? details.find(detail => !this.transitionTargets(detail.request.status).includes(changes.status!)) : undefined
+    if (invalidTransition) {
+      throw new C311ApiError({ ...this.fixtures.errors['invalid-status-transition'], failing_request_id: invalidTransition.request.request_id }, 422)
+    }
+    const snapshot = this.snapshotRequestState()
+    const updatedRequestIds: string[] = []
+    try {
+      for (const detail of details) {
+        const requestID = detail.request.request_id
+        if (input.action === 'CLOSE') this.updateRequestStatus(requestID, 'CLOSED')
+        if (changes.status !== undefined) this.updateRequestStatus(requestID, changes.status)
+        if (changes.primary_assignee_id !== undefined) detail.primary_assignee_id = changes.primary_assignee_id
+        if (changes.priority !== undefined) (detail.request as ServiceRequest & { priority?: string }).priority = changes.priority
+        if (changes.staff_note !== undefined) this.appendStaffNote(requestID, changes.staff_note)
+        detail.available_actions = this.availableActionsFor(detail.request.status)
+        if (input.action !== 'CLOSE' && changes.status === undefined) this.bumpStaffRequest(detail)
+        this.syncQueueItem(detail)
+        this.auditStaffRequest(detail, `BULK_${input.action}`)
+        updatedRequestIds.push(requestID)
+      }
+    } catch (error) {
+      this.restoreRequestState(snapshot)
+      const requestID = details[updatedRequestIds.length]?.request.request_id || input.request_items[0].request_id
+      return this.bulkError(error, requestID)
+    }
+    const response = { updated_count: updatedRequestIds.length, updated_request_ids: updatedRequestIds }
+    this.bulkIdempotentResponses.set(key, { fingerprint, response })
+    this.countWrite('staff_request_bulk')
+    return copy(response)
+  }
+
+  async processCivicWorksEvent (input: CivicWorksEvent, eventId: string, signature: string): Promise<CivicWorksEventResult> {
+    if (this.scenario === 'civicworks-invalid-signature' || signature !== 'fixture-signature' || eventId !== input?.event_id) {
+      throw new C311ApiError(this.fixtures.errors['civicworks-invalid-signature'], 401)
+    }
+    if (!input || input.event_type !== 'work_order.status_changed' || !input.work_order_id || !input.source_case_id || !CIVICWORKS_STATUSES.includes(input.previous_status) || !CIVICWORKS_STATUSES.includes(input.status) || !Number.isInteger(input.version) || input.version < 1 || !validISODateTime(input.occurred_at)) {
+      throw new C311ApiError(this.fixtures.errors['bulk-validation'], 422)
+    }
+    const fingerprint = this.fingerprint(input)
+    const existingEvent = this.civicWorksEvents.get(eventId)
+    if (existingEvent) {
+      if (existingEvent !== fingerprint) throw new C311ApiError(this.fixtures.errors['civicworks-duplicate'], 422)
+      return { acknowledged: true, duplicate: true }
+    }
+    const detail = this.fixtures.details[input.source_case_id]
+    if (!detail) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+    const currentExternalVersion = (detail.external_work_order as CivicWorksWorkOrder | null)?.version || 0
+    if (input.version <= currentExternalVersion) {
+      this.civicWorksEvents.set(eventId, fingerprint)
+      return { acknowledged: true }
+    }
+    const plans: Partial<Record<ServiceRequest['status'], Partial<Record<CivicWorksWorkOrder['status'], ServiceRequest['status'][]>>>> = {
+      ASSIGNED: { ASSIGNED: [], IN_PROGRESS: ['IN_PROGRESS'], PARTIALLY_COMPLETED: ['IN_PROGRESS'], COMPLETED: ['IN_PROGRESS', 'RESOLVED'] },
+      IN_PROGRESS: { ASSIGNED: [], IN_PROGRESS: [], PARTIALLY_COMPLETED: [], COMPLETED: ['RESOLVED'] },
+      RESOLVED: { COMPLETED: [] },
+      CLOSED: { COMPLETED: [] },
+      REOPENED: { COMPLETED: [] },
+    }
+    const transitions = plans[detail.request.status]?.[input.status] || []
+    const snapshot = this.snapshotRequestState()
+    try {
+      for (const status of transitions) {
+        this.updateRequestStatus(input.source_case_id, status)
+        this.auditStaffRequest(detail, `STATUS_${status}`)
+      }
+    } catch (error) {
+      this.restoreRequestState(snapshot)
+      throw error
+    }
+    detail.available_actions = this.availableActionsFor(detail.request.status)
+    const currentWorkOrder = detail.external_work_order
+    detail.external_work_order = {
+      work_order_id: input.work_order_id,
+      source_case_id: input.source_case_id,
+      service_request_number: detail.request.request_number || input.source_case_id,
+      status: input.status,
+      external_status_url: currentWorkOrder?.external_status_url || `https://civicworks.fixture.invalid/ui/work-orders/${encodeURIComponent(input.work_order_id)}`,
+      version: input.version,
+      created_at: currentWorkOrder?.created_at || '2026-01-15T15:00:00.000Z',
+      updated_at: input.occurred_at,
+    }
+    this.civicWorksEvents.set(eventId, fingerprint)
+    this.auditStaffRequest(detail, 'CIVICWORKS_STATUS_CHANGED')
+    this.countWrite('civicworks_event_callback')
+    return { acknowledged: true }
   }
 
   async listReports (query: ListQuery = {}): Promise<PageResponse<ReportDefinition>> {

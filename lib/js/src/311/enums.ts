@@ -244,6 +244,15 @@ export const C311_SCENARIOS = [
   'pagination',
   /** Mock-only fixture with an out-of-scope queue item for scope filtering checks. */
   'scope-filter',
+  'invalid-status-transition',
+  'bulk-validation',
+  'bulk-version-conflict',
+  'civicworks-invalid-signature',
+  'civicworks-stale',
+  'civicworks-duplicate',
+  'reminder-validation',
+  'reminder-retryable',
+  'reminder-terminal',
 ] as const
 export type C311Scenario = typeof C311_SCENARIOS[number]
 

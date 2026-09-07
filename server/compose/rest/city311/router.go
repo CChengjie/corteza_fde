@@ -119,6 +119,9 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Get(serviceRequestsRoute, h.staffList)
 			r.Get("/service-requests/{request_id}", h.staffDetail)
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
+			r.Post("/service-requests/{request_id}/assignment", h.staffReassign)
+			r.Put("/service-requests/{request_id}/collaborators/{staff_id}", h.staffCollaboratorAdd)
+			r.Delete("/service-requests/{request_id}/collaborators/{staff_id}", h.staffCollaboratorRemove)
 			r.Post("/service-requests/{request_id}/notes", h.staffNoteCreate)
 			r.Post("/service-requests/{request_id}/reopen/approve", h.staffReopenApprove)
 			r.Post("/service-requests/{request_id}/constituents", h.staffConstituentLink)
@@ -641,6 +644,68 @@ func (h *handler) staffTransition(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, http.StatusOK, result, err)
 }
 
+func (h *handler) staffReassign(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.Reassignment{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.Reassign(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffCollaboratorAdd(w http.ResponseWriter, r *http.Request) {
+	h.staffCollaboratorChange(w, r, true)
+}
+
+func (h *handler) staffCollaboratorRemove(w http.ResponseWriter, r *http.Request) {
+	h.staffCollaboratorChange(w, r, false)
+}
+
+func (h *handler) staffCollaboratorChange(w http.ResponseWriter, r *http.Request, add bool) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	staffID, err := strconv.ParseUint(chi.URLParam(r, "staff_id"), 10, 64)
+	if err != nil || staffID == 0 {
+		writeValidation(w, "/path/staff_id", contract.ValidationInvalidFormat)
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.Reason{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	var result *contract.StaffServiceRequestDetail
+	if add {
+		result, err = h.service.AddCollaborator(r.Context(), actor, requestID, expectedVersion, staffID, input)
+	} else {
+		result, err = h.service.RemoveCollaborator(r.Context(), actor, requestID, expectedVersion, staffID, input)
+	}
+	writeResult(w, http.StatusOK, result, err)
+}
+
 func (h *handler) staffNoteCreate(w http.ResponseWriter, r *http.Request) {
 	requestID, ok := staffRequestID(w, r)
 	if !ok {
@@ -762,6 +827,17 @@ func parseIfMatch(value string) (uint64, error) {
 		return 0, errors.New("If-Match must be one quoted positive decimal version")
 	}
 	return strconv.ParseUint(value[1:len(value)-1], 10, 64)
+}
+
+func requiredVersion(w http.ResponseWriter, r *http.Request) (uint64, bool) {
+	version, err := parseIfMatch(r.Header.Get(contract.IfMatchHeader))
+	if err != nil {
+		writeResult(w, 0, nil, &city311Service.ServiceError{Status: http.StatusPreconditionRequired, Payload: contract.APIError{
+			Error: contract.ErrorExpectedVersionRequired, Message: "If-Match must identify the expected record version.", Retryable: false,
+		}})
+		return 0, false
+	}
+	return version, true
 }
 
 func requireIdentity(next http.Handler) http.Handler {

@@ -219,6 +219,10 @@ type DataExportQuery struct {
 	UpdatedSince *time.Time
 }
 
+type ContactEmailExport struct {
+	Filters map[string][]string `json:"filters"`
+}
+
 type FollowUpAction struct {
 	ActionType       string         `json:"action_type"`
 	Actor            string         `json:"actor"`

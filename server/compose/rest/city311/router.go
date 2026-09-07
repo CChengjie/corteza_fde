@@ -90,6 +90,10 @@ type auditExportWrite struct {
 	Filters *auditFilterInput `json:"filters"`
 }
 
+type contactEmailExportWrite struct {
+	Filters *map[string]stringList `json:"filters"`
+}
+
 func MountRoutes() func(chi.Router) {
 	return MountRoutesWithServices(city311Service.Default, city311Service.DefaultIdentity)
 }
@@ -137,6 +141,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Use(requireIdentity)
 			r.Get("/audit-events", h.staffAuditList)
 			r.Post("/audit-events/export", h.staffAuditExport)
+			r.Post("/contact-email-export", h.contactEmailExport)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
 			r.Post("/service-requests/bulk", h.staffBulk)
 			r.Get(serviceRequestsRoute, h.staffList)
@@ -616,6 +621,28 @@ func (h *handler) staffAuditExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.service.StartAuditExport(r.Context(), actor, contract.AuditExport{Filters: filters})
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) contactEmailExport(w http.ResponseWriter, r *http.Request) {
+	input := contactEmailExportWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Filters == nil {
+		writeValidation(w, "/filters", contract.ValidationRequired)
+		return
+	}
+	filters := make(map[string][]string, len(*input.Filters))
+	for key, values := range *input.Filters {
+		filters[key] = trimStringList(values)
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.StartContactEmailExport(r.Context(), actor, contract.ContactEmailExport{Filters: filters})
 	writeResult(w, http.StatusAccepted, result, err)
 }
 

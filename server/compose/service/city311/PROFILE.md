@@ -51,7 +51,8 @@ Profile PATCH supports only:
 - `display_name`: 1–120 Unicode characters, trimmed on save;
 - `phone_numbers`: zero to three objects, MOBILE/HOME/WORK labels and E.164 values;
 - `addresses`: zero to five structured addresses, at most one primary;
-- `primary_category`: the existing published contact-category vocabulary;
+- `primary_category`: a stable code from the current active administrator-managed
+  contact-category vocabulary;
 - `preferred_language`: EN, ES or VI.
 
 Omitted fields retain their current values. Empty arrays explicitly clear a
@@ -65,6 +66,11 @@ value as `If-Match` on PATCH. Missing/malformed preconditions return 428
 with `current_version`, without writes or extra audits. Reload after a conflict
 before resubmitting. Even an equivalent body with a stale version is rejected.
 The existing contract does not require pagination or an idempotency key here.
+Assignment and category deactivation take the same database-visible category
+lock. A newly created active code is immediately assignable; an unknown or
+inactive code returns `422 VALIDATION_ERROR` at `/primary_category`. Whichever
+of assignment or deactivation acquires the lock first determines the valid
+outcome, so an inactive category cannot commit while remaining in use.
 
 Example authenticated request:
 

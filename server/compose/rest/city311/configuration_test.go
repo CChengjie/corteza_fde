@@ -43,18 +43,33 @@ func TestContactCategoryHTTPContract(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, unknownActor.Code)
 
 	body["code"] = "RENAMED"
-	conflict := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, nil, manager.ID)
+	missingVersion := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, nil, manager.ID)
+	require.Equal(t, http.StatusPreconditionRequired, missingVersion.Code)
+	conflict := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, map[string]string{contract.IfMatchHeader: `"1"`}, manager.ID)
 	require.Equal(t, http.StatusUnprocessableEntity, conflict.Code)
 	require.Contains(t, conflict.Body.String(), `"code":"CONFLICT"`)
 	body["code"] = "NONPROFIT"
 	body["active"] = false
-	updated := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, nil, manager.ID)
+	unauthenticated = executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, map[string]string{contract.IfMatchHeader: `"1"`}, 0)
+	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
+	forbidden = executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, map[string]string{contract.IfMatchHeader: `"1"`}, agent.ID)
+	require.Equal(t, http.StatusForbidden, forbidden.Code)
+	updated := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, map[string]string{contract.IfMatchHeader: `"1"`}, manager.ID)
 	require.Equal(t, http.StatusOK, updated.Code, updated.Body.String())
 	require.Equal(t, `"2"`, updated.Header().Get("ETag"))
-	malformed = executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", map[string]any{"unknown": true}, nil, manager.ID)
+	stale := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, map[string]string{contract.IfMatchHeader: `"1"`}, manager.ID)
+	require.Equal(t, http.StatusConflict, stale.Code, stale.Body.String())
+	require.Contains(t, stale.Body.String(), `"message":"The category has changed."`)
+	require.Contains(t, stale.Body.String(), `"current_version":2`)
+	malformed = executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", map[string]any{"unknown": true}, map[string]string{contract.IfMatchHeader: `"2"`}, manager.ID)
 	require.Equal(t, http.StatusUnprocessableEntity, malformed.Code)
-	unknownActor = executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, nil, 999)
+	unknownActor = executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/NONPROFIT", body, map[string]string{contract.IfMatchHeader: `"2"`}, 999)
 	require.Equal(t, http.StatusForbidden, unknownActor.Code)
+	inUse := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/contact-categories/RESIDENT", map[string]any{
+		"code": "RESIDENT", "active": false, "labels": map[string]string{"EN": "Resident"},
+	}, map[string]string{contract.IfMatchHeader: `"1"`}, manager.ID)
+	require.Equal(t, http.StatusUnprocessableEntity, inUse.Code, inUse.Body.String())
+	require.Contains(t, inUse.Body.String(), `"field":"/active"`)
 }
 
 func TestCustomFieldHTTPContractAndQueueFiltering(t *testing.T) {

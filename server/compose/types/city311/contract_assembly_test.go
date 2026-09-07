@@ -179,7 +179,7 @@ func TestMutatingVersionedEndpointsRequireIfMatch(t *testing.T) {
 	contract := NewContractDocument()
 	for _, name := range []string{
 		"portal_draft_update", "profile_update", "staff_request_transition", "admin_branding_update", "admin_help_update",
-		"admin_content_update", "admin_custom_fields_update", "workflow_update", "integration_update",
+		"admin_content_update", "admin_categories_update", "admin_custom_fields_update", "workflow_update", "integration_update",
 	} {
 		endpoint := contract.Endpoints[name]
 		if !contains(endpoint.RequiredHeaders, IfMatchHeader) {
@@ -187,6 +187,56 @@ func TestMutatingVersionedEndpointsRequireIfMatch(t *testing.T) {
 		}
 		if endpoint.ErrorStatuses[string(ErrorExpectedVersionRequired)] != 428 || endpoint.ErrorStatuses[string(ErrorVersionConflict)] != 409 {
 			t.Errorf("versioned update %s has incomplete concurrency errors", name)
+		}
+	}
+}
+
+func TestContactCategoryConcurrencyContractIsComplete(t *testing.T) {
+	contract := NewContractDocument()
+	update := contract.Endpoints["admin_categories_update"]
+	if !contains(update.RequiredHeaders, IfMatchHeader) || update.ErrorStatuses[string(ErrorVersionConflict)] != 409 || update.ErrorStatuses[string(ErrorExpectedVersionRequired)] != 428 {
+		t.Fatal("category update must publish If-Match, stale-version, and missing-version behavior")
+	}
+	for code, status := range map[ErrorCode]int{
+		ErrorUnauthenticated: 401, ErrorForbidden: 403, ErrorNotFound: 404, ErrorVersionConflict: 409,
+		ErrorValidation: 422, ErrorExpectedVersionRequired: 428,
+	} {
+		if update.ErrorStatuses[string(code)] != status {
+			t.Errorf("category update is missing %s=%d", code, status)
+		}
+	}
+	category := contract.Schemas["category"]
+	if !reflect.DeepEqual(category["required"], []string{"code", "active", "labels", "version", "updated_at"}) {
+		t.Fatalf("category DTO does not freeze labels and revision fields: %#v", category["required"])
+	}
+	properties := category["properties"].(map[string]interface{})
+	code := properties["code"].(map[string]interface{})
+	if code["stable"] != true || code["immutable"] != true {
+		t.Fatal("category code must remain a stable immutable identifier")
+	}
+	for _, schemaName := range []string{"constituent", "profile_update"} {
+		primary := contract.Schemas[schemaName]["properties"].(map[string]interface{})["primary_category"].(map[string]interface{})
+		if _, closed := primary["enum_ref"]; closed || primary["must_be_active"] != true || primary["vocabulary_endpoint"] != "admin_categories_list" || primary["initial_values_enum_ref"] != "contact_category" {
+			t.Errorf("%s must reference the active managed category vocabulary while retaining the initial seed enum separately", schemaName)
+		}
+	}
+	concurrency := contract.Protocol["optimistic_concurrency"].(map[string]interface{})
+	if !contains(concurrency["applies_to"].([]string), "category") {
+		t.Fatal("category must be included in the shared optimistic-concurrency protocol")
+	}
+	session := contract.Protocol["session_and_authorization"].(map[string]interface{})
+	fixtures := session["administration_role_capability_fixtures"].(map[string]interface{})
+	for _, role := range []string{"department_manager", "platform_administrator"} {
+		capabilities := fixtures[role].([]string)
+		for _, name := range []string{"admin_categories_list", "admin_categories_create", "admin_categories_update"} {
+			if !contains(capabilities, name) {
+				t.Errorf("%s fixture must grant %s", role, name)
+			}
+		}
+	}
+	for _, name := range []string{"admin_category_updated", "admin_category_update_request", "admin_category_version_conflict", "admin_category_version_required", "admin_category_in_use", "admin_category_audit_event"} {
+		if _, present := contract.Mocks[name]; !present {
+			t.Errorf("category fixture %s is missing", name)
 		}
 	}
 }

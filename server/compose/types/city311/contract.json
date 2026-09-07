@@ -1,11 +1,11 @@
 {
-  "contract_version": "2.0.0",
+  "contract_version": "3.0.0",
   "versioning": {
     "scheme": "semantic_versioning",
     "stability": "frozen",
     "effective_at": "merge_to_2024.9.x",
     "first_published_version": "1.0.0",
-    "supported_major": 2,
+    "supported_major": 3,
     "major_version_rule": "after first publication, any consumer-incompatible contract revision increments the major version"
   },
   "maintainer": "Developer 1 - backend, integrations, and runtime",
@@ -355,6 +355,23 @@
     },
     "session_and_authorization": {
       "actor_class_enum_ref": "authenticated_actor_class",
+      "administration_role_capability_fixtures": {
+        "constituent": [],
+        "department_manager": [],
+        "integration_client": [],
+        "platform_administrator": [
+          "admin_help_get",
+          "admin_help_update",
+          "admin_help_preview",
+          "admin_help_publish",
+          "admin_help_versions",
+          "admin_help_rollback"
+        ],
+        "public_visitor": [],
+        "service_agent": [],
+        "supervisor": [],
+        "workflow_designer": []
+      },
       "anonymous_role": "public_visitor",
       "authentication_mode_enum_ref": "authentication_mode",
       "authorization_rule": "available_actions is computed from application roles plus department and district record scope; the server remains authoritative",
@@ -1113,6 +1130,181 @@
         "VERSION_CONFLICT": 409
       }
     },
+    "admin_help_get": {
+      "method": "GET",
+      "path": "/api/v1/admin/help/{help_key}",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "session_cookie",
+        "actor_class": "staff",
+        "alternatives": [
+          {
+            "application_roles": [
+              "platform_administrator"
+            ]
+          }
+        ]
+      },
+      "required_capability": "admin_help_get",
+      "path_parameters": {
+        "help_key": {
+          "enum_source": "help_keys",
+          "type": "string"
+        }
+      },
+      "response_schema": "help_content",
+      "success_statuses": {
+        "success": 200
+      },
+      "error_statuses": {
+        "FORBIDDEN": 403,
+        "NOT_FOUND": 404,
+        "UNAUTHENTICATED": 401,
+        "VALIDATION_ERROR": 422
+      },
+      "query_parameters": {
+        "language": {
+          "default": "EN",
+          "enum_ref": "language"
+        }
+      },
+      "response_headers": {
+        "ETag": "success response: quoted decimal language-specific help revision"
+      }
+    },
+    "admin_help_preview": {
+      "method": "POST",
+      "path": "/api/v1/admin/help/{help_key}/preview",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "session_cookie",
+        "actor_class": "staff",
+        "alternatives": [
+          {
+            "application_roles": [
+              "platform_administrator"
+            ]
+          }
+        ]
+      },
+      "required_capability": "admin_help_preview",
+      "path_parameters": {
+        "help_key": {
+          "enum_source": "help_keys",
+          "type": "string"
+        }
+      },
+      "request_schema": "help_write",
+      "response_schema": "help_content",
+      "success_statuses": {
+        "success": 200
+      },
+      "error_statuses": {
+        "FORBIDDEN": 403,
+        "NOT_FOUND": 404,
+        "UNAUTHENTICATED": 401,
+        "VALIDATION_ERROR": 422
+      },
+      "response_headers": {
+        "ETag": "success response: quoted decimal language-specific help revision"
+      }
+    },
+    "admin_help_publish": {
+      "method": "POST",
+      "path": "/api/v1/admin/help/{help_key}/publish",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "session_cookie",
+        "actor_class": "staff",
+        "alternatives": [
+          {
+            "application_roles": [
+              "platform_administrator"
+            ]
+          }
+        ]
+      },
+      "required_capability": "admin_help_publish",
+      "required_headers": [
+        "If-Match"
+      ],
+      "path_parameters": {
+        "help_key": {
+          "enum_source": "help_keys",
+          "type": "string"
+        }
+      },
+      "request_schema": "empty_request",
+      "response_schema": "help_content",
+      "success_statuses": {
+        "success": 200
+      },
+      "error_statuses": {
+        "EXPECTED_VERSION_REQUIRED": 428,
+        "FORBIDDEN": 403,
+        "NOT_FOUND": 404,
+        "UNAUTHENTICATED": 401,
+        "VALIDATION_ERROR": 422,
+        "VERSION_CONFLICT": 409
+      },
+      "query_parameters": {
+        "language": {
+          "default": "EN",
+          "enum_ref": "language"
+        }
+      },
+      "response_headers": {
+        "ETag": "success response: quoted decimal language-specific help revision"
+      }
+    },
+    "admin_help_rollback": {
+      "method": "POST",
+      "path": "/api/v1/admin/help/{help_key}/rollback",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "session_cookie",
+        "actor_class": "staff",
+        "alternatives": [
+          {
+            "application_roles": [
+              "platform_administrator"
+            ]
+          }
+        ]
+      },
+      "required_capability": "admin_help_rollback",
+      "required_headers": [
+        "If-Match"
+      ],
+      "path_parameters": {
+        "help_key": {
+          "enum_source": "help_keys",
+          "type": "string"
+        }
+      },
+      "request_schema": "rollback",
+      "response_schema": "help_content",
+      "success_statuses": {
+        "success": 200
+      },
+      "error_statuses": {
+        "EXPECTED_VERSION_REQUIRED": 428,
+        "FORBIDDEN": 403,
+        "NOT_FOUND": 404,
+        "UNAUTHENTICATED": 401,
+        "VALIDATION_ERROR": 422,
+        "VERSION_CONFLICT": 409
+      },
+      "query_parameters": {
+        "language": {
+          "default": "EN",
+          "enum_ref": "language"
+        }
+      },
+      "response_headers": {
+        "ETag": "success response: quoted decimal language-specific help revision"
+      }
+    },
     "admin_help_update": {
       "method": "PATCH",
       "path": "/api/v1/admin/help/{help_key}",
@@ -1150,6 +1342,68 @@
         "UNAUTHENTICATED": 401,
         "VALIDATION_ERROR": 422,
         "VERSION_CONFLICT": 409
+      },
+      "response_headers": {
+        "ETag": "success response: quoted decimal language-specific help revision"
+      }
+    },
+    "admin_help_versions": {
+      "method": "GET",
+      "path": "/api/v1/admin/help/{help_key}/versions",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "session_cookie",
+        "actor_class": "staff",
+        "alternatives": [
+          {
+            "application_roles": [
+              "platform_administrator"
+            ]
+          }
+        ]
+      },
+      "required_capability": "admin_help_versions",
+      "path_parameters": {
+        "help_key": {
+          "enum_source": "help_keys",
+          "type": "string"
+        }
+      },
+      "response_schema": "list_response",
+      "entity_response_schemas": {
+        "items": "help_content"
+      },
+      "success_statuses": {
+        "success": 200
+      },
+      "error_statuses": {
+        "FORBIDDEN": 403,
+        "NOT_FOUND": 404,
+        "UNAUTHENTICATED": 401,
+        "VALIDATION_ERROR": 422
+      },
+      "query_parameters": {
+        "filters": {
+          "type": "object"
+        },
+        "language": {
+          "default": "EN",
+          "enum_ref": "language"
+        },
+        "page_size": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "page_token": {
+          "opaque": true,
+          "type": "string"
+        },
+        "sort": {
+          "maximum_fields": 3,
+          "type": "string"
+        }
       }
     },
     "anonymous_status_lookup": {
@@ -2506,6 +2760,9 @@
       },
       "error_statuses": {
         "NOT_FOUND": 404
+      },
+      "response_headers": {
+        "ETag": "success response: quoted decimal language-specific help revision"
       }
     },
     "report_catalogue": {
@@ -4207,7 +4464,12 @@
       "admin_custom_fields_create",
       "admin_custom_fields_list",
       "admin_custom_fields_update",
+      "admin_help_get",
+      "admin_help_preview",
+      "admin_help_publish",
+      "admin_help_rollback",
       "admin_help_update",
+      "admin_help_versions",
       "attachment_download",
       "audit_export",
       "audit_list",
@@ -4438,7 +4700,12 @@
       "admin_custom_fields_create",
       "admin_custom_fields_list",
       "admin_custom_fields_update",
+      "admin_help_get",
+      "admin_help_preview",
+      "admin_help_publish",
+      "admin_help_rollback",
       "admin_help_update",
+      "admin_help_versions",
       "anonymous_status_lookup",
       "attachment_download",
       "audit_export",
@@ -5957,6 +6224,15 @@
         "language": {
           "enum_ref": "language"
         },
+        "published": {
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "DRAFT",
+            "PUBLISHED"
+          ]
+        },
         "updated_at": {
           "explicit_utc_offset": true,
           "format": "date-time",
@@ -5971,6 +6247,8 @@
         "help_key",
         "language",
         "body",
+        "state",
+        "published",
         "version",
         "updated_at"
       ],
@@ -7743,6 +8021,212 @@
         "accepted": true
       }
     },
+    "admin_help_audit_events": {
+      "endpoint": "audit_list",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "applied_filters": {
+          "entity_type": [
+            "help"
+          ]
+        },
+        "items": [
+          {
+            "actor_id": "staff-admin-1",
+            "actor_type": "staff",
+            "after": {
+              "published": false,
+              "version": 2
+            },
+            "before": {
+              "version": 1
+            },
+            "entity_id": "public.request.submit",
+            "entity_type": "help",
+            "event_type": "HELP_UPDATED",
+            "occurred_at": "2026-08-25T10:02:00Z",
+            "source_channel": "STAFF_IN_PERSON"
+          },
+          {
+            "actor_id": "staff-admin-1",
+            "actor_type": "staff",
+            "after": {
+              "published": true,
+              "version": 3
+            },
+            "before": {
+              "version": 2
+            },
+            "entity_id": "public.request.submit",
+            "entity_type": "help",
+            "event_type": "HELP_PUBLISHED",
+            "occurred_at": "2026-08-25T10:03:00Z",
+            "source_channel": "STAFF_IN_PERSON"
+          },
+          {
+            "actor_id": "staff-admin-1",
+            "actor_type": "staff",
+            "after": {
+              "published": true,
+              "version": 5
+            },
+            "before": {
+              "version": 4
+            },
+            "entity_id": "public.request.submit",
+            "entity_type": "help",
+            "event_type": "HELP_ROLLED_BACK",
+            "occurred_at": "2026-08-25T10:05:00Z",
+            "source_channel": "STAFF_IN_PERSON"
+          }
+        ],
+        "next_page_token": null,
+        "sort": [
+          "-occurred_at"
+        ],
+        "total_count": 3
+      }
+    },
+    "admin_help_current": {
+      "endpoint": "admin_help_get",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "body": "\u003cp\u003eDescribe the issue.\u003c/p\u003e",
+        "help_key": "public.request.submit",
+        "language": "EN",
+        "published": true,
+        "state": "PUBLISHED",
+        "updated_at": "2026-08-25T10:00:00Z",
+        "version": 1
+      }
+    },
+    "admin_help_draft": {
+      "endpoint": "admin_help_update",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+        "help_key": "public.request.submit",
+        "language": "ES",
+        "published": false,
+        "state": "DRAFT",
+        "updated_at": "2026-08-25T10:02:00Z",
+        "version": 2
+      }
+    },
+    "admin_help_preview": {
+      "endpoint": "admin_help_preview",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+        "help_key": "public.request.submit",
+        "language": "ES",
+        "published": false,
+        "state": "DRAFT",
+        "updated_at": "2026-08-25T10:01:00Z",
+        "version": 2
+      }
+    },
+    "admin_help_published": {
+      "endpoint": "admin_help_publish",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+        "help_key": "public.request.submit",
+        "language": "ES",
+        "published": true,
+        "state": "PUBLISHED",
+        "updated_at": "2026-08-25T10:03:00Z",
+        "version": 3
+      }
+    },
+    "admin_help_rollback_request": {
+      "endpoint": "admin_help_rollback",
+      "role": "request",
+      "body": {
+        "target_version": 3
+      }
+    },
+    "admin_help_rolled_back": {
+      "endpoint": "admin_help_rollback",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+        "help_key": "public.request.submit",
+        "language": "ES",
+        "published": true,
+        "state": "PUBLISHED",
+        "updated_at": "2026-08-25T10:05:00Z",
+        "version": 5
+      }
+    },
+    "admin_help_update_request": {
+      "endpoint": "admin_help_update",
+      "role": "request",
+      "body": {
+        "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+        "language": "ES"
+      }
+    },
+    "admin_help_version_conflict": {
+      "endpoint": "admin_help_update",
+      "role": "response",
+      "http_status": 409,
+      "body": {
+        "error": "VERSION_CONFLICT",
+        "message": "The resource was updated by another operation.",
+        "retryable": false,
+        "current_version": 4
+      }
+    },
+    "admin_help_version_required": {
+      "endpoint": "admin_help_publish",
+      "role": "response",
+      "http_status": 428,
+      "body": {
+        "error": "EXPECTED_VERSION_REQUIRED",
+        "message": "If-Match is required for this update.",
+        "retryable": false
+      }
+    },
+    "admin_help_versions": {
+      "endpoint": "admin_help_versions",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "applied_filters": {},
+        "items": [
+          {
+            "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+            "help_key": "public.request.submit",
+            "language": "ES",
+            "published": true,
+            "state": "PUBLISHED",
+            "updated_at": "2026-08-25T10:03:00Z",
+            "version": 3
+          },
+          {
+            "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+            "help_key": "public.request.submit",
+            "language": "ES",
+            "published": false,
+            "state": "DRAFT",
+            "updated_at": "2026-08-25T10:02:00Z",
+            "version": 2
+          }
+        ],
+        "next_page_token": null,
+        "sort": [
+          "-version"
+        ],
+        "total_count": 2
+      }
+    },
     "anonymous_status_found": {
       "endpoint": "anonymous_status_lookup",
       "role": "response",
@@ -8238,6 +8722,8 @@
         "body": "\u003cp\u003eDescribe the issue, choose its type, and provide the location where City service is needed.\u003c/p\u003e",
         "help_key": "public.request.submit",
         "language": "EN",
+        "published": true,
+        "state": "PUBLISHED",
         "updated_at": "2026-08-25T10:00:00Z",
         "version": 1
       }

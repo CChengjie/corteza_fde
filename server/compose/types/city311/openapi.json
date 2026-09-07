@@ -1237,7 +1237,12 @@
           "admin_custom_fields_create",
           "admin_custom_fields_list",
           "admin_custom_fields_update",
+          "admin_help_get",
+          "admin_help_preview",
+          "admin_help_publish",
+          "admin_help_rollback",
           "admin_help_update",
+          "admin_help_versions",
           "attachment_download",
           "audit_export",
           "audit_list",
@@ -1556,7 +1561,12 @@
           "admin_custom_fields_create",
           "admin_custom_fields_list",
           "admin_custom_fields_update",
+          "admin_help_get",
+          "admin_help_preview",
+          "admin_help_publish",
+          "admin_help_rollback",
           "admin_help_update",
+          "admin_help_versions",
           "anonymous_status_lookup",
           "attachment_download",
           "audit_export",
@@ -1916,6 +1926,15 @@
             "$ref": "#/components/schemas/enum_language",
             "x-city311-enum-ref": "language"
           },
+          "published": {
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "DRAFT",
+              "PUBLISHED"
+            ]
+          },
           "updated_at": {
             "format": "date-time",
             "type": "string",
@@ -1930,6 +1949,8 @@
           "help_key",
           "language",
           "body",
+          "state",
+          "published",
           "version",
           "updated_at"
         ],
@@ -3837,7 +3858,7 @@
   "info": {
     "description": "Developer 1-owned BE-contract-v1 generated from NewContractDocument().",
     "title": "City 311 CRM client/server API",
-    "version": "2.0.0"
+    "version": "3.0.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -8997,6 +9018,229 @@
       }
     },
     "/api/v1/admin/help/{help_key}": {
+      "get": {
+        "operationId": "admin_help_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "help_key",
+            "required": true,
+            "schema": {
+              "enum": [
+                "admin.branding.publish",
+                "admin.workflow.author",
+                "public.request.lookup",
+                "public.request.submit",
+                "staff.report.create",
+                "staff.request.bulk-update",
+                "staff.request.reassign",
+                "staff.request.triage"
+              ],
+              "type": "string",
+              "x-city311-enum-source": "help_keys"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/enum_language",
+              "default": "EN",
+              "x-city311-enum-ref": "language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_help_current": {
+                    "value": {
+                      "body": "\u003cp\u003eDescribe the issue.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "EN",
+                      "published": true,
+                      "state": "PUBLISHED",
+                      "updated_at": "2026-08-25T10:00:00Z",
+                      "version": 1
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "body": "\u003cp\u003eDescribe the issue.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "EN",
+                      "published": true,
+                      "state": "PUBLISHED",
+                      "updated_at": "2026-08-25T10:00:00Z",
+                      "version": 1
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/help_content"
+                }
+              }
+            },
+            "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal language-specific help revision",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "x-city311-example": {
+              "body": {
+                "body": "\u003cp\u003eDescribe the issue.\u003c/p\u003e",
+                "help_key": "public.request.submit",
+                "language": "EN",
+                "published": true,
+                "state": "PUBLISHED",
+                "updated_at": "2026-08-25T10:00:00Z",
+                "version": 1
+              },
+              "status": 200
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "admin help get",
+        "tags": [
+          "admin"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "staff",
+          "alternatives": [
+            {
+              "application_roles": [
+                "platform_administrator"
+              ]
+            }
+          ]
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-required-capability": "admin_help_get"
+      },
       "patch": {
         "operationId": "admin_help_update",
         "parameters": [
@@ -9034,6 +9278,12 @@
           "content": {
             "application/json": {
               "examples": {
+                "admin_help_update_request": {
+                  "value": {
+                    "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                    "language": "ES"
+                  }
+                },
                 "request": {
                   "value": {
                     "body": "xxxxxx",
@@ -9053,13 +9303,26 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "admin_help_draft": {
+                    "value": {
+                      "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "ES",
+                      "published": false,
+                      "state": "DRAFT",
+                      "updated_at": "2026-08-25T10:02:00Z",
+                      "version": 2
+                    }
+                  },
                   "success": {
                     "value": {
-                      "body": "xxxxxx",
-                      "help_key": "admin.branding.publish",
-                      "language": "EN",
-                      "updated_at": "2026-08-25T12:00:00Z",
-                      "version": 1
+                      "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "ES",
+                      "published": false,
+                      "state": "DRAFT",
+                      "updated_at": "2026-08-25T10:02:00Z",
+                      "version": 2
                     }
                   }
                 },
@@ -9069,13 +9332,891 @@
               }
             },
             "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal language-specific help revision",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
             "x-city311-example": {
               "body": {
-                "body": "xxxxxx",
-                "help_key": "admin.branding.publish",
-                "language": "EN",
-                "updated_at": "2026-08-25T12:00:00Z",
-                "version": 1
+                "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                "help_key": "public.request.submit",
+                "language": "ES",
+                "published": false,
+                "state": "DRAFT",
+                "updated_at": "2026-08-25T10:02:00Z",
+                "version": 2
+              },
+              "status": 200
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_help_version_conflict": {
+                    "value": {
+                      "current_version": 4,
+                      "error": "VERSION_CONFLICT",
+                      "message": "The resource was updated by another operation.",
+                      "retryable": false
+                    }
+                  },
+                  "version_conflict": {
+                    "value": {
+                      "current_version": 4,
+                      "error": "VERSION_CONFLICT",
+                      "message": "The resource was updated by another operation.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VERSION CONFLICT",
+            "x-city311-example": {
+              "body": {
+                "current_version": 4,
+                "error": "VERSION_CONFLICT",
+                "message": "The resource was updated by another operation.",
+                "retryable": false
+              },
+              "status": 409
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "expected_version_required": {
+                    "value": {
+                      "error": "EXPECTED_VERSION_REQUIRED",
+                      "message": "expected version required.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "EXPECTED VERSION REQUIRED",
+            "x-city311-example": {
+              "body": {
+                "error": "EXPECTED_VERSION_REQUIRED",
+                "message": "expected version required.",
+                "retryable": false
+              },
+              "status": 428
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "admin help update",
+        "tags": [
+          "admin"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "staff",
+          "alternatives": [
+            {
+              "application_roles": [
+                "platform_administrator"
+              ]
+            }
+          ]
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-required-capability": "admin_help_update"
+      }
+    },
+    "/api/v1/admin/help/{help_key}/preview": {
+      "post": {
+        "operationId": "admin_help_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "help_key",
+            "required": true,
+            "schema": {
+              "enum": [
+                "admin.branding.publish",
+                "admin.workflow.author",
+                "public.request.lookup",
+                "public.request.submit",
+                "staff.report.create",
+                "staff.request.bulk-update",
+                "staff.request.reassign",
+                "staff.request.triage"
+              ],
+              "type": "string",
+              "x-city311-enum-source": "help_keys"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "request": {
+                  "value": {
+                    "body": "xxxxxx",
+                    "language": "EN"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/help_write"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_help_preview": {
+                    "value": {
+                      "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "ES",
+                      "published": false,
+                      "state": "DRAFT",
+                      "updated_at": "2026-08-25T10:01:00Z",
+                      "version": 2
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "ES",
+                      "published": false,
+                      "state": "DRAFT",
+                      "updated_at": "2026-08-25T10:01:00Z",
+                      "version": 2
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/help_content"
+                }
+              }
+            },
+            "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal language-specific help revision",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "x-city311-example": {
+              "body": {
+                "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                "help_key": "public.request.submit",
+                "language": "ES",
+                "published": false,
+                "state": "DRAFT",
+                "updated_at": "2026-08-25T10:01:00Z",
+                "version": 2
+              },
+              "status": 200
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "admin help preview",
+        "tags": [
+          "admin"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "staff",
+          "alternatives": [
+            {
+              "application_roles": [
+                "platform_administrator"
+              ]
+            }
+          ]
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-required-capability": "admin_help_preview"
+      }
+    },
+    "/api/v1/admin/help/{help_key}/publish": {
+      "post": {
+        "operationId": "admin_help_publish",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "help_key",
+            "required": true,
+            "schema": {
+              "enum": [
+                "admin.branding.publish",
+                "admin.workflow.author",
+                "public.request.lookup",
+                "public.request.submit",
+                "staff.report.create",
+                "staff.request.bulk-update",
+                "staff.request.reassign",
+                "staff.request.triage"
+              ],
+              "type": "string",
+              "x-city311-enum-source": "help_keys"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/enum_language",
+              "default": "EN",
+              "x-city311-enum-ref": "language"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "example": "\"7\"",
+              "pattern": "^\\\"[1-9][0-9]*\\\"$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "request": {
+                  "value": {}
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/empty_request"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_help_published": {
+                    "value": {
+                      "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "ES",
+                      "published": true,
+                      "state": "PUBLISHED",
+                      "updated_at": "2026-08-25T10:03:00Z",
+                      "version": 3
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "ES",
+                      "published": true,
+                      "state": "PUBLISHED",
+                      "updated_at": "2026-08-25T10:03:00Z",
+                      "version": 3
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/help_content"
+                }
+              }
+            },
+            "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal language-specific help revision",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "x-city311-example": {
+              "body": {
+                "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                "help_key": "public.request.submit",
+                "language": "ES",
+                "published": true,
+                "state": "PUBLISHED",
+                "updated_at": "2026-08-25T10:03:00Z",
+                "version": 3
+              },
+              "status": 200
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "version_conflict": {
+                    "value": {
+                      "error": "VERSION_CONFLICT",
+                      "message": "version conflict.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VERSION CONFLICT",
+            "x-city311-example": {
+              "body": {
+                "error": "VERSION_CONFLICT",
+                "message": "version conflict.",
+                "retryable": false
+              },
+              "status": 409
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_help_version_required": {
+                    "value": {
+                      "error": "EXPECTED_VERSION_REQUIRED",
+                      "message": "If-Match is required for this update.",
+                      "retryable": false
+                    }
+                  },
+                  "expected_version_required": {
+                    "value": {
+                      "error": "EXPECTED_VERSION_REQUIRED",
+                      "message": "If-Match is required for this update.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "EXPECTED VERSION REQUIRED",
+            "x-city311-example": {
+              "body": {
+                "error": "EXPECTED_VERSION_REQUIRED",
+                "message": "If-Match is required for this update.",
+                "retryable": false
+              },
+              "status": 428
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "admin help publish",
+        "tags": [
+          "admin"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "staff",
+          "alternatives": [
+            {
+              "application_roles": [
+                "platform_administrator"
+              ]
+            }
+          ]
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-required-capability": "admin_help_publish"
+      }
+    },
+    "/api/v1/admin/help/{help_key}/rollback": {
+      "post": {
+        "operationId": "admin_help_rollback",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "help_key",
+            "required": true,
+            "schema": {
+              "enum": [
+                "admin.branding.publish",
+                "admin.workflow.author",
+                "public.request.lookup",
+                "public.request.submit",
+                "staff.report.create",
+                "staff.request.bulk-update",
+                "staff.request.reassign",
+                "staff.request.triage"
+              ],
+              "type": "string",
+              "x-city311-enum-source": "help_keys"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/enum_language",
+              "default": "EN",
+              "x-city311-enum-ref": "language"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "example": "\"7\"",
+              "pattern": "^\\\"[1-9][0-9]*\\\"$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "admin_help_rollback_request": {
+                  "value": {
+                    "target_version": 3
+                  }
+                },
+                "request": {
+                  "value": {
+                    "target_version": 1
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/rollback"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_help_rolled_back": {
+                    "value": {
+                      "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "ES",
+                      "published": true,
+                      "state": "PUBLISHED",
+                      "updated_at": "2026-08-25T10:05:00Z",
+                      "version": 5
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                      "help_key": "public.request.submit",
+                      "language": "ES",
+                      "published": true,
+                      "state": "PUBLISHED",
+                      "updated_at": "2026-08-25T10:05:00Z",
+                      "version": 5
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/help_content"
+                }
+              }
+            },
+            "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal language-specific help revision",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "x-city311-example": {
+              "body": {
+                "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                "help_key": "public.request.submit",
+                "language": "ES",
+                "published": true,
+                "state": "PUBLISHED",
+                "updated_at": "2026-08-25T10:05:00Z",
+                "version": 5
               },
               "status": 200
             }
@@ -9248,7 +10389,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "admin help update",
+        "summary": "admin help rollback",
         "tags": [
           "admin"
         ],
@@ -9264,7 +10405,315 @@
           ]
         },
         "x-city311-direction": "provided_by_crm",
-        "x-city311-required-capability": "admin_help_update"
+        "x-city311-required-capability": "admin_help_rollback"
+      }
+    },
+    "/api/v1/admin/help/{help_key}/versions": {
+      "get": {
+        "operationId": "admin_help_versions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "help_key",
+            "required": true,
+            "schema": {
+              "enum": [
+                "admin.branding.publish",
+                "admin.workflow.author",
+                "public.request.lookup",
+                "public.request.submit",
+                "staff.report.create",
+                "staff.request.bulk-update",
+                "staff.request.reassign",
+                "staff.request.triage"
+              ],
+              "type": "string",
+              "x-city311-enum-source": "help_keys"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filters",
+            "required": false,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/enum_language",
+              "default": "EN",
+              "x-city311-enum-ref": "language"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "x-city311-opaque": true
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "x-city311-maximum-fields": 3
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_help_versions": {
+                    "value": {
+                      "applied_filters": {},
+                      "items": [
+                        {
+                          "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                          "help_key": "public.request.submit",
+                          "language": "ES",
+                          "published": true,
+                          "state": "PUBLISHED",
+                          "updated_at": "2026-08-25T10:03:00Z",
+                          "version": 3
+                        },
+                        {
+                          "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                          "help_key": "public.request.submit",
+                          "language": "ES",
+                          "published": false,
+                          "state": "DRAFT",
+                          "updated_at": "2026-08-25T10:02:00Z",
+                          "version": 2
+                        }
+                      ],
+                      "next_page_token": null,
+                      "sort": [
+                        "-version"
+                      ],
+                      "total_count": 2
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "applied_filters": {},
+                      "items": [
+                        {
+                          "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                          "help_key": "public.request.submit",
+                          "language": "ES",
+                          "published": true,
+                          "state": "PUBLISHED",
+                          "updated_at": "2026-08-25T10:03:00Z",
+                          "version": 3
+                        },
+                        {
+                          "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                          "help_key": "public.request.submit",
+                          "language": "ES",
+                          "published": false,
+                          "state": "DRAFT",
+                          "updated_at": "2026-08-25T10:02:00Z",
+                          "version": 2
+                        }
+                      ],
+                      "next_page_token": null,
+                      "sort": [
+                        "-version"
+                      ],
+                      "total_count": 2
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/list_response"
+                }
+              }
+            },
+            "description": "success",
+            "x-city311-example": {
+              "body": {
+                "applied_filters": {},
+                "items": [
+                  {
+                    "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                    "help_key": "public.request.submit",
+                    "language": "ES",
+                    "published": true,
+                    "state": "PUBLISHED",
+                    "updated_at": "2026-08-25T10:03:00Z",
+                    "version": 3
+                  },
+                  {
+                    "body": "\u003cp\u003eDescriba el problema.\u003c/p\u003e",
+                    "help_key": "public.request.submit",
+                    "language": "ES",
+                    "published": false,
+                    "state": "DRAFT",
+                    "updated_at": "2026-08-25T10:02:00Z",
+                    "version": 2
+                  }
+                ],
+                "next_page_token": null,
+                "sort": [
+                  "-version"
+                ],
+                "total_count": 2
+              },
+              "status": 200
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "admin help versions",
+        "tags": [
+          "admin"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "staff",
+          "alternatives": [
+            {
+              "application_roles": [
+                "platform_administrator"
+              ]
+            }
+          ]
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-required-capability": "admin_help_versions"
       }
     },
     "/api/v1/admin/identity": {
@@ -16574,6 +18023,8 @@
                       "body": "\u003cp\u003eDescribe the issue, choose its type, and provide the location where City service is needed.\u003c/p\u003e",
                       "help_key": "public.request.submit",
                       "language": "EN",
+                      "published": true,
+                      "state": "PUBLISHED",
                       "updated_at": "2026-08-25T10:00:00Z",
                       "version": 1
                     }
@@ -16583,6 +18034,8 @@
                       "body": "\u003cp\u003eDescribe the issue, choose its type, and provide the location where City service is needed.\u003c/p\u003e",
                       "help_key": "public.request.submit",
                       "language": "EN",
+                      "published": true,
+                      "state": "PUBLISHED",
                       "updated_at": "2026-08-25T10:00:00Z",
                       "version": 1
                     }
@@ -16594,11 +18047,24 @@
               }
             },
             "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal language-specific help revision",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
             "x-city311-example": {
               "body": {
                 "body": "\u003cp\u003eDescribe the issue, choose its type, and provide the location where City service is needed.\u003c/p\u003e",
                 "help_key": "public.request.submit",
                 "language": "EN",
+                "published": true,
+                "state": "PUBLISHED",
                 "updated_at": "2026-08-25T10:00:00Z",
                 "version": 1
               },
@@ -17538,27 +19004,132 @@
             "content": {
               "application/json": {
                 "examples": {
-                  "success": {
+                  "admin_help_audit_events": {
                     "value": {
-                      "applied_filters": {},
+                      "applied_filters": {
+                        "entity_type": [
+                          "help"
+                        ]
+                      },
                       "items": [
                         {
-                          "actor_id": "xxxxxx",
-                          "actor_type": "constituent",
-                          "after": {},
-                          "before": {},
-                          "entity_id": "xxxxxx",
-                          "entity_type": "xxxxxx",
-                          "event_type": "xxxxxx",
-                          "occurred_at": "2026-08-25T12:00:00Z",
-                          "source_channel": "PORTAL_ANONYMOUS"
+                          "actor_id": "staff-admin-1",
+                          "actor_type": "staff",
+                          "after": {
+                            "published": false,
+                            "version": 2
+                          },
+                          "before": {
+                            "version": 1
+                          },
+                          "entity_id": "public.request.submit",
+                          "entity_type": "help",
+                          "event_type": "HELP_UPDATED",
+                          "occurred_at": "2026-08-25T10:02:00Z",
+                          "source_channel": "STAFF_IN_PERSON"
+                        },
+                        {
+                          "actor_id": "staff-admin-1",
+                          "actor_type": "staff",
+                          "after": {
+                            "published": true,
+                            "version": 3
+                          },
+                          "before": {
+                            "version": 2
+                          },
+                          "entity_id": "public.request.submit",
+                          "entity_type": "help",
+                          "event_type": "HELP_PUBLISHED",
+                          "occurred_at": "2026-08-25T10:03:00Z",
+                          "source_channel": "STAFF_IN_PERSON"
+                        },
+                        {
+                          "actor_id": "staff-admin-1",
+                          "actor_type": "staff",
+                          "after": {
+                            "published": true,
+                            "version": 5
+                          },
+                          "before": {
+                            "version": 4
+                          },
+                          "entity_id": "public.request.submit",
+                          "entity_type": "help",
+                          "event_type": "HELP_ROLLED_BACK",
+                          "occurred_at": "2026-08-25T10:05:00Z",
+                          "source_channel": "STAFF_IN_PERSON"
                         }
                       ],
-                      "next_page_token": "xxxxxx",
+                      "next_page_token": null,
                       "sort": [
-                        "xxxxxx"
+                        "-occurred_at"
                       ],
-                      "total_count": 0
+                      "total_count": 3
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "applied_filters": {
+                        "entity_type": [
+                          "help"
+                        ]
+                      },
+                      "items": [
+                        {
+                          "actor_id": "staff-admin-1",
+                          "actor_type": "staff",
+                          "after": {
+                            "published": false,
+                            "version": 2
+                          },
+                          "before": {
+                            "version": 1
+                          },
+                          "entity_id": "public.request.submit",
+                          "entity_type": "help",
+                          "event_type": "HELP_UPDATED",
+                          "occurred_at": "2026-08-25T10:02:00Z",
+                          "source_channel": "STAFF_IN_PERSON"
+                        },
+                        {
+                          "actor_id": "staff-admin-1",
+                          "actor_type": "staff",
+                          "after": {
+                            "published": true,
+                            "version": 3
+                          },
+                          "before": {
+                            "version": 2
+                          },
+                          "entity_id": "public.request.submit",
+                          "entity_type": "help",
+                          "event_type": "HELP_PUBLISHED",
+                          "occurred_at": "2026-08-25T10:03:00Z",
+                          "source_channel": "STAFF_IN_PERSON"
+                        },
+                        {
+                          "actor_id": "staff-admin-1",
+                          "actor_type": "staff",
+                          "after": {
+                            "published": true,
+                            "version": 5
+                          },
+                          "before": {
+                            "version": 4
+                          },
+                          "entity_id": "public.request.submit",
+                          "entity_type": "help",
+                          "event_type": "HELP_ROLLED_BACK",
+                          "occurred_at": "2026-08-25T10:05:00Z",
+                          "source_channel": "STAFF_IN_PERSON"
+                        }
+                      ],
+                      "next_page_token": null,
+                      "sort": [
+                        "-occurred_at"
+                      ],
+                      "total_count": 3
                     }
                   }
                 },
@@ -17570,25 +19141,66 @@
             "description": "success",
             "x-city311-example": {
               "body": {
-                "applied_filters": {},
+                "applied_filters": {
+                  "entity_type": [
+                    "help"
+                  ]
+                },
                 "items": [
                   {
-                    "actor_id": "xxxxxx",
-                    "actor_type": "constituent",
-                    "after": {},
-                    "before": {},
-                    "entity_id": "xxxxxx",
-                    "entity_type": "xxxxxx",
-                    "event_type": "xxxxxx",
-                    "occurred_at": "2026-08-25T12:00:00Z",
-                    "source_channel": "PORTAL_ANONYMOUS"
+                    "actor_id": "staff-admin-1",
+                    "actor_type": "staff",
+                    "after": {
+                      "published": false,
+                      "version": 2
+                    },
+                    "before": {
+                      "version": 1
+                    },
+                    "entity_id": "public.request.submit",
+                    "entity_type": "help",
+                    "event_type": "HELP_UPDATED",
+                    "occurred_at": "2026-08-25T10:02:00Z",
+                    "source_channel": "STAFF_IN_PERSON"
+                  },
+                  {
+                    "actor_id": "staff-admin-1",
+                    "actor_type": "staff",
+                    "after": {
+                      "published": true,
+                      "version": 3
+                    },
+                    "before": {
+                      "version": 2
+                    },
+                    "entity_id": "public.request.submit",
+                    "entity_type": "help",
+                    "event_type": "HELP_PUBLISHED",
+                    "occurred_at": "2026-08-25T10:03:00Z",
+                    "source_channel": "STAFF_IN_PERSON"
+                  },
+                  {
+                    "actor_id": "staff-admin-1",
+                    "actor_type": "staff",
+                    "after": {
+                      "published": true,
+                      "version": 5
+                    },
+                    "before": {
+                      "version": 4
+                    },
+                    "entity_id": "public.request.submit",
+                    "entity_type": "help",
+                    "event_type": "HELP_ROLLED_BACK",
+                    "occurred_at": "2026-08-25T10:05:00Z",
+                    "source_channel": "STAFF_IN_PERSON"
                   }
                 ],
-                "next_page_token": "xxxxxx",
+                "next_page_token": null,
                 "sort": [
-                  "xxxxxx"
+                  "-occurred_at"
                 ],
-                "total_count": 0
+                "total_count": 3
               },
               "status": 200
             }
@@ -28673,7 +30285,7 @@
     "stability": "frozen",
     "effective_at": "merge_to_2024.9.x",
     "first_published_version": "1.0.0",
-    "supported_major": 2,
+    "supported_major": 3,
     "major_version_rule": "after first publication, any consumer-incompatible contract revision increments the major version"
   },
   "x-city311-server-error-policy": {

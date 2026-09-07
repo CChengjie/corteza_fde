@@ -10,11 +10,15 @@ Regenerate both artifacts from the server directory with:
 go run ./compose/types/city311/cmd/generate
 ```
 
-The exact leaf provisions implemented or verified are recorded in `contract.json`; section-level ranges are intentionally not used. The contract covers shared local and federated sessions, structured authorization, bound path parameters, optimistic concurrency, validation, lists, idempotency, asynchronous operations, atomic bulk failure, geocoding and attachment conventions together with the public portal, staff request handling, administration, reporting, mail, calendar and external-integration surfaces. Bulk mutations carry an expected version for every selected request, contextual-help updates require `If-Match`, and reminder paths use a controlled action vocabulary. Localised display strings remain in Developer 2's translation catalogue and are not duplicated here.
+The exact leaf provisions implemented or verified are recorded in `contract.json`; section-level ranges are intentionally not used. The contract covers shared local and federated sessions, structured authorization, bound path parameters, optimistic concurrency, validation, lists, idempotency, asynchronous operations, atomic bulk failure, geocoding and attachment conventions together with the public portal, staff request handling, administration, reporting, mail, calendar and external-integration surfaces. Bulk mutations carry an expected version for every selected request, contextual-help update, publish, and rollback operations require `If-Match`, and reminder paths use a controlled action vocabulary. Localised display strings remain in Developer 2's translation catalogue and are not duplicated here.
 
 The contract records explicit integration decisions where the specification fixes behavior but not internal routes or representation details. Notably, CivicWorks direct completion is normalised atomically through the legal CRM lifecycle, terminal redelivery is acknowledged idempotently, portal attachments use staged uploads while the integration API retains inline base64, anonymous lookup uses a privacy-safe projection, and application roles are kept distinct from identity-provider and audit actor vocabularies. This package defines the contract only; runtime routes and persistence implement it elsewhere.
 
-Public endpoint errors describe only reachable outcomes. Local sign-in does not distinguish an unknown identifier from an incorrect password, registration does not distinguish a new identifier from one already associated with a verified account, and `/healthz` publishes its required `503 TEMPORARILY_UNAVAILABLE` response. The current contract is `2.0.0`, supported major `2`; first publication was `1.0.0`. Semantic versions identify incompatible consumer requirements, not a promise to support older versions. This benchmark reference implementation has no backward-compatibility requirement and provides only the current contract.
+Public endpoint errors describe only reachable outcomes. Local sign-in does not distinguish an unknown identifier from an incorrect password, registration does not distinguish a new identifier from one already associated with a verified account, and `/healthz` publishes its required `503 TEMPORARILY_UNAVAILABLE` response. The current contract is `3.0.0`, supported major `3`; first publication was `1.0.0`. Semantic versions identify incompatible consumer requirements, not a promise to support older versions. This benchmark reference implementation has no backward-compatibility requirement and provides only the current contract.
+
+Contextual help has one version stream per stable help key and language. The administrator surface provides get, preview, draft update, publish, version history, and rollback operations. Preview never persists, draft updates remain invisible to the public endpoint, publish creates a new immutable published revision, and rollback copies a selected published revision into another new published revision. `GET`, publish, history, and rollback select `language` by query parameter (default `EN`); draft and preview select it in `help_write`. Every returned help object carries `state`, `published`, `version`, and `updated_at`, and successful single-object responses carry a quoted revision `ETag`.
+
+Help lifecycle persistence reuses the existing `compose_city311_configuration_revision` table; no data migration or replacement store is required. `resource_type=HELP`, the stable help key, and the language identify a stream, while `version`, `published`, immutable payload, and creation time preserve its history. Draft, publish, and rollback insert a new revision and a matching `HELP_UPDATED`, `HELP_PUBLISHED`, or `HELP_ROLLED_BACK` audit record in one transaction. Existing English seed revisions remain valid published version-one records.
 
 Optional-session endpoints discard an absent, expired or invalid cookie and continue anonymously. Their error sets therefore exclude authentication and authorization failures; the browser geocode proxy instead exposes the actionable `ADDRESS_NOT_FOUND`, `MAP_TEMPORARILY_UNAVAILABLE` and `VALIDATION_ERROR` outcomes. Every deterministic mock identifies its endpoint and whether it represents a request or response, and the contract tests verify every response status and error code against that endpoint.
 
@@ -22,7 +26,7 @@ Identity-provider endpoints, client identifiers, role mappings and secrets are s
 
 Developer 1 is the designated maintainer for this package and its generated or shared contract artifacts.
 
-Contract `2.0.0` includes the attachment runtime handoff: optional `attachments`
+The current contract includes the attachment runtime handoff: optional `attachments`
 metadata on submission responses and request records exposes stable
 `attachment_id` values. The JSON download envelope requires
 `body_encoding=base64`; decode `body` as RFC 4648 base64 to bytes before creating
@@ -41,7 +45,7 @@ and periodic cleanup remove only expired, unconsumed bytes. A receipt is not a
 download ID or permission to view a submitted request.
 
 The frontend mock remains a separate, explicitly mock-only consumer. Developer 2
-must align its DTOs and fixtures to `2.0.0`, use returned attachment IDs, and replace
+must align its DTOs and fixtures to `3.0.0`, use returned attachment IDs, and replace
 `new Blob([response.body])` with base64 decoding into a byte array before creating
 the Blob. For example, `hello` is transported as `aGVsbG8=`; the saved file must
 contain `hello`, not the encoded text. Reject a missing/unsupported encoding;

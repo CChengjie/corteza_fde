@@ -160,10 +160,12 @@ func clientSchemas() map[string]map[string]interface{} {
 			"published":   map[string]interface{}{"type": "boolean"},
 		}),
 		"content_write": object([]string{"body"}, map[string]interface{}{"body": map[string]interface{}{"type": "string", "format": "sanitized_html"}}),
-		"help_content": versionedObject([]string{"help_key", "language", "body"}, map[string]interface{}{
-			"help_key": map[string]interface{}{"type": "string", "enum_source": "help_keys"},
-			"language": map[string]interface{}{"enum_ref": "language"},
-			"body":     map[string]interface{}{"type": "string", "format": "sanitized_html"},
+		"help_content": versionedObject([]string{"help_key", "language", "body", "state", "published"}, map[string]interface{}{
+			"help_key":  map[string]interface{}{"type": "string", "enum_source": "help_keys"},
+			"language":  map[string]interface{}{"enum_ref": "language"},
+			"body":      map[string]interface{}{"type": "string", "format": "sanitized_html"},
+			"state":     map[string]interface{}{"enum": []string{"DRAFT", "PUBLISHED"}},
+			"published": map[string]interface{}{"type": "boolean"},
 		}),
 		"help_write": object([]string{"language", "body"}, map[string]interface{}{
 			"language": map[string]interface{}{"enum_ref": "language"}, "body": map[string]interface{}{"type": "string", "format": "sanitized_html"},

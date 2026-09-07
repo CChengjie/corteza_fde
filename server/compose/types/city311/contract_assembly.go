@@ -117,6 +117,16 @@ func contractProtocol() map[string]interface{} {
 			"oauth_scope_enum_ref":           "oauth_scope",
 			"optional_cookie_rule":           "an absent, expired, or invalid cookie is discarded and the request proceeds anonymously; optional-session endpoints do not return UNAUTHENTICATED solely because of the cookie",
 			"authorization_rule":             "available_actions is computed from application roles plus department and district record scope; the server remains authoritative",
+			"administration_role_capability_fixtures": map[string]interface{}{
+				"public_visitor":         []string{},
+				"constituent":            []string{},
+				"service_agent":          []string{},
+				"supervisor":             []string{},
+				"department_manager":     []string{},
+				"platform_administrator": []string{"admin_help_get", "admin_help_update", "admin_help_preview", "admin_help_publish", "admin_help_versions", "admin_help_rollback"},
+				"workflow_designer":      []string{},
+				"integration_client":     []string{},
+			},
 		},
 		"optimistic_concurrency": map[string]interface{}{
 			"request_header": IfMatchHeader,

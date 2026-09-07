@@ -70,8 +70,49 @@ func clientMocks() map[string]MockContract {
 		}),
 		"public_help_submit": mock(200, map[string]interface{}{
 			"help_key": "public.request.submit", "language": "EN",
-			"body":    "<p>Describe the issue, choose its type, and provide the location where City service is needed.</p>",
-			"version": 1, "updated_at": "2026-08-25T10:00:00Z",
+			"body":  "<p>Describe the issue, choose its type, and provide the location where City service is needed.</p>",
+			"state": "PUBLISHED", "published": true, "version": 1, "updated_at": "2026-08-25T10:00:00Z",
+		}),
+		"admin_help_current": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "EN", "body": "<p>Describe the issue.</p>",
+			"state": "PUBLISHED", "published": true, "version": 1, "updated_at": "2026-08-25T10:00:00Z",
+		}),
+		"admin_help_preview": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>",
+			"state": "DRAFT", "published": false, "version": 2, "updated_at": "2026-08-25T10:01:00Z",
+		}),
+		"admin_help_draft": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>",
+			"state": "DRAFT", "published": false, "version": 2, "updated_at": "2026-08-25T10:02:00Z",
+		}),
+		"admin_help_published": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>",
+			"state": "PUBLISHED", "published": true, "version": 3, "updated_at": "2026-08-25T10:03:00Z",
+		}),
+		"admin_help_versions": mock(200, map[string]interface{}{
+			"items": []interface{}{
+				map[string]interface{}{"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>", "state": "PUBLISHED", "published": true, "version": 3, "updated_at": "2026-08-25T10:03:00Z"},
+				map[string]interface{}{"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>", "state": "DRAFT", "published": false, "version": 2, "updated_at": "2026-08-25T10:02:00Z"},
+			},
+			"next_page_token": nil, "total_count": 2, "applied_filters": map[string]interface{}{}, "sort": []string{"-version"},
+		}),
+		"admin_help_rolled_back": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>",
+			"state": "PUBLISHED", "published": true, "version": 5, "updated_at": "2026-08-25T10:05:00Z",
+		}),
+		"admin_help_update_request":   mock(0, map[string]interface{}{"language": "ES", "body": "<p>Describa el problema.</p>"}),
+		"admin_help_rollback_request": mock(0, map[string]interface{}{"target_version": 3}),
+		"admin_help_version_conflict": mock(409, MockVersionConflict(4)),
+		"admin_help_version_required": mock(428, APIError{
+			Error: ErrorExpectedVersionRequired, Message: "If-Match is required for this update.", Retryable: false,
+		}),
+		"admin_help_audit_events": mock(200, map[string]interface{}{
+			"items": []interface{}{
+				map[string]interface{}{"entity_type": "help", "entity_id": "public.request.submit", "event_type": "HELP_UPDATED", "actor_type": "staff", "actor_id": "staff-admin-1", "occurred_at": "2026-08-25T10:02:00Z", "source_channel": "STAFF_IN_PERSON", "before": map[string]interface{}{"version": 1}, "after": map[string]interface{}{"version": 2, "published": false}},
+				map[string]interface{}{"entity_type": "help", "entity_id": "public.request.submit", "event_type": "HELP_PUBLISHED", "actor_type": "staff", "actor_id": "staff-admin-1", "occurred_at": "2026-08-25T10:03:00Z", "source_channel": "STAFF_IN_PERSON", "before": map[string]interface{}{"version": 2}, "after": map[string]interface{}{"version": 3, "published": true}},
+				map[string]interface{}{"entity_type": "help", "entity_id": "public.request.submit", "event_type": "HELP_ROLLED_BACK", "actor_type": "staff", "actor_id": "staff-admin-1", "occurred_at": "2026-08-25T10:05:00Z", "source_channel": "STAFF_IN_PERSON", "before": map[string]interface{}{"version": 4}, "after": map[string]interface{}{"version": 5, "published": true}},
+			},
+			"next_page_token": nil, "total_count": 3, "applied_filters": map[string]interface{}{"entity_type": []string{"help"}}, "sort": []string{"-occurred_at"},
 		}),
 		"identity_configuration_effective": mock(200, map[string]interface{}{
 			"oidc_enabled": true, "saml_enabled": true,
@@ -148,6 +189,17 @@ func linkMocks(mocks map[string]MockContract) {
 		"public_branding":                   "public_branding_get",
 		"public_content_home":               "public_content_get",
 		"public_help_submit":                "public_help_get",
+		"admin_help_current":                "admin_help_get",
+		"admin_help_preview":                "admin_help_preview",
+		"admin_help_draft":                  "admin_help_update",
+		"admin_help_published":              "admin_help_publish",
+		"admin_help_versions":               "admin_help_versions",
+		"admin_help_rolled_back":            "admin_help_rollback",
+		"admin_help_update_request":         "admin_help_update",
+		"admin_help_rollback_request":       "admin_help_rollback",
+		"admin_help_version_conflict":       "admin_help_update",
+		"admin_help_version_required":       "admin_help_publish",
+		"admin_help_audit_events":           "audit_list",
 		"identity_configuration_effective":  "identity_configuration_get",
 		"staff_queue":                       "staff_request_queue",
 		"civicworks_event_acknowledged":     "civicworks_event_callback",
@@ -161,7 +213,7 @@ func linkMocks(mocks map[string]MockContract) {
 		}
 		item.Endpoint = endpoint
 		item.Role = "response"
-		if name == "civicworks_completed_event" {
+		if name == "civicworks_completed_event" || name == "admin_help_update_request" || name == "admin_help_rollback_request" {
 			item.Role = "request"
 			item.HTTPStatus = 0
 		}

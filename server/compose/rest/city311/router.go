@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -73,6 +74,22 @@ type constituentLinkWrite struct {
 	NotifyStatus     *bool                     `json:"notify_status"`
 }
 
+type auditFilterInput struct {
+	RequestID     stringList `json:"request_id"`
+	EntityType    stringList `json:"entity_type"`
+	EntityID      stringList `json:"entity_id"`
+	EventType     stringList `json:"event_type"`
+	ActorType     stringList `json:"actor_type"`
+	ActorID       stringList `json:"actor_id"`
+	SourceChannel stringList `json:"source_channel"`
+	OccurredFrom  string     `json:"occurred_from"`
+	OccurredTo    string     `json:"occurred_to"`
+}
+
+type auditExportWrite struct {
+	Filters *auditFilterInput `json:"filters"`
+}
+
 func MountRoutes() func(chi.Router) {
 	return MountRoutesWithServices(city311Service.Default, city311Service.DefaultIdentity)
 }
@@ -93,6 +110,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Post("/auth/password-reset/request", h.passwordResetRequest)
 		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
 		r.Patch("/preferences/language", h.languageUpdate)
+		r.With(requireIdentity).Get("/operations/{operation_id}", h.operationGet)
+		r.With(requireIdentity).Get("/operations/{operation_id}/result", h.operationResult)
 		r.Route("/account", func(r chi.Router) {
 			r.Use(requireCityIdentitySession)
 			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
@@ -115,6 +134,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.With(requireConstituentSession).Post("/portal/service-requests/{request_id}/reopen", h.portalReopenRequest)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
+			r.Get("/audit-events", h.staffAuditList)
+			r.Post("/audit-events/export", h.staffAuditExport)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
 			r.Post("/service-requests/bulk", h.staffBulk)
 			r.Get(serviceRequestsRoute, h.staffList)
@@ -485,6 +506,151 @@ func (h *handler) staffList(w http.ResponseWriter, r *http.Request) {
 	requestFilter.Sort = r.URL.Query().Get("sort")
 	result, err := h.service.List(r.Context(), actor, requestFilter)
 	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffAuditList(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	filters, err := parseStaffAuditFilters(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	pageSize := uint64(50)
+	if raw := r.URL.Query().Get("page_size"); raw != "" {
+		pageSize, err = strconv.ParseUint(raw, 10, 16)
+		if err != nil || pageSize == 0 {
+			writeValidation(w, "/query/page_size", contract.ValidationInvalidFormat)
+			return
+		}
+	}
+	result, err := h.service.ListAuditEvents(r.Context(), actor, contract.AuditQuery{
+		Filters: filters, PageSize: uint(pageSize), PageToken: r.URL.Query().Get("page_token"), Sort: r.URL.Query().Get("sort"),
+	})
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffAuditExport(w http.ResponseWriter, r *http.Request) {
+	input := auditExportWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Filters == nil {
+		writeValidation(w, "/filters", contract.ValidationRequired)
+		return
+	}
+	filters, err := auditFilterFromInput(*input.Filters, "/filters")
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.StartAuditExport(r.Context(), actor, contract.AuditExport{Filters: filters})
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) operationGet(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.GetOperation(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "operation_id")))
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) operationResult(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.DownloadOperation(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "operation_id")))
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", result.ContentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": result.Filename}))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(result.Content)
+}
+
+func parseStaffAuditFilters(r *http.Request) (contract.AuditFilter, error) {
+	input := auditFilterInput{}
+	raw := r.URL.Query().Get("filters")
+	if raw != "" {
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			return contract.AuditFilter{}, queueFilterError("filters", contract.ValidationInvalidFormat)
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			return contract.AuditFilter{}, queueFilterError("filters", contract.ValidationInvalidFormat)
+		}
+	} else {
+		query := r.URL.Query()
+		input.RequestID = queryValues(query, "request_id")
+		input.EntityType = queryValues(query, "entity_type")
+		input.EntityID = queryValues(query, "entity_id")
+		input.EventType = queryValues(query, "event_type")
+		input.ActorType = queryValues(query, "actor_type")
+		input.ActorID = queryValues(query, "actor_id")
+		input.SourceChannel = queryValues(query, "source_channel")
+		input.OccurredFrom = firstQueryValue(queryValues(query, "occurred_from"))
+		input.OccurredTo = firstQueryValue(queryValues(query, "occurred_to"))
+	}
+	return auditFilterFromInput(input, "/query/filters")
+}
+
+func auditFilterFromInput(input auditFilterInput, prefix string) (contract.AuditFilter, error) {
+	from, err := parseAuditTime(input.OccurredFrom, prefix+"/occurred_from")
+	if err != nil {
+		return contract.AuditFilter{}, err
+	}
+	to, err := parseAuditTime(input.OccurredTo, prefix+"/occurred_to")
+	if err != nil {
+		return contract.AuditFilter{}, err
+	}
+	return contract.AuditFilter{
+		RequestIDs: trimStringList(input.RequestID), EntityTypes: trimStringList(input.EntityType), EntityIDs: trimStringList(input.EntityID),
+		EventTypes: trimStringList(input.EventType), ActorTypes: convertStrings(trimStringList(input.ActorType), contract.AuditActorType("")),
+		ActorIDs: trimStringList(input.ActorID), SourceChannels: convertStrings(trimStringList(input.SourceChannel), contract.SourceChannel("")),
+		OccurredFrom: from, OccurredTo: to,
+	}, nil
+}
+
+func parseAuditTime(value, field string) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, &city311Service.ServiceError{Status: http.StatusUnprocessableEntity, Payload: contract.APIError{
+			Error: contract.ErrorValidation, Message: invalidFieldsMessage, Retryable: false,
+			Errors: []contract.FieldError{{Field: field, Code: contract.ValidationInvalidFormat}},
+		}}
+	}
+	parsed = parsed.UTC()
+	return &parsed, nil
+}
+
+func trimStringList(values stringList) stringList {
+	out := make(stringList, 0, len(values))
+	for _, value := range values {
+		out = append(out, strings.TrimSpace(value))
+	}
+	return out
 }
 
 func parseStaffQueueFilters(r *http.Request) (city311Service.RequestFilter, error) {

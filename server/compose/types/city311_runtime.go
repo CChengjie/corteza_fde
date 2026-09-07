@@ -156,6 +156,31 @@ type (
 	}
 	City311StagedAttachmentSet []*City311StagedAttachment
 
+	City311Operation struct {
+		ID          uint64      `json:"operationID,string"`
+		Kind        string      `json:"kind"`
+		Status      string      `json:"status"`
+		Progress    int         `json:"progress"`
+		ActorID     uint64      `json:"actorID,string"`
+		Result      City311JSON `json:"result"`
+		Error       City311JSON `json:"error"`
+		Content     []byte      `json:"-"`
+		ContentType string      `json:"contentType"`
+		Filename    string      `json:"filename"`
+		CreatedAt   time.Time   `json:"createdAt"`
+		UpdatedAt   time.Time   `json:"updatedAt"`
+		CompletedAt *time.Time  `json:"completedAt,omitempty"`
+	}
+	City311OperationFilter struct {
+		ActorID uint64
+		Kind    string
+		Status  string
+		Check   func(*City311Operation) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311OperationSet []*City311Operation
+
 	City311RequestAttachment struct {
 		ID        uint64    `json:"id,string"`
 		RequestID uint64    `json:"requestID,string"`

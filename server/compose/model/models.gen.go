@@ -921,6 +921,130 @@ var City311LocalAccount = &dal.Model{
 	},
 }
 
+var City311Operation = &dal.Model{
+	Ident:        "compose_city311_operation",
+	ResourceType: types.City311OperationResourceType,
+
+	Attributes: dal.AttributeSet{
+		&dal.Attribute{
+			Ident: "ID",
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "id"},
+		},
+
+		&dal.Attribute{
+			Ident: "Kind", Sortable: true,
+			Type:  &dal.TypeText{Length: 64},
+			Store: &dal.CodecAlias{Ident: "kind"},
+		},
+
+		&dal.Attribute{
+			Ident: "Status", Sortable: true,
+			Type:  &dal.TypeText{Length: 32},
+			Store: &dal.CodecAlias{Ident: "status"},
+		},
+
+		&dal.Attribute{
+			Ident: "Progress",
+			Type: &dal.TypeNumber{HasDefault: true,
+				DefaultValue: 0,
+				Precision:    -1, Scale: -1, Meta: map[string]interface{}{"rdbms:type": "integer"},
+			},
+			Store: &dal.CodecAlias{Ident: "progress"},
+		},
+
+		&dal.Attribute{
+			Ident: "ActorID", Sortable: true,
+			Type:  &dal.TypeID{},
+			Store: &dal.CodecAlias{Ident: "actor_id"},
+		},
+
+		&dal.Attribute{
+			Ident: "Result",
+			Type: &dal.TypeJSON{
+				DefaultValue: "{}",
+			},
+			Store: &dal.CodecAlias{Ident: "result"},
+		},
+
+		&dal.Attribute{
+			Ident: "Error",
+			Type: &dal.TypeJSON{
+				DefaultValue: "{}",
+			},
+			Store: &dal.CodecAlias{Ident: "error"},
+		},
+
+		&dal.Attribute{
+			Ident: "Content",
+			Type:  &dal.TypeBlob{Nullable: true},
+			Store: &dal.CodecAlias{Ident: "content"},
+		},
+
+		&dal.Attribute{
+			Ident: "ContentType",
+			Type:  &dal.TypeText{Length: 128},
+			Store: &dal.CodecAlias{Ident: "content_type"},
+		},
+
+		&dal.Attribute{
+			Ident: "Filename",
+			Type:  &dal.TypeText{Length: 160},
+			Store: &dal.CodecAlias{Ident: "filename"},
+		},
+
+		&dal.Attribute{
+			Ident: "CreatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "created_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "UpdatedAt", Sortable: true,
+			Type: &dal.TypeTimestamp{
+				DefaultCurrentTimestamp: true, Timezone: true, Precision: -1,
+			},
+			Store: &dal.CodecAlias{Ident: "updated_at"},
+		},
+
+		&dal.Attribute{
+			Ident: "CompletedAt", Sortable: true,
+			Type:  &dal.TypeTimestamp{Nullable: true, Timezone: true, Precision: -1},
+			Store: &dal.CodecAlias{Ident: "completed_at"},
+		},
+	},
+
+	Indexes: dal.IndexSet{
+		&dal.Index{
+			Ident: "compose_city311_operation_actor",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ActorID",
+				},
+
+				{
+					AttributeIdent: "CreatedAt",
+				},
+			},
+		},
+
+		&dal.Index{
+			Ident: "PRIMARY",
+			Type:  "BTREE",
+
+			Fields: []*dal.IndexField{
+				{
+					AttributeIdent: "ID",
+				},
+			},
+		},
+	},
+}
+
 var City311PasswordResetToken = &dal.Model{
 	Ident:        "compose_city311_password_reset_token",
 	ResourceType: types.City311PasswordResetTokenResourceType,
@@ -2773,6 +2897,7 @@ func init() {
 		City311IdentityNotification,
 		City311IdentitySession,
 		City311LocalAccount,
+		City311Operation,
 		City311PasswordResetToken,
 		City311PublicHistoryItem,
 		City311ReopenRequest,

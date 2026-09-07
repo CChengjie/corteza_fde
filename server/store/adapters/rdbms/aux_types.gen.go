@@ -299,6 +299,23 @@ type (
 		UpdatedAt         time.Time `db:"updated_at"`
 	}
 
+	// auxCity311Operation is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311Operation struct {
+		ID          uint64                  `db:"id"`
+		Kind        string                  `db:"kind"`
+		Status      string                  `db:"status"`
+		Progress    int                     `db:"progress"`
+		ActorID     uint64                  `db:"actor_id"`
+		Result      composeType.City311JSON `db:"result"`
+		Error       composeType.City311JSON `db:"error"`
+		Content     []byte                  `db:"content"`
+		ContentType string                  `db:"content_type"`
+		Filename    string                  `db:"filename"`
+		CreatedAt   time.Time               `db:"created_at"`
+		UpdatedAt   time.Time               `db:"updated_at"`
+		CompletedAt *time.Time              `db:"completed_at"`
+	}
+
 	// auxCity311PasswordResetToken is an auxiliary structure used for transporting to/from RDBMS store
 	auxCity311PasswordResetToken struct {
 		ID        uint64     `db:"id"`
@@ -1914,6 +1931,68 @@ func (aux *auxCity311LocalAccount) scan(row scanner) error {
 		&aux.PreferredLanguage,
 		&aux.CreatedAt,
 		&aux.UpdatedAt,
+	)
+}
+
+// encodes City311Operation to auxCity311Operation
+//
+// This function is auto-generated
+func (aux *auxCity311Operation) encode(res *composeType.City311Operation) (_ error) {
+	aux.ID = res.ID
+	aux.Kind = res.Kind
+	aux.Status = res.Status
+	aux.Progress = res.Progress
+	aux.ActorID = res.ActorID
+	aux.Result = res.Result
+	aux.Error = res.Error
+	aux.Content = res.Content
+	aux.ContentType = res.ContentType
+	aux.Filename = res.Filename
+	aux.CreatedAt = res.CreatedAt
+	aux.UpdatedAt = res.UpdatedAt
+	aux.CompletedAt = res.CompletedAt
+	return
+}
+
+// decodes City311Operation from auxCity311Operation
+//
+// This function is auto-generated
+func (aux auxCity311Operation) decode() (res *composeType.City311Operation, _ error) {
+	res = new(composeType.City311Operation)
+	res.ID = aux.ID
+	res.Kind = aux.Kind
+	res.Status = aux.Status
+	res.Progress = aux.Progress
+	res.ActorID = aux.ActorID
+	res.Result = aux.Result
+	res.Error = aux.Error
+	res.Content = aux.Content
+	res.ContentType = aux.ContentType
+	res.Filename = aux.Filename
+	res.CreatedAt = aux.CreatedAt
+	res.UpdatedAt = aux.UpdatedAt
+	res.CompletedAt = aux.CompletedAt
+	return
+}
+
+// scans row and fills auxCity311Operation fields
+//
+// This function is auto-generated
+func (aux *auxCity311Operation) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.Kind,
+		&aux.Status,
+		&aux.Progress,
+		&aux.ActorID,
+		&aux.Result,
+		&aux.Error,
+		&aux.Content,
+		&aux.ContentType,
+		&aux.Filename,
+		&aux.CreatedAt,
+		&aux.UpdatedAt,
+		&aux.CompletedAt,
 	)
 }
 

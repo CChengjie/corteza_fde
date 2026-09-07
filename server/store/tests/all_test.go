@@ -71,6 +71,9 @@ func testAllGenerated(t *testing.T, s store.Storer) {
 	t.Run("city311LocalAccount", func(t *testing.T) {
 		testCity311LocalAccounts(t, s)
 	})
+	t.Run("city311Operation", func(t *testing.T) {
+		testCity311Operations(t, s)
+	})
 	t.Run("city311PasswordResetToken", func(t *testing.T) {
 		testCity311PasswordResetTokens(t, s)
 	})

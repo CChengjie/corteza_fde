@@ -319,6 +319,39 @@ stagedAttachment: {
 	store: {ident: "city311StagedAttachment", api: lookups: [{fields: ["id"]}, {fields: ["token_hash"], constraintCheck: true}]}
 }
 
+operation: {
+	model: {
+		ident:            "compose_city311_operation"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			kind: {goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			status: {goType: "string", sortable: true, dal: {type: "Text", length: 32}}
+			progress: {goType: "int", dal: {type: "Number", meta: {"rdbms:type": "integer"}, default: 0}}
+			actor_id: {ident: "actorID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			result: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			error: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			content: {goType: "[]byte", dal: {type: "Blob", nullable: true}}
+			content_type: {goType: "string", dal: {type: "Text", length: 128}}
+			filename: {goType: "string", dal: {type: "Text", length: 160}}
+			created_at: schema.SortableTimestampNowField
+			updated_at: schema.SortableTimestampNowField
+			completed_at: schema.SortableTimestampNilField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			actor: {attributes: ["actor_id", "created_at"]}
+		}
+	}
+	filter: {
+		struct: {actor_id: {ident: "actorID", goType: "uint64"}, kind: {goType: "string"}, status: {goType: "string"}}
+		byValue: ["actor_id", "kind", "status"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {ident: "city311Operation", api: lookups: [{fields: ["id"]}]}
+}
+
 requestAttachment: {
 	model: {
 		ident:            "compose_city311_request_attachment"

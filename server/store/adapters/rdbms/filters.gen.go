@@ -87,6 +87,9 @@ type (
 		// optional city311LocalAccount filter function called after the generated function
 		City311LocalAccount func(*Store, composeType.City311LocalAccountFilter) ([]goqu.Expression, composeType.City311LocalAccountFilter, error)
 
+		// optional city311Operation filter function called after the generated function
+		City311Operation func(*Store, composeType.City311OperationFilter) ([]goqu.Expression, composeType.City311OperationFilter, error)
+
 		// optional city311PasswordResetToken filter function called after the generated function
 		City311PasswordResetToken func(*Store, composeType.City311PasswordResetTokenFilter) ([]goqu.Expression, composeType.City311PasswordResetTokenFilter, error)
 
@@ -688,6 +691,30 @@ func City311LocalAccountFilter(d drivers.Dialect, f composeType.City311LocalAcco
 
 	if val := strings.TrimSpace(f.VerifiedEmail); len(val) > 0 {
 		ee = append(ee, goqu.C("verified_email").Eq(f.VerifiedEmail))
+	}
+
+	return ee, f, err
+}
+
+// City311OperationFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311Operations() and can be extended
+// by setting Store.Filters.City311Operation. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311OperationFilter(d drivers.Dialect, f composeType.City311OperationFilter) (ee []goqu.Expression, _ composeType.City311OperationFilter, err error) {
+
+	if f.ActorID > 0 {
+		ee = append(ee, goqu.C("actor_id").Eq(f.ActorID))
+	}
+
+	if val := strings.TrimSpace(f.Kind); len(val) > 0 {
+		ee = append(ee, goqu.C("kind").Eq(f.Kind))
+	}
+
+	if val := strings.TrimSpace(f.Status); len(val) > 0 {
+		ee = append(ee, goqu.C("status").Eq(f.Status))
 	}
 
 	return ee, f, err

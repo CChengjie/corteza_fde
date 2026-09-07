@@ -535,7 +535,9 @@
             "type": "boolean"
           },
           "code": {
-            "type": "string"
+            "type": "string",
+            "x-city311-immutable": true,
+            "x-city311-stable": true
           },
           "labels": {
             "properties": {
@@ -567,6 +569,7 @@
         "required": [
           "code",
           "active",
+          "labels",
           "version",
           "updated_at"
         ],
@@ -791,9 +794,13 @@
             "x-city311-enum-ref": "language"
           },
           "primary_category": {
-            "$ref": "#/components/schemas/enum_contact_category",
-            "x-city311-enum-ref": "contact_category",
-            "x-city311-must-be-active": true
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "type": "string",
+            "x-city311-initial-values-enum-ref": "contact_category",
+            "x-city311-must-be-active": true,
+            "x-city311-vocabulary-endpoint": "admin_categories_list"
           }
         },
         "required": [
@@ -2741,8 +2748,13 @@
             "x-city311-enum-ref": "language"
           },
           "primary_category": {
-            "$ref": "#/components/schemas/enum_contact_category",
-            "x-city311-enum-ref": "contact_category"
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "type": "string",
+            "x-city311-initial-values-enum-ref": "contact_category",
+            "x-city311-must-be-active": true,
+            "x-city311-vocabulary-endpoint": "admin_categories_list"
           }
         },
         "required": [],
@@ -6363,6 +6375,9 @@
                     "value": {
                       "active": false,
                       "code": "xxxxxx",
+                      "labels": {
+                        "EN": "xxxxxx"
+                      },
                       "updated_at": "2026-08-25T12:00:00Z",
                       "version": 1
                     }
@@ -6374,10 +6389,24 @@
               }
             },
             "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal category revision",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
             "x-city311-example": {
               "body": {
                 "active": false,
                 "code": "xxxxxx",
+                "labels": {
+                  "EN": "xxxxxx"
+                },
                 "updated_at": "2026-08-25T12:00:00Z",
                 "version": 1
               },
@@ -6529,12 +6558,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "example": "\"7\"",
+              "pattern": "^\\\"[1-9][0-9]*\\\"$",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
+                "admin_category_update_request": {
+                  "value": {
+                    "active": true,
+                    "code": "VETERAN",
+                    "labels": {
+                      "EN": "Veteran",
+                      "ES": "Veterano",
+                      "VI": "Cựu chiến binh"
+                    }
+                  }
+                },
                 "request": {
                   "value": {
                     "active": false,
@@ -6557,12 +6607,30 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "admin_category_updated": {
+                    "value": {
+                      "active": true,
+                      "code": "VETERAN",
+                      "labels": {
+                        "EN": "Veteran",
+                        "ES": "Veterano",
+                        "VI": "Cựu chiến binh"
+                      },
+                      "updated_at": "2026-08-25T11:04:00Z",
+                      "version": 4
+                    }
+                  },
                   "success": {
                     "value": {
-                      "active": false,
-                      "code": "xxxxxx",
-                      "updated_at": "2026-08-25T12:00:00Z",
-                      "version": 1
+                      "active": true,
+                      "code": "VETERAN",
+                      "labels": {
+                        "EN": "Veteran",
+                        "ES": "Veterano",
+                        "VI": "Cựu chiến binh"
+                      },
+                      "updated_at": "2026-08-25T11:04:00Z",
+                      "version": 4
                     }
                   }
                 },
@@ -6572,12 +6640,28 @@
               }
             },
             "description": "success",
+            "headers": {
+              "ETag": {
+                "description": "success response: quoted decimal category revision",
+                "required": true,
+                "schema": {
+                  "example": "\"1\"",
+                  "pattern": "^\"[1-9][0-9]*\"$",
+                  "type": "string"
+                }
+              }
+            },
             "x-city311-example": {
               "body": {
-                "active": false,
-                "code": "xxxxxx",
-                "updated_at": "2026-08-25T12:00:00Z",
-                "version": 1
+                "active": true,
+                "code": "VETERAN",
+                "labels": {
+                  "EN": "Veteran",
+                  "ES": "Veterano",
+                  "VI": "Cựu chiến binh"
+                },
+                "updated_at": "2026-08-25T11:04:00Z",
+                "version": 4
               },
               "status": 200
             }
@@ -6663,14 +6747,70 @@
               "status": 404
             }
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_category_version_conflict": {
+                    "value": {
+                      "current_version": 4,
+                      "error": "VERSION_CONFLICT",
+                      "message": "The category has changed.",
+                      "retryable": false
+                    }
+                  },
+                  "version_conflict": {
+                    "value": {
+                      "current_version": 4,
+                      "error": "VERSION_CONFLICT",
+                      "message": "The category has changed.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VERSION CONFLICT",
+            "x-city311-example": {
+              "body": {
+                "current_version": 4,
+                "error": "VERSION_CONFLICT",
+                "message": "The category has changed.",
+                "retryable": false
+              },
+              "status": 409
+            }
+          },
           "422": {
             "content": {
               "application/json": {
                 "examples": {
+                  "admin_category_in_use": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "errors": [
+                        {
+                          "code": "CONFLICT",
+                          "field": "/active"
+                        }
+                      ],
+                      "message": "The request contains invalid fields.",
+                      "retryable": false
+                    }
+                  },
                   "validation_error": {
                     "value": {
                       "error": "VALIDATION_ERROR",
-                      "message": "validation error.",
+                      "errors": [
+                        {
+                          "code": "CONFLICT",
+                          "field": "/active"
+                        }
+                      ],
+                      "message": "The request contains invalid fields.",
                       "retryable": false
                     }
                   }
@@ -6684,10 +6824,50 @@
             "x-city311-example": {
               "body": {
                 "error": "VALIDATION_ERROR",
-                "message": "validation error.",
+                "errors": [
+                  {
+                    "code": "CONFLICT",
+                    "field": "/active"
+                  }
+                ],
+                "message": "The request contains invalid fields.",
                 "retryable": false
               },
               "status": 422
+            }
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "admin_category_version_required": {
+                    "value": {
+                      "error": "EXPECTED_VERSION_REQUIRED",
+                      "message": "If-Match is required for this update.",
+                      "retryable": false
+                    }
+                  },
+                  "expected_version_required": {
+                    "value": {
+                      "error": "EXPECTED_VERSION_REQUIRED",
+                      "message": "If-Match is required for this update.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "EXPECTED VERSION REQUIRED",
+            "x-city311-example": {
+              "body": {
+                "error": "EXPECTED_VERSION_REQUIRED",
+                "message": "If-Match is required for this update.",
+                "retryable": false
+              },
+              "status": 428
             }
           }
         },
@@ -15700,7 +15880,7 @@
                           }
                         ],
                         "preferred_language": "EN",
-                        "primary_category": "RESIDENT"
+                        "primary_category": "xxxxxx"
                       },
                       "request_id": "xxxxxx",
                       "service_type": "TREE_MAINTENANCE",
@@ -15747,7 +15927,7 @@
                     }
                   ],
                   "preferred_language": "EN",
-                  "primary_category": "RESIDENT"
+                  "primary_category": "xxxxxx"
                 },
                 "request_id": "xxxxxx",
                 "service_type": "TREE_MAINTENANCE",
@@ -16142,7 +16322,7 @@
                           }
                         ],
                         "preferred_language": "EN",
-                        "primary_category": "RESIDENT"
+                        "primary_category": "xxxxxx"
                       },
                       "request_id": "xxxxxx",
                       "service_type": "TREE_MAINTENANCE",
@@ -16189,7 +16369,7 @@
                     }
                   ],
                   "preferred_language": "EN",
-                  "primary_category": "RESIDENT"
+                  "primary_category": "xxxxxx"
                 },
                 "request_id": "xxxxxx",
                 "service_type": "TREE_MAINTENANCE",
@@ -16398,7 +16578,7 @@
                           }
                         ],
                         "preferred_language": "EN",
-                        "primary_category": "RESIDENT"
+                        "primary_category": "xxxxxx"
                       },
                       "request_id": "xxxxxx",
                       "service_type": "TREE_MAINTENANCE",
@@ -16445,7 +16625,7 @@
                     }
                   ],
                   "preferred_language": "EN",
-                  "primary_category": "RESIDENT"
+                  "primary_category": "xxxxxx"
                 },
                 "request_id": "xxxxxx",
                 "service_type": "TREE_MAINTENANCE",
@@ -17350,7 +17530,7 @@
                           }
                         ],
                         "preferred_language": "EN",
-                        "primary_category": "RESIDENT"
+                        "primary_category": "xxxxxx"
                       },
                       "request_id": "xxxxxx",
                       "service_type": "TREE_MAINTENANCE",
@@ -17397,7 +17577,7 @@
                     }
                   ],
                   "preferred_language": "EN",
-                  "primary_category": "RESIDENT"
+                  "primary_category": "xxxxxx"
                 },
                 "request_id": "xxxxxx",
                 "service_type": "TREE_MAINTENANCE",
@@ -19004,6 +19184,39 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "admin_category_audit_event": {
+                    "value": {
+                      "applied_filters": {
+                        "entity_type": [
+                          "contact_category"
+                        ]
+                      },
+                      "items": [
+                        {
+                          "actor_id": "staff-manager-1",
+                          "actor_type": "staff",
+                          "after": {
+                            "active": true,
+                            "version": 4
+                          },
+                          "before": {
+                            "active": true,
+                            "version": 3
+                          },
+                          "entity_id": "VETERAN",
+                          "entity_type": "contact_category",
+                          "event_type": "CONTACT_CATEGORY_UPDATED",
+                          "occurred_at": "2026-08-25T11:04:00Z",
+                          "source_channel": "STAFF_IN_PERSON"
+                        }
+                      ],
+                      "next_page_token": null,
+                      "sort": [
+                        "-occurred_at"
+                      ],
+                      "total_count": 1
+                    }
+                  },
                   "admin_help_audit_events": {
                     "value": {
                       "applied_filters": {
@@ -19072,56 +19285,25 @@
                     "value": {
                       "applied_filters": {
                         "entity_type": [
-                          "help"
+                          "contact_category"
                         ]
                       },
                       "items": [
                         {
-                          "actor_id": "staff-admin-1",
+                          "actor_id": "staff-manager-1",
                           "actor_type": "staff",
                           "after": {
-                            "published": false,
-                            "version": 2
-                          },
-                          "before": {
-                            "version": 1
-                          },
-                          "entity_id": "public.request.submit",
-                          "entity_type": "help",
-                          "event_type": "HELP_UPDATED",
-                          "occurred_at": "2026-08-25T10:02:00Z",
-                          "source_channel": "STAFF_IN_PERSON"
-                        },
-                        {
-                          "actor_id": "staff-admin-1",
-                          "actor_type": "staff",
-                          "after": {
-                            "published": true,
-                            "version": 3
-                          },
-                          "before": {
-                            "version": 2
-                          },
-                          "entity_id": "public.request.submit",
-                          "entity_type": "help",
-                          "event_type": "HELP_PUBLISHED",
-                          "occurred_at": "2026-08-25T10:03:00Z",
-                          "source_channel": "STAFF_IN_PERSON"
-                        },
-                        {
-                          "actor_id": "staff-admin-1",
-                          "actor_type": "staff",
-                          "after": {
-                            "published": true,
-                            "version": 5
-                          },
-                          "before": {
+                            "active": true,
                             "version": 4
                           },
-                          "entity_id": "public.request.submit",
-                          "entity_type": "help",
-                          "event_type": "HELP_ROLLED_BACK",
-                          "occurred_at": "2026-08-25T10:05:00Z",
+                          "before": {
+                            "active": true,
+                            "version": 3
+                          },
+                          "entity_id": "VETERAN",
+                          "entity_type": "contact_category",
+                          "event_type": "CONTACT_CATEGORY_UPDATED",
+                          "occurred_at": "2026-08-25T11:04:00Z",
                           "source_channel": "STAFF_IN_PERSON"
                         }
                       ],
@@ -19129,7 +19311,7 @@
                       "sort": [
                         "-occurred_at"
                       ],
-                      "total_count": 3
+                      "total_count": 1
                     }
                   }
                 },
@@ -19143,56 +19325,25 @@
               "body": {
                 "applied_filters": {
                   "entity_type": [
-                    "help"
+                    "contact_category"
                   ]
                 },
                 "items": [
                   {
-                    "actor_id": "staff-admin-1",
+                    "actor_id": "staff-manager-1",
                     "actor_type": "staff",
                     "after": {
-                      "published": false,
-                      "version": 2
-                    },
-                    "before": {
-                      "version": 1
-                    },
-                    "entity_id": "public.request.submit",
-                    "entity_type": "help",
-                    "event_type": "HELP_UPDATED",
-                    "occurred_at": "2026-08-25T10:02:00Z",
-                    "source_channel": "STAFF_IN_PERSON"
-                  },
-                  {
-                    "actor_id": "staff-admin-1",
-                    "actor_type": "staff",
-                    "after": {
-                      "published": true,
-                      "version": 3
-                    },
-                    "before": {
-                      "version": 2
-                    },
-                    "entity_id": "public.request.submit",
-                    "entity_type": "help",
-                    "event_type": "HELP_PUBLISHED",
-                    "occurred_at": "2026-08-25T10:03:00Z",
-                    "source_channel": "STAFF_IN_PERSON"
-                  },
-                  {
-                    "actor_id": "staff-admin-1",
-                    "actor_type": "staff",
-                    "after": {
-                      "published": true,
-                      "version": 5
-                    },
-                    "before": {
+                      "active": true,
                       "version": 4
                     },
-                    "entity_id": "public.request.submit",
-                    "entity_type": "help",
-                    "event_type": "HELP_ROLLED_BACK",
-                    "occurred_at": "2026-08-25T10:05:00Z",
+                    "before": {
+                      "active": true,
+                      "version": 3
+                    },
+                    "entity_id": "VETERAN",
+                    "entity_type": "contact_category",
+                    "event_type": "CONTACT_CATEGORY_UPDATED",
+                    "occurred_at": "2026-08-25T11:04:00Z",
                     "source_channel": "STAFF_IN_PERSON"
                   }
                 ],
@@ -19200,7 +19351,7 @@
                 "sort": [
                   "-occurred_at"
                 ],
-                "total_count": 3
+                "total_count": 1
               },
               "status": 200
             }
@@ -19984,8 +20135,13 @@
                 },
                 "primary_category": {
                   "items": {
-                    "$ref": "#/components/schemas/enum_contact_category",
-                    "x-city311-enum-ref": "contact_category"
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string",
+                    "x-city311-initial-values-enum-ref": "contact_category",
+                    "x-city311-must-be-active": true,
+                    "x-city311-vocabulary-endpoint": "admin_categories_list"
                   },
                   "minItems": 1,
                   "type": "array",
@@ -20077,7 +20233,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         }
                       ],
                       "next_page_token": "xxxxxx",
@@ -20121,7 +20277,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   }
                 ],
                 "next_page_token": "xxxxxx",
@@ -20312,7 +20468,7 @@
                         }
                       ],
                       "preferred_language": "EN",
-                      "primary_category": "RESIDENT"
+                      "primary_category": "xxxxxx"
                     }
                   }
                 },
@@ -20346,7 +20502,7 @@
                   }
                 ],
                 "preferred_language": "EN",
-                "primary_category": "RESIDENT"
+                "primary_category": "xxxxxx"
               },
               "status": 200
             }
@@ -23491,7 +23647,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -23589,7 +23745,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -24109,7 +24265,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -24207,7 +24363,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -24484,7 +24640,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -24582,7 +24738,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -24916,7 +25072,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -25014,7 +25170,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -25346,7 +25502,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -25444,7 +25600,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -25773,7 +25929,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -25871,7 +26027,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -26204,7 +26360,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -26302,7 +26458,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -26627,7 +26783,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -26725,7 +26881,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -27049,7 +27205,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -27147,7 +27303,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -27663,7 +27819,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -27761,7 +27917,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -28292,7 +28448,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -28390,7 +28546,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -28720,7 +28876,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -28818,7 +28974,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",
@@ -29144,7 +29300,7 @@
                             }
                           ],
                           "preferred_language": "EN",
-                          "primary_category": "RESIDENT"
+                          "primary_category": "xxxxxx"
                         },
                         "request_id": "xxxxxx",
                         "service_type": "TREE_MAINTENANCE",
@@ -29242,7 +29398,7 @@
                       }
                     ],
                     "preferred_language": "EN",
-                    "primary_category": "RESIDENT"
+                    "primary_category": "xxxxxx"
                   },
                   "request_id": "xxxxxx",
                   "service_type": "TREE_MAINTENANCE",

@@ -581,6 +581,16 @@ func (svc *Service) currentHelpRevision(ctx context.Context, helpKey string, lan
 }
 
 func (svc *Service) createConfigurationRevision(ctx context.Context, actor contract.Actor, current *composeTypes.City311ConfigurationRevision, resourceType, resourceKey, language string, value any, published bool, eventType string) (*composeTypes.City311ConfigurationRevision, error) {
+	var revision *composeTypes.City311ConfigurationRevision
+	err := store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+		var err error
+		revision, err = svc.createConfigurationRevisionInStore(ctx, tx, actor, current, resourceType, resourceKey, language, value, published, eventType)
+		return err
+	})
+	return revision, err
+}
+
+func (svc *Service) createConfigurationRevisionInStore(ctx context.Context, st store.Storer, actor contract.Actor, current *composeTypes.City311ConfigurationRevision, resourceType, resourceKey, language string, value any, published bool, eventType string) (*composeTypes.City311ConfigurationRevision, error) {
 	payload, err := mapFrom(value)
 	if err != nil {
 		return nil, err
@@ -593,21 +603,21 @@ func (svc *Service) createConfigurationRevision(ctx context.Context, actor contr
 		ID: svc.nextID(), ResourceType: resourceType, ResourceKey: resourceKey, Language: language,
 		Payload: payload, Version: current.Version + 1, Published: published, CreatedAt: now,
 	}
-	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
-		if err := store.CreateCity311ConfigurationRevision(ctx, tx, revision); err != nil {
-			return err
-		}
-		before := cloneMap(current.Payload)
-		after := cloneMap(revision.Payload)
-		after["version"] = revision.Version
-		after["published"] = revision.Published
-		return store.CreateCity311AuditEvent(ctx, tx, &composeTypes.City311AuditEvent{
-			ID: svc.nextID(), EntityType: strings.ToLower(resourceType), EntityID: resourceKey, EventType: eventType,
-			ActorType: contract.AuditActorStaff, ActorID: actor.ID, SourceChannel: contract.SourceChannelStaffInPerson,
-			Before: before, After: after, CreatedAt: now,
-		})
-	})
-	return revision, err
+	if err := store.CreateCity311ConfigurationRevision(ctx, st, revision); err != nil {
+		return nil, err
+	}
+	before := cloneMap(current.Payload)
+	after := cloneMap(revision.Payload)
+	after["version"] = revision.Version
+	after["published"] = revision.Published
+	if err := store.CreateCity311AuditEvent(ctx, st, &composeTypes.City311AuditEvent{
+		ID: svc.nextID(), EntityType: strings.ToLower(resourceType), EntityID: resourceKey, EventType: eventType,
+		ActorType: contract.AuditActorStaff, ActorID: actor.ID, SourceChannel: contract.SourceChannelStaffInPerson,
+		Before: before, After: after, CreatedAt: now,
+	}); err != nil {
+		return nil, err
+	}
+	return revision, nil
 }
 
 func (svc *Service) configurationRevisions(ctx context.Context, st store.Storer, resourceType, resourceKey string) (composeTypes.City311ConfigurationRevisionSet, error) {

@@ -507,6 +507,9 @@ func (svc *Service) persistSubmission(ctx context.Context, tx store.Storer, prep
 		return nil, err
 	}
 	stored := newStoredRequest(prepared, profile, requestID, department, year, number, now)
+	if err = svc.qualifyDuplicateGroup(ctx, tx, stored, now); err != nil {
+		return nil, err
+	}
 	if err = store.CreateCity311ServiceRequest(ctx, tx, stored); err != nil {
 		return nil, err
 	}
@@ -687,6 +690,9 @@ func (svc *Service) transitionRequest(ctx context.Context, tx store.Storer, acto
 			return allocateErr
 		}
 		request.RequestNumber = fmt.Sprintf("SR-%04d-%05d", year, number)
+		if qualificationErr := svc.qualifyDuplicateGroup(ctx, tx, request, svc.now()); qualificationErr != nil {
+			return qualificationErr
+		}
 	}
 	request.Status = toStatus
 	request.Version++

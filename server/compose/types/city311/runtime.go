@@ -1,6 +1,9 @@
 package city311
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // PortalAttachment is a single-use upload receipt, not a download credential.
 type PortalAttachment struct {
@@ -109,6 +112,40 @@ type ReopenRequest struct {
 
 type ReopenApproval struct {
 	Reason string `json:"reason"`
+}
+
+type DuplicateGroupChange struct {
+	DuplicateGroupID string `json:"duplicate_group_id"`
+	Reason           string `json:"reason"`
+}
+
+type BulkAction string
+
+const (
+	BulkActionUpdate BulkAction = "UPDATE"
+	BulkActionClose  BulkAction = "CLOSE"
+)
+
+type BulkRequestItem struct {
+	RequestID       string `json:"request_id"`
+	ExpectedVersion uint64 `json:"expected_version"`
+}
+
+// BulkChanges uses raw values so the service can distinguish an omitted
+// primary_assignee_id from an explicit null, which clears the assignment.
+// The frozen contract intentionally keeps this object extensible at the JSON
+// schema layer; the runtime enforces its four-field allow-list.
+type BulkChanges map[string]json.RawMessage
+
+type BulkRequest struct {
+	RequestItems []BulkRequestItem `json:"request_items"`
+	Action       BulkAction        `json:"action"`
+	Changes      *BulkChanges      `json:"changes"`
+}
+
+type BulkResult struct {
+	UpdatedRequestIDs []string `json:"updated_request_ids"`
+	UpdatedCount      int      `json:"updated_count"`
 }
 
 type PortalRequestSummary struct {

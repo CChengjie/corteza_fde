@@ -72,6 +72,9 @@ type (
 		// optional city311AuditEvent filter function called after the generated function
 		City311AuditEvent func(*Store, composeType.City311AuditEventFilter) ([]goqu.Expression, composeType.City311AuditEventFilter, error)
 
+		// optional city311ConfigurationRevision filter function called after the generated function
+		City311ConfigurationRevision func(*Store, composeType.City311ConfigurationRevisionFilter) ([]goqu.Expression, composeType.City311ConfigurationRevisionFilter, error)
+
 		// optional city311Constituent filter function called after the generated function
 		City311Constituent func(*Store, composeType.City311ConstituentFilter) ([]goqu.Expression, composeType.City311ConstituentFilter, error)
 
@@ -593,6 +596,34 @@ func City311AuditEventFilter(d drivers.Dialect, f composeType.City311AuditEventF
 
 	if val := strings.TrimSpace(f.EventType); len(val) > 0 {
 		ee = append(ee, goqu.C("event_type").Eq(f.EventType))
+	}
+
+	return ee, f, err
+}
+
+// City311ConfigurationRevisionFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311ConfigurationRevisions() and can be extended
+// by setting Store.Filters.City311ConfigurationRevision. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311ConfigurationRevisionFilter(d drivers.Dialect, f composeType.City311ConfigurationRevisionFilter) (ee []goqu.Expression, _ composeType.City311ConfigurationRevisionFilter, err error) {
+
+	if val := strings.TrimSpace(f.ResourceType); len(val) > 0 {
+		ee = append(ee, goqu.C("resource_type").Eq(f.ResourceType))
+	}
+
+	if val := strings.TrimSpace(f.ResourceKey); len(val) > 0 {
+		ee = append(ee, goqu.C("resource_key").Eq(f.ResourceKey))
+	}
+
+	if val := strings.TrimSpace(f.Language); len(val) > 0 {
+		ee = append(ee, goqu.C("language").Eq(f.Language))
+	}
+
+	if f.Published {
+		ee = append(ee, goqu.C("published").IsTrue())
 	}
 
 	return ee, f, err

@@ -307,6 +307,79 @@ type WorkflowActionAccepted struct {
 	AcceptedAt  time.Time `json:"accepted_at"`
 }
 
+type Branding struct {
+	OrganisationName   string    `json:"organisation_name"`
+	LogoURL            *string   `json:"logo_url"`
+	FaviconURL         *string   `json:"favicon_url"`
+	PortalWallpaperURL *string   `json:"portal_wallpaper_url"`
+	LoginHeader        string    `json:"login_header"`
+	PublicHeader       string    `json:"public_header"`
+	PublicFooter       string    `json:"public_footer"`
+	PrimaryColour      string    `json:"primary_colour"`
+	AccentColour       string    `json:"accent_colour"`
+	FontFamily         string    `json:"font_family"`
+	Published          bool      `json:"published"`
+	Version            uint64    `json:"version"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type BrandingWrite struct {
+	OrganisationName   *string `json:"organisation_name,omitempty"`
+	LogoURL            *string `json:"logo_url,omitempty"`
+	FaviconURL         *string `json:"favicon_url,omitempty"`
+	PortalWallpaperURL *string `json:"portal_wallpaper_url,omitempty"`
+	LoginHeader        *string `json:"login_header,omitempty"`
+	PublicHeader       *string `json:"public_header,omitempty"`
+	PublicFooter       *string `json:"public_footer,omitempty"`
+	PrimaryColour      *string `json:"primary_colour,omitempty"`
+	AccentColour       *string `json:"accent_colour,omitempty"`
+	FontFamily         *string `json:"font_family,omitempty"`
+}
+
+type BrandingList struct {
+	Items         []Branding `json:"items"`
+	NextPageToken *string    `json:"next_page_token"`
+	TotalCount    int        `json:"total_count"`
+	Sort          []string   `json:"sort"`
+}
+
+type ContentObject struct {
+	ContentKey string    `json:"content_key"`
+	Body       string    `json:"body"`
+	State      string    `json:"state"`
+	Published  bool      `json:"published"`
+	Version    uint64    `json:"version"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type ContentWrite struct {
+	Body string `json:"body"`
+}
+
+type ContentList struct {
+	Items         []ContentObject `json:"items"`
+	NextPageToken *string         `json:"next_page_token"`
+	TotalCount    int             `json:"total_count"`
+	Sort          []string        `json:"sort"`
+}
+
+type HelpContent struct {
+	HelpKey   string    `json:"help_key"`
+	Language  Language  `json:"language"`
+	Body      string    `json:"body"`
+	Version   uint64    `json:"version"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type HelpWrite struct {
+	Language Language `json:"language"`
+	Body     string   `json:"body"`
+}
+
+type Rollback struct {
+	TargetVersion uint64 `json:"target_version"`
+}
+
 type FollowUpAction struct {
 	ActionType       string         `json:"action_type"`
 	Actor            string         `json:"actor"`

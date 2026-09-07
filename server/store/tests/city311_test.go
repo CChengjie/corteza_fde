@@ -428,3 +428,26 @@ func testCity311WorkflowExecutions(t *testing.T, s store.City311WorkflowExecutio
 	require.Error(t, s.CreateCity311WorkflowExecution(ctx, &duplicate))
 	require.NoError(t, s.DeleteCity311WorkflowExecutionByID(ctx, execution.ID))
 }
+
+func testCity311ConfigurationRevisions(t *testing.T, s store.City311ConfigurationRevisions) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311ConfigurationRevisions(ctx))
+	createdAt := *now()
+	revision := &composeTypes.City311ConfigurationRevision{
+		ID: 703, ResourceType: "CONTENT", ResourceKey: "HOME", Payload: composeTypes.City311JSON{"body": "<p>Home</p>"},
+		Version: 1, Published: true, CreatedAt: createdAt,
+	}
+	require.NoError(t, s.CreateCity311ConfigurationRevision(ctx, revision))
+	fetched, err := s.LookupCity311ConfigurationRevisionByID(ctx, revision.ID)
+	require.NoError(t, err)
+	require.Equal(t, "HOME", fetched.ResourceKey)
+	set, _, err := s.SearchCity311ConfigurationRevisions(ctx, composeTypes.City311ConfigurationRevisionFilter{ResourceType: "CONTENT", ResourceKey: "HOME"})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	fetched.Published = false
+	require.NoError(t, s.UpdateCity311ConfigurationRevision(ctx, fetched))
+	duplicate := *revision
+	duplicate.ID++
+	require.Error(t, s.CreateCity311ConfigurationRevision(ctx, &duplicate))
+	require.NoError(t, s.DeleteCity311ConfigurationRevisionByID(ctx, revision.ID))
+}

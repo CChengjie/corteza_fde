@@ -1615,6 +1615,106 @@ var (
 		}
 	}
 
+	// city311ConfigurationRevisionTable represents city311ConfigurationRevisions store table
+	//
+	// This value is auto-generated
+	city311ConfigurationRevisionTable = goqu.T("compose_city311_configuration_revision")
+
+	// city311ConfigurationRevisionSelectQuery assembles select query for fetching city311ConfigurationRevisions
+	//
+	// This function is auto-generated
+	city311ConfigurationRevisionSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"resource_type",
+			"resource_key",
+			"language",
+			"payload",
+			"version",
+			"published",
+			"created_at",
+		).From(city311ConfigurationRevisionTable)
+	}
+
+	// city311ConfigurationRevisionInsertQuery assembles query inserting city311ConfigurationRevisions
+	//
+	// This function is auto-generated
+	city311ConfigurationRevisionInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311ConfigurationRevision) *goqu.InsertDataset {
+		return d.Insert(city311ConfigurationRevisionTable).
+			Rows(goqu.Record{
+				"id":            res.ID,
+				"resource_type": res.ResourceType,
+				"resource_key":  res.ResourceKey,
+				"language":      res.Language,
+				"payload":       res.Payload,
+				"version":       res.Version,
+				"published":     res.Published,
+				"created_at":    res.CreatedAt,
+			})
+	}
+
+	// city311ConfigurationRevisionUpsertQuery assembles (insert+on-conflict) query for replacing city311ConfigurationRevisions
+	//
+	// This function is auto-generated
+	city311ConfigurationRevisionUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311ConfigurationRevision) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311ConfigurationRevisionInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"resource_type": res.ResourceType,
+						"resource_key":  res.ResourceKey,
+						"language":      res.Language,
+						"payload":       res.Payload,
+						"version":       res.Version,
+						"published":     res.Published,
+						"created_at":    res.CreatedAt,
+					},
+				),
+			)
+	}
+
+	// city311ConfigurationRevisionUpdateQuery assembles query for updating city311ConfigurationRevisions
+	//
+	// This function is auto-generated
+	city311ConfigurationRevisionUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311ConfigurationRevision) *goqu.UpdateDataset {
+		return d.Update(city311ConfigurationRevisionTable).
+			Set(goqu.Record{
+				"resource_type": res.ResourceType,
+				"resource_key":  res.ResourceKey,
+				"language":      res.Language,
+				"payload":       res.Payload,
+				"version":       res.Version,
+				"published":     res.Published,
+				"created_at":    res.CreatedAt,
+			}).
+			Where(city311ConfigurationRevisionPrimaryKeys(res))
+	}
+
+	// city311ConfigurationRevisionDeleteQuery assembles delete query for removing city311ConfigurationRevisions
+	//
+	// This function is auto-generated
+	city311ConfigurationRevisionDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311ConfigurationRevisionTable).Where(ee...)
+	}
+
+	// city311ConfigurationRevisionDeleteQuery assembles delete query for removing city311ConfigurationRevisions
+	//
+	// This function is auto-generated
+	city311ConfigurationRevisionTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311ConfigurationRevisionTable)
+	}
+
+	// city311ConfigurationRevisionPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311ConfigurationRevisionPrimaryKeys = func(res *composeType.City311ConfigurationRevision) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
 	// city311ConstituentTable represents city311Constituents store table
 	//
 	// This value is auto-generated

@@ -60,6 +60,9 @@ func (svc *Service) Seed(ctx context.Context, benchmarkNow time.Time) error {
 		if err := svc.seedRequests(ctx, tx, benchmarkNow); err != nil {
 			return fmt.Errorf("seed service requests: %w", err)
 		}
+		if err := svc.seedPresentation(ctx, tx, benchmarkNow); err != nil {
+			return fmt.Errorf("seed presentation configuration: %w", err)
+		}
 		return nil
 	})
 }

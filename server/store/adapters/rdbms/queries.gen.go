@@ -2295,6 +2295,110 @@ var (
 		}
 	}
 
+	// city311ReopenRequestTable represents city311ReopenRequests store table
+	//
+	// This value is auto-generated
+	city311ReopenRequestTable = goqu.T("compose_city311_reopen_request")
+
+	// city311ReopenRequestSelectQuery assembles select query for fetching city311ReopenRequests
+	//
+	// This function is auto-generated
+	city311ReopenRequestSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"request_id",
+			"requested_by",
+			"request_reason",
+			"status",
+			"requested_at",
+			"approved_by",
+			"approval_reason",
+			"approved_at",
+		).From(city311ReopenRequestTable)
+	}
+
+	// city311ReopenRequestInsertQuery assembles query inserting city311ReopenRequests
+	//
+	// This function is auto-generated
+	city311ReopenRequestInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311ReopenRequest) *goqu.InsertDataset {
+		return d.Insert(city311ReopenRequestTable).
+			Rows(goqu.Record{
+				"id":              res.ID,
+				"request_id":      res.RequestID,
+				"requested_by":    res.RequestedBy,
+				"request_reason":  res.RequestReason,
+				"status":          res.Status,
+				"requested_at":    res.RequestedAt,
+				"approved_by":     res.ApprovedBy,
+				"approval_reason": res.ApprovalReason,
+				"approved_at":     res.ApprovedAt,
+			})
+	}
+
+	// city311ReopenRequestUpsertQuery assembles (insert+on-conflict) query for replacing city311ReopenRequests
+	//
+	// This function is auto-generated
+	city311ReopenRequestUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311ReopenRequest) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311ReopenRequestInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"request_id":      res.RequestID,
+						"requested_by":    res.RequestedBy,
+						"request_reason":  res.RequestReason,
+						"status":          res.Status,
+						"requested_at":    res.RequestedAt,
+						"approved_by":     res.ApprovedBy,
+						"approval_reason": res.ApprovalReason,
+						"approved_at":     res.ApprovedAt,
+					},
+				),
+			)
+	}
+
+	// city311ReopenRequestUpdateQuery assembles query for updating city311ReopenRequests
+	//
+	// This function is auto-generated
+	city311ReopenRequestUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311ReopenRequest) *goqu.UpdateDataset {
+		return d.Update(city311ReopenRequestTable).
+			Set(goqu.Record{
+				"request_id":      res.RequestID,
+				"requested_by":    res.RequestedBy,
+				"request_reason":  res.RequestReason,
+				"status":          res.Status,
+				"requested_at":    res.RequestedAt,
+				"approved_by":     res.ApprovedBy,
+				"approval_reason": res.ApprovalReason,
+				"approved_at":     res.ApprovedAt,
+			}).
+			Where(city311ReopenRequestPrimaryKeys(res))
+	}
+
+	// city311ReopenRequestDeleteQuery assembles delete query for removing city311ReopenRequests
+	//
+	// This function is auto-generated
+	city311ReopenRequestDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311ReopenRequestTable).Where(ee...)
+	}
+
+	// city311ReopenRequestDeleteQuery assembles delete query for removing city311ReopenRequests
+	//
+	// This function is auto-generated
+	city311ReopenRequestTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311ReopenRequestTable)
+	}
+
+	// city311ReopenRequestPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311ReopenRequestPrimaryKeys = func(res *composeType.City311ReopenRequest) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
 	// city311RequestAttachmentTable represents city311RequestAttachments store table
 	//
 	// This value is auto-generated

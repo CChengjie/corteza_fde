@@ -77,6 +77,9 @@ func testAllGenerated(t *testing.T, s store.Storer) {
 	t.Run("city311PublicHistoryItem", func(t *testing.T) {
 		testCity311PublicHistoryItems(t, s)
 	})
+	t.Run("city311ReopenRequest", func(t *testing.T) {
+		testCity311ReopenRequests(t, s)
+	})
 	t.Run("city311RequestAttachment", func(t *testing.T) {
 		testCity311RequestAttachments(t, s)
 	})

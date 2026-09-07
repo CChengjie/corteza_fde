@@ -50,6 +50,9 @@ func (svc *Service) CreateDraft(ctx context.Context, ownerID uint64, input contr
 		if err := store.CreateCity311ServiceRequest(ctx, tx, request); err != nil {
 			return err
 		}
+		if err := svc.persistPrimaryRelationship(ctx, tx, request, now); err != nil {
+			return err
+		}
 		if err := persistDraftAudit(ctx, tx, svc.nextID, request.ID, ownerID, "DRAFT_CREATED", map[string]any{}, requestSnapshot(request), now); err != nil {
 			return err
 		}
@@ -153,6 +156,15 @@ func (svc *Service) DeleteDraft(ctx context.Context, ownerID, requestID, expecte
 		}
 		if err := persistDraftAudit(ctx, tx, svc.nextID, request.ID, ownerID, "DRAFT_DELETED", requestSnapshot(request), map[string]any{}, svc.now()); err != nil {
 			return err
+		}
+		links, _, err := store.SearchCity311RequestConstituentLinks(ctx, tx, composeTypes.City311RequestConstituentFilter{RequestID: request.ID})
+		if err != nil {
+			return err
+		}
+		if len(links) > 0 {
+			if err = store.DeleteCity311RequestConstituentLink(ctx, tx, links...); err != nil {
+				return err
+			}
 		}
 		return store.DeleteCity311ServiceRequest(ctx, tx, request)
 	})

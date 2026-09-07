@@ -329,6 +329,18 @@ type (
 		CreatedAt time.Time `db:"created_at"`
 	}
 
+	// auxCity311RequestConstituentLink is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311RequestConstituentLink struct {
+		ID               uint64                       `db:"id"`
+		RequestID        uint64                       `db:"request_id"`
+		ConstituentID    string                       `db:"constituent_id"`
+		RelationshipType composeType.RelationshipType `db:"relationship_type"`
+		PortalVisible    bool                         `db:"portal_visible"`
+		NotifyStatus     bool                         `db:"notify_status"`
+		CreatedAt        time.Time                    `db:"created_at"`
+		UpdatedAt        time.Time                    `db:"updated_at"`
+	}
+
 	// auxCity311RequestSequence is an auxiliary structure used for transporting to/from RDBMS store
 	auxCity311RequestSequence struct {
 		ID         uint64 `db:"id"`
@@ -1998,6 +2010,53 @@ func (aux *auxCity311RequestAttachment) scan(row scanner) error {
 		&aux.Size,
 		&aux.Content,
 		&aux.CreatedAt,
+	)
+}
+
+// encodes City311RequestConstituentLink to auxCity311RequestConstituentLink
+//
+// This function is auto-generated
+func (aux *auxCity311RequestConstituentLink) encode(res *composeType.City311RequestConstituent) (_ error) {
+	aux.ID = res.ID
+	aux.RequestID = res.RequestID
+	aux.ConstituentID = res.ConstituentID
+	aux.RelationshipType = res.RelationshipType
+	aux.PortalVisible = res.PortalVisible
+	aux.NotifyStatus = res.NotifyStatus
+	aux.CreatedAt = res.CreatedAt
+	aux.UpdatedAt = res.UpdatedAt
+	return
+}
+
+// decodes City311RequestConstituentLink from auxCity311RequestConstituentLink
+//
+// This function is auto-generated
+func (aux auxCity311RequestConstituentLink) decode() (res *composeType.City311RequestConstituent, _ error) {
+	res = new(composeType.City311RequestConstituent)
+	res.ID = aux.ID
+	res.RequestID = aux.RequestID
+	res.ConstituentID = aux.ConstituentID
+	res.RelationshipType = aux.RelationshipType
+	res.PortalVisible = aux.PortalVisible
+	res.NotifyStatus = aux.NotifyStatus
+	res.CreatedAt = aux.CreatedAt
+	res.UpdatedAt = aux.UpdatedAt
+	return
+}
+
+// scans row and fills auxCity311RequestConstituentLink fields
+//
+// This function is auto-generated
+func (aux *auxCity311RequestConstituentLink) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.RequestID,
+		&aux.ConstituentID,
+		&aux.RelationshipType,
+		&aux.PortalVisible,
+		&aux.NotifyStatus,
+		&aux.CreatedAt,
+		&aux.UpdatedAt,
 	)
 }
 

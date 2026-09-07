@@ -340,6 +340,21 @@ func (svc *Service) prepareSubmission(ctx context.Context, in contract.ServiceRe
 }
 
 func (svc *Service) prepareReferencedConstituent(ctx context.Context, in *contract.ServiceRequestCreate, options *SubmissionOptions) (*composeTypes.City311Constituent, error) {
+	if options.SourceChannel == contract.SourceChannelPortalAuthenticated {
+		if options.ActorID == 0 {
+			return nil, apiError(401, contract.ErrorUnauthenticated, "Authentication is required.")
+		}
+		constituentID := "C-" + strconv.FormatUint(options.ActorID, 10)
+		constituent, err := store.LookupCity311ConstituentByConstituentID(ctx, svc.store, constituentID)
+		if errors.IsNotFound(err) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		in.Requester = requesterInput(constituent.Profile)
+		return constituent, nil
+	}
 	if options.ExistingConstituentID == "" {
 		return nil, nil
 	}
@@ -493,6 +508,9 @@ func (svc *Service) persistSubmission(ctx context.Context, tx store.Storer, prep
 	}
 	stored := newStoredRequest(prepared, profile, requestID, department, year, number, now)
 	if err = store.CreateCity311ServiceRequest(ctx, tx, stored); err != nil {
+		return nil, err
+	}
+	if err = svc.persistPrimaryRelationship(ctx, tx, stored, now); err != nil {
 		return nil, err
 	}
 	if err = svc.persistSubmissionAttachments(ctx, tx, requestID, prepared.attachments, now); err != nil {
@@ -1032,6 +1050,10 @@ func appliedFilters(requested RequestFilter) map[string]any {
 }
 
 func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *composeTypes.City311ServiceRequest) (*contract.StaffServiceRequestDetail, error) {
+	links, _, err := store.SearchCity311RequestConstituentLinks(ctx, svc.store, composeTypes.City311RequestConstituentFilter{RequestID: stored.ID})
+	if err != nil {
+		return nil, err
+	}
 	audits, _, err := store.SearchCity311AuditEvents(ctx, svc.store, composeTypes.City311AuditEventFilter{RequestID: stored.ID})
 	if err != nil {
 		return nil, err
@@ -1042,12 +1064,18 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 	}
 	primaryAssignee := optionalID(stored.PrimaryAssigneeID)
 	result := &contract.StaffServiceRequestDetail{
-		Request: toContract(stored), AvailableActions: availableActions(actor, stored), PrimaryAssigneeID: primaryAssignee,
+		Request: toContract(stored), ConstituentLinks: make([]contract.ConstituentLink, 0, len(links)), AvailableActions: availableActions(actor, stored), PrimaryAssigneeID: primaryAssignee,
 		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: []any{}, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: nil,
 	}
 	result.Request.Attachments, err = svc.attachmentMetadata(ctx, stored.ID)
 	if err != nil {
 		return nil, err
+	}
+	for _, link := range links {
+		result.ConstituentLinks = append(result.ConstituentLinks, contract.ConstituentLink{
+			ConstituentID: link.ConstituentID, RelationshipType: link.RelationshipType,
+			PortalVisible: link.PortalVisible, NotifyStatus: link.NotifyStatus,
+		})
 	}
 	for _, item := range history {
 		result.History = append(result.History, contract.PublicHistoryItem{Action: item.Action, OccurredAt: item.OccurredAt, ResponsibleDepartment: string(item.ResponsibleDepartment)})

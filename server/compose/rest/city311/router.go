@@ -66,6 +66,13 @@ type staffQueueFilters struct {
 	DuplicateGroup stringList `json:"duplicate_group"`
 }
 
+type constituentLinkWrite struct {
+	ConstituentID    string                    `json:"constituent_id"`
+	RelationshipType contract.RelationshipType `json:"relationship_type"`
+	PortalVisible    *bool                     `json:"portal_visible"`
+	NotifyStatus     *bool                     `json:"notify_status"`
+}
+
 func MountRoutes() func(chi.Router) {
 	return MountRoutesWithServices(city311Service.Default, city311Service.DefaultIdentity)
 }
@@ -102,12 +109,16 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.With(requireConstituentIdentitySession).Patch("/portal/service-request-drafts/{request_id}", h.draftUpdate)
 		r.With(requireConstituentIdentitySession).Delete("/portal/service-request-drafts/{request_id}", h.draftDelete)
 		r.With(requireConstituentIdentitySession).Post("/portal/service-request-drafts/{request_id}/submit", h.draftSubmit)
+		r.With(requireConstituentSession).Get("/portal/service-requests", h.portalMyRequests)
+		r.With(requireConstituentSession).Post("/portal/service-requests/link", h.portalLinkAnonymousRequest)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
 			r.Get(serviceRequestsRoute, h.staffList)
 			r.Get("/service-requests/{request_id}", h.staffDetail)
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
+			r.Post("/service-requests/{request_id}/constituents", h.staffConstituentLink)
+			r.Delete("/service-requests/{request_id}/constituents/{constituent_id}", h.staffConstituentUnlink)
 		})
 	}
 }
@@ -151,6 +162,26 @@ func requireCityIdentitySession(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+func requireConstituentSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		resolved := identitySessionFromContext(r.Context())
+		if resolved == nil || resolved.User == nil {
+			writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: authenticationRequiredMessage, Retryable: false})
+			return
+		}
+		if resolved.Actor != nil {
+			for _, role := range resolved.Actor.ApplicationRoles {
+				if role == contract.ApplicationRoleConstituent {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+		writeJSON(w, http.StatusForbidden, contract.APIError{Error: contract.ErrorForbidden, Message: "A constituent account is required.", Retryable: false})
 	})
 }
 
@@ -289,6 +320,33 @@ func (h *handler) portalSubmit(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 	writeResult(w, status, response, err)
+}
+
+func (h *handler) portalMyRequests(w http.ResponseWriter, r *http.Request) {
+	pageSize := uint64(50)
+	var err error
+	if raw := r.URL.Query().Get("page_size"); raw != "" {
+		pageSize, err = strconv.ParseUint(raw, 10, 16)
+		if err != nil || pageSize == 0 {
+			writeValidation(w, "/query/page_size", contract.ValidationInvalidFormat)
+			return
+		}
+	}
+	resolved := identitySessionFromContext(r.Context())
+	result, err := h.service.ListPortalRequests(r.Context(), resolved.User.ID, city311Service.PortalRequestFilter{
+		PageSize: uint(pageSize), PageToken: r.URL.Query().Get("page_token"), Sort: r.URL.Query().Get("sort"),
+	})
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) portalLinkAnonymousRequest(w http.ResponseWriter, r *http.Request) {
+	input := contract.AnonymousRequestLink{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	resolved := identitySessionFromContext(r.Context())
+	result, err := h.service.LinkAnonymousRequest(r.Context(), resolved.User.ID, input)
+	writeResult(w, http.StatusOK, result, err)
 }
 
 func (h *handler) staffSubmit(w http.ResponseWriter, r *http.Request) {
@@ -549,6 +607,80 @@ func (h *handler) staffTransition(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.Transition(r.Context(), actor, requestID, expectedVersion, input)
 	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffConstituentLink(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, err := parseIfMatch(r.Header.Get(contract.IfMatchHeader))
+	if err != nil {
+		writeResult(w, 0, nil, &city311Service.ServiceError{Status: 428, Payload: contract.APIError{Error: contract.ErrorExpectedVersionRequired, Message: "If-Match must identify the expected record version.", Retryable: false}})
+		return
+	}
+	input := constituentLinkWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	var missing []contract.FieldError
+	if input.PortalVisible == nil {
+		missing = append(missing, contract.FieldError{Field: "/portal_visible", Code: contract.ValidationRequired})
+	}
+	if input.NotifyStatus == nil {
+		missing = append(missing, contract.FieldError{Field: "/notify_status", Code: contract.ValidationRequired})
+	}
+	if len(missing) > 0 {
+		writeJSON(w, http.StatusUnprocessableEntity, contract.APIError{Error: contract.ErrorValidation, Message: invalidFieldsMessage, Retryable: false, Errors: missing})
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.LinkConstituent(r.Context(), actor, requestID, expectedVersion, contract.ConstituentLink{
+		ConstituentID: input.ConstituentID, RelationshipType: input.RelationshipType,
+		PortalVisible: *input.PortalVisible, NotifyStatus: *input.NotifyStatus,
+	})
+	writeResult(w, http.StatusCreated, result, err)
+}
+
+func (h *handler) staffConstituentUnlink(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, err := parseIfMatch(r.Header.Get(contract.IfMatchHeader))
+	if err != nil {
+		writeResult(w, 0, nil, &city311Service.ServiceError{Status: 428, Payload: contract.APIError{Error: contract.ErrorExpectedVersionRequired, Message: "If-Match must identify the expected record version.", Retryable: false}})
+		return
+	}
+	constituentID := strings.TrimSpace(chi.URLParam(r, "constituent_id"))
+	if constituentID == "" {
+		writeValidation(w, "/path/constituent_id", contract.ValidationRequired)
+		return
+	}
+	input := contract.ConstituentUnlink{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.UnlinkConstituent(r.Context(), actor, requestID, expectedVersion, constituentID, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func staffRequestID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
+	requestID, err := strconv.ParseUint(chi.URLParam(r, "request_id"), 10, 64)
+	if err != nil || requestID == 0 {
+		writeValidation(w, "/path/request_id", contract.ValidationInvalidFormat)
+		return 0, false
+	}
+	return requestID, true
 }
 
 func parseIfMatch(value string) (uint64, error) {

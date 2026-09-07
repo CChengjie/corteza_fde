@@ -2,15 +2,26 @@ package city311
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	composeTypes "github.com/cortezaproject/corteza/server/compose/types"
 	contract "github.com/cortezaproject/corteza/server/compose/types/city311"
 	"github.com/cortezaproject/corteza/server/store"
+	"github.com/cortezaproject/corteza/server/store/adapters/rdbms/drivers/postgres"
+	"github.com/cortezaproject/corteza/server/store/adapters/rdbms/drivers/sqlite"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
+
+var savedReportRaceSequence atomic.Uint64
 
 func validReportDefinition(reportID, entity string, columns ...string) contract.ReportDefinition {
 	return contract.ReportDefinition{
@@ -71,6 +82,132 @@ func TestReportCatalogueValidationAndSavedReportLifecycle(t *testing.T) {
 	requireServiceError(t, err, http.StatusForbidden, contract.ErrorForbidden)
 	_, err = svc.ShareSavedReport(ctx, supervisor, definition.ReportID, 3, contract.ReportShare{Roles: []contract.ApplicationRole{contract.ApplicationRoleDepartmentManager}})
 	requireValidationCode(t, err, "/roles/0", contract.ValidationInvalidValue)
+}
+
+func TestSavedReportWritesUseDatabaseAtomicConcurrency(t *testing.T) {
+	ctx := context.Background()
+	dsn := fmt.Sprintf("sqlite3://file:%s?_busy_timeout=5000&_journal_mode=WAL", filepath.Join(t.TempDir(), "city311.db"))
+	st, err := sqlite.Connect(ctx, dsn)
+	require.NoError(t, err)
+	testSavedReportWritesUseDatabaseAtomicConcurrency(t, st)
+}
+
+func TestSavedReportWritesUseDatabaseAtomicConcurrencyPostgreSQL(t *testing.T) {
+	dsn := os.Getenv("CITY311_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("CITY311_POSTGRES_DSN is not configured")
+	}
+	st, err := postgres.Connect(context.Background(), dsn)
+	require.NoError(t, err)
+	testSavedReportWritesUseDatabaseAtomicConcurrency(t, st)
+}
+
+func testSavedReportWritesUseDatabaseAtomicConcurrency(t *testing.T, st store.Storer) {
+	t.Helper()
+	t.Setenv(seedConstituentPasswordEnv, "SeedConstituentPassword1!")
+	t.Setenv(seedConstituentTwoPasswordEnv, "SeedConstituentPassword2!")
+	ctx := context.Background()
+	require.NoError(t, store.Upgrade(ctx, zap.NewNop(), st))
+	svc := New(st)
+	fixedNow := time.Date(2026, 2, 3, 15, 4, 5, 0, time.UTC)
+	svc.now = func() time.Time { return fixedNow }
+	sequence := savedReportRaceSequence.Add(1)
+	var nextID atomic.Uint64
+	nextID.Store(910_000_000_000_000_000 + sequence*1_000_000)
+	svc.nextID = func() uint64 { return nextID.Add(1) }
+	require.NoError(t, svc.Seed(ctx, svc.now()))
+	administrator := seededAssignmentActor(t, ctx, svc, st, "platform-admin@city311.example.invalid")
+	other := New(st)
+	other.now = svc.now
+	other.nextID = svc.nextID
+
+	definition := validReportDefinition(fmt.Sprintf("concurrent-report-%d", sequence), "service_requests", "request_number", "status")
+	created, err := svc.CreateSavedReport(ctx, administrator, definition)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), created.Version)
+
+	type writeResult struct {
+		definition *contract.ReportDefinition
+		err        error
+	}
+	runRace := func(first, second func() (*contract.ReportDefinition, error)) (writeResult, writeResult) {
+		start := make(chan struct{})
+		results := make(chan writeResult, 2)
+		var ready sync.WaitGroup
+		ready.Add(2)
+		for _, write := range []func() (*contract.ReportDefinition, error){first, second} {
+			go func(write func() (*contract.ReportDefinition, error)) {
+				ready.Done()
+				<-start
+				result, writeErr := write()
+				results <- writeResult{definition: result, err: writeErr}
+			}(write)
+		}
+		ready.Wait()
+		close(start)
+		return <-results, <-results
+	}
+	assertOneSuccessOneConflict := func(first, second writeResult, expectedVersion uint64) {
+		t.Helper()
+		if first.err == nil {
+			first, second = second, first
+		}
+		require.NoError(t, second.err)
+		require.Equal(t, expectedVersion, second.definition.Version)
+		requireServiceError(t, first.err, http.StatusConflict, contract.ErrorVersionConflict)
+	}
+
+	firstUpdate := validReportDefinition(definition.ReportID, "service_requests", "request_number", "status")
+	firstUpdate.Name = "First concurrent update"
+	secondUpdate := validReportDefinition(definition.ReportID, "service_requests", "request_number", "status")
+	secondUpdate.Name = "Second concurrent update"
+	first, second := runRace(
+		func() (*contract.ReportDefinition, error) {
+			return svc.UpdateSavedReport(ctx, administrator, definition.ReportID, 1, firstUpdate)
+		},
+		func() (*contract.ReportDefinition, error) {
+			return other.UpdateSavedReport(ctx, administrator, definition.ReportID, 1, secondUpdate)
+		},
+	)
+	assertOneSuccessOneConflict(first, second, 2)
+	updates, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{EntityID: definition.ReportID, EventType: "REPORT_UPDATED"})
+	require.NoError(t, err)
+	require.Len(t, updates, 1, "the stale writer must not append an audit event")
+
+	first, second = runRace(
+		func() (*contract.ReportDefinition, error) {
+			return svc.ShareSavedReport(ctx, administrator, definition.ReportID, 2, contract.ReportShare{Roles: []contract.ApplicationRole{contract.ApplicationRoleServiceAgent}})
+		},
+		func() (*contract.ReportDefinition, error) {
+			return other.ShareSavedReport(ctx, administrator, definition.ReportID, 2, contract.ReportShare{Roles: []contract.ApplicationRole{contract.ApplicationRoleSupervisor}})
+		},
+	)
+	assertOneSuccessOneConflict(first, second, 3)
+	shares, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{EntityID: definition.ReportID, EventType: "REPORT_SHARED"})
+	require.NoError(t, err)
+	require.Len(t, shares, 1, "the stale share must not append an audit event")
+
+	duplicateID := fmt.Sprintf("concurrent-create-%d", sequence)
+	first, second = runRace(
+		func() (*contract.ReportDefinition, error) {
+			return svc.CreateSavedReport(ctx, administrator, validReportDefinition(duplicateID, "service_requests", "request_number"))
+		},
+		func() (*contract.ReportDefinition, error) {
+			return other.CreateSavedReport(ctx, administrator, validReportDefinition(duplicateID, "service_requests", "request_number"))
+		},
+	)
+	if first.err == nil {
+		first, second = second, first
+	}
+	require.NoError(t, second.err)
+	require.Equal(t, uint64(1), second.definition.Version)
+	requireValidationCode(t, first.err, "/report_id", contract.ValidationDuplicate)
+	revisions, err := svc.configurationRevisions(ctx, st, configurationSavedReport, duplicateID)
+	require.NoError(t, err)
+	require.Len(t, revisions, 1)
+	creates, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{EntityID: duplicateID, EventType: "REPORT_CREATED"})
+	require.NoError(t, err)
+	require.Len(t, creates, 1)
 }
 
 func TestReportDefinitionRejectsUnsupportedAndOversizedBuilderInput(t *testing.T) {

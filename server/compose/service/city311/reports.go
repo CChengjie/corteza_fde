@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -177,6 +178,13 @@ func (svc *Service) CreateSavedReport(ctx context.Context, actor contract.Actor,
 	payload := newSavedReportPayload(normalized, actor)
 	revision, err := svc.createInitialConfigurationResource(ctx, actor, configurationSavedReport, normalized.ReportID, payload, "REPORT_CREATED")
 	if err != nil {
+		// A different application instance can pass the preflight lookup and
+		// commit version 1 first. The unique revision constraint is the final
+		// arbiter; translate that losing insert into the published duplicate
+		// validation result once the winning transaction is visible.
+		if revisions, lookupErr := svc.configurationRevisions(ctx, svc.store, configurationSavedReport, normalized.ReportID); lookupErr == nil && len(revisions) > 0 {
+			return nil, validationError(contract.FieldError{Field: "/report_id", Code: contract.ValidationDuplicate})
+		}
 		return nil, err
 	}
 	definition := reportDefinitionFromRevision(revision)
@@ -198,23 +206,10 @@ func (svc *Service) UpdateSavedReport(ctx context.Context, actor contract.Actor,
 	if err != nil {
 		return nil, err
 	}
-	svc.reportMu.Lock()
-	defer svc.reportMu.Unlock()
-	current, payload, err := svc.lookupSavedReport(ctx, svc.store, actor, reportID, true)
-	if err != nil {
-		return nil, err
-	}
-	if uint64(current.Version) != expectedVersion {
-		return nil, versionConflict(current.Version)
-	}
-	payload.ReportID, payload.Name, payload.Entity = normalized.ReportID, normalized.Name, normalized.Entity
-	payload.Columns, payload.Filters, payload.Grouping, payload.Sort = normalized.Columns, normalized.Filters, normalized.Grouping, normalized.Sort
-	revision, err := svc.createConfigurationRevision(ctx, actor, current, configurationSavedReport, reportID, "", payload, true, "REPORT_UPDATED")
-	if err != nil {
-		return nil, err
-	}
-	definition := reportDefinitionFromRevision(revision)
-	return &definition, nil
+	return svc.reviseSavedReport(ctx, actor, reportID, expectedVersion, "REPORT_UPDATED", func(payload *savedReportPayload) {
+		payload.ReportID, payload.Name, payload.Entity = normalized.ReportID, normalized.Name, normalized.Entity
+		payload.Columns, payload.Filters, payload.Grouping, payload.Sort = normalized.Columns, normalized.Filters, normalized.Grouping, normalized.Sort
+	})
 }
 
 func (svc *Service) ShareSavedReport(ctx context.Context, actor contract.Actor, reportID string, expectedVersion uint64, input contract.ReportShare) (*contract.ReportDefinition, error) {
@@ -228,23 +223,36 @@ func (svc *Service) ShareSavedReport(ctx context.Context, actor contract.Actor, 
 	if err != nil {
 		return nil, err
 	}
+	return svc.reviseSavedReport(ctx, actor, reportID, expectedVersion, "REPORT_SHARED", func(payload *savedReportPayload) {
+		payload.SharedRoles = roles
+		payload.OwnerDepartment = actor.Department
+		payload.OwnerDistricts = append([]contract.DistrictCode(nil), actor.Districts...)
+		payload.OwnerAllDistricts = hasRole(actor, contract.ApplicationRoleDepartmentManager)
+		payload.OwnerPlatform = hasRole(actor, contract.ApplicationRolePlatformAdministrator)
+	})
+}
+
+func (svc *Service) reviseSavedReport(ctx context.Context, actor contract.Actor, reportID string, expectedVersion uint64, action string, mutate func(*savedReportPayload)) (*contract.ReportDefinition, error) {
 	svc.reportMu.Lock()
 	defer svc.reportMu.Unlock()
-	current, payload, err := svc.lookupSavedReport(ctx, svc.store, actor, reportID, true)
+	var revision *composeTypes.City311ConfigurationRevision
+	err := store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+		if err := store.LockCity311ConfigurationResource(ctx, tx, configurationSavedReport, reportID); err != nil {
+			return err
+		}
+		current, payload, err := svc.lookupSavedReport(ctx, tx, actor, reportID, true)
+		if err != nil {
+			return err
+		}
+		if uint64(current.Version) != expectedVersion {
+			return versionConflict(current.Version)
+		}
+		mutate(&payload)
+		revision, err = svc.createConfigurationRevisionInStore(ctx, tx, actor, current, configurationSavedReport, current.ResourceKey, "", payload, true, action)
+		return err
+	})
 	if err != nil {
-		return nil, err
-	}
-	if uint64(current.Version) != expectedVersion {
-		return nil, versionConflict(current.Version)
-	}
-	payload.SharedRoles = roles
-	payload.OwnerDepartment = actor.Department
-	payload.OwnerDistricts = append([]contract.DistrictCode(nil), actor.Districts...)
-	payload.OwnerAllDistricts = hasRole(actor, contract.ApplicationRoleDepartmentManager)
-	payload.OwnerPlatform = hasRole(actor, contract.ApplicationRolePlatformAdministrator)
-	revision, err := svc.createConfigurationRevision(ctx, actor, current, configurationSavedReport, current.ResourceKey, "", payload, true, "REPORT_SHARED")
-	if err != nil {
-		return nil, err
+		return nil, svc.savedReportWriteError(ctx, reportID, expectedVersion, err)
 	}
 	definition := reportDefinitionFromRevision(revision)
 	return &definition, nil
@@ -884,6 +892,18 @@ func (svc *Service) lookupSavedReport(ctx context.Context, st store.Storer, acto
 		return nil, savedReportPayload{}, apiError(http.StatusForbidden, contract.ErrorForbidden, "The saved report is not shared with this actor.")
 	}
 	return revision, payload, nil
+}
+
+func (svc *Service) savedReportWriteError(ctx context.Context, reportID string, expectedVersion uint64, err error) error {
+	var serviceErr *ServiceError
+	if errors.As(err, &serviceErr) {
+		return err
+	}
+	current, lookupErr := svc.latestConfigurationRevision(ctx, svc.store, configurationSavedReport, reportID, "", false)
+	if lookupErr == nil && uint64(current.Version) != expectedVersion {
+		return versionConflict(current.Version)
+	}
+	return err
 }
 
 func newSavedReportPayload(definition contract.ReportDefinition, actor contract.Actor) savedReportPayload {

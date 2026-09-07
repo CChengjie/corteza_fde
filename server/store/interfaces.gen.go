@@ -67,6 +67,7 @@ type (
 		City311PublicHistoryItems
 		City311RequestAttachments
 		City311RequestConstituentLinks
+		City311RequestNotes
 		City311RequestSequences
 		City311ServiceRequests
 		City311StagedAttachments
@@ -402,6 +403,18 @@ type (
 		DeleteCity311RequestConstituentLinkByID(ctx context.Context, id uint64) error
 		TruncateCity311RequestConstituentLinks(ctx context.Context) error
 		LookupCity311RequestConstituentLinkByID(ctx context.Context, id uint64) (*composeType.City311RequestConstituent, error)
+	}
+
+	City311RequestNotes interface {
+		SearchCity311RequestNotes(ctx context.Context, f composeType.City311RequestNoteFilter) (composeType.City311RequestNoteSet, composeType.City311RequestNoteFilter, error)
+		CreateCity311RequestNote(ctx context.Context, rr ...*composeType.City311RequestNote) error
+		UpdateCity311RequestNote(ctx context.Context, rr ...*composeType.City311RequestNote) error
+		UpsertCity311RequestNote(ctx context.Context, rr ...*composeType.City311RequestNote) error
+		DeleteCity311RequestNote(ctx context.Context, rr ...*composeType.City311RequestNote) error
+
+		DeleteCity311RequestNoteByID(ctx context.Context, id uint64) error
+		TruncateCity311RequestNotes(ctx context.Context) error
+		LookupCity311RequestNoteByID(ctx context.Context, id uint64) (*composeType.City311RequestNote, error)
 	}
 
 	City311RequestSequences interface {
@@ -2334,6 +2347,62 @@ func TruncateCity311RequestConstituentLinks(ctx context.Context, s City311Reques
 // This function is auto-generated
 func LookupCity311RequestConstituentLinkByID(ctx context.Context, s City311RequestConstituentLinks, id uint64) (*composeType.City311RequestConstituent, error) {
 	return s.LookupCity311RequestConstituentLinkByID(ctx, id)
+}
+
+// SearchCity311RequestNotes returns all matching City311RequestNotes from store
+//
+// This function is auto-generated
+func SearchCity311RequestNotes(ctx context.Context, s City311RequestNotes, f composeType.City311RequestNoteFilter) (composeType.City311RequestNoteSet, composeType.City311RequestNoteFilter, error) {
+	return s.SearchCity311RequestNotes(ctx, f)
+}
+
+// CreateCity311RequestNote creates one or more City311RequestNotes in store
+//
+// This function is auto-generated
+func CreateCity311RequestNote(ctx context.Context, s City311RequestNotes, rr ...*composeType.City311RequestNote) error {
+	return s.CreateCity311RequestNote(ctx, rr...)
+}
+
+// UpdateCity311RequestNote updates one or more (existing) City311RequestNotes in store
+//
+// This function is auto-generated
+func UpdateCity311RequestNote(ctx context.Context, s City311RequestNotes, rr ...*composeType.City311RequestNote) error {
+	return s.UpdateCity311RequestNote(ctx, rr...)
+}
+
+// UpsertCity311RequestNote creates new or updates existing one or more City311RequestNotes in store
+//
+// This function is auto-generated
+func UpsertCity311RequestNote(ctx context.Context, s City311RequestNotes, rr ...*composeType.City311RequestNote) error {
+	return s.UpsertCity311RequestNote(ctx, rr...)
+}
+
+// DeleteCity311RequestNote deletes one or more City311RequestNotes from store
+//
+// This function is auto-generated
+func DeleteCity311RequestNote(ctx context.Context, s City311RequestNotes, rr ...*composeType.City311RequestNote) error {
+	return s.DeleteCity311RequestNote(ctx, rr...)
+}
+
+// DeleteCity311RequestNoteByID deletes one or more City311RequestNotes from store
+//
+// This function is auto-generated
+func DeleteCity311RequestNoteByID(ctx context.Context, s City311RequestNotes, id uint64) error {
+	return s.DeleteCity311RequestNoteByID(ctx, id)
+}
+
+// TruncateCity311RequestNotes Deletes all City311RequestNotes from store
+//
+// This function is auto-generated
+func TruncateCity311RequestNotes(ctx context.Context, s City311RequestNotes) error {
+	return s.TruncateCity311RequestNotes(ctx)
+}
+
+// LookupCity311RequestNoteByID
+//
+// This function is auto-generated
+func LookupCity311RequestNoteByID(ctx context.Context, s City311RequestNotes, id uint64) (*composeType.City311RequestNote, error) {
+	return s.LookupCity311RequestNoteByID(ctx, id)
 }
 
 // SearchCity311RequestSequences returns all matching City311RequestSequences from store

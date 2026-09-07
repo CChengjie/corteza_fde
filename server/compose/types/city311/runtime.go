@@ -86,6 +86,22 @@ type ConstituentUnlink struct {
 	Reason *string `json:"reason"`
 }
 
+type RequestNoteWrite struct {
+	Body          string `json:"body"`
+	PortalVisible *bool  `json:"portal_visible"`
+}
+
+type RequestNote struct {
+	NoteID              string         `json:"note_id"`
+	RequestID           string         `json:"request_id"`
+	AuthorType          AuditActorType `json:"author_type"`
+	AuthorID            string         `json:"author_id"`
+	AuthorConstituentID string         `json:"author_constituent_id,omitempty"`
+	Body                string         `json:"body"`
+	PortalVisible       bool           `json:"portal_visible"`
+	CreatedAt           time.Time      `json:"created_at"`
+}
+
 type PortalRequestSummary struct {
 	RequestID        string               `json:"request_id"`
 	RequestNumber    string               `json:"request_number"`
@@ -119,6 +135,7 @@ type AuditEvent struct {
 type StaffServiceRequestDetail struct {
 	Request           ServiceRequest      `json:"request"`
 	ConstituentLinks  []ConstituentLink   `json:"constituent_links,omitempty"`
+	Notes             []RequestNote       `json:"notes,omitempty"`
 	AvailableActions  []string            `json:"available_actions"`
 	PrimaryAssigneeID *string             `json:"primary_assignee_id"`
 	CollaboratorIDs   []string            `json:"collaborator_ids"`

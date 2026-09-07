@@ -341,6 +341,18 @@ type (
 		UpdatedAt        time.Time                    `db:"updated_at"`
 	}
 
+	// auxCity311RequestNote is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311RequestNote struct {
+		ID                  uint64                     `db:"id"`
+		RequestID           uint64                     `db:"request_id"`
+		AuthorType          composeType.AuditActorType `db:"author_type"`
+		AuthorID            uint64                     `db:"author_id"`
+		AuthorConstituentID string                     `db:"author_constituent_id"`
+		Body                string                     `db:"body"`
+		PortalVisible       bool                       `db:"portal_visible"`
+		CreatedAt           time.Time                  `db:"created_at"`
+	}
+
 	// auxCity311RequestSequence is an auxiliary structure used for transporting to/from RDBMS store
 	auxCity311RequestSequence struct {
 		ID         uint64 `db:"id"`
@@ -2057,6 +2069,53 @@ func (aux *auxCity311RequestConstituentLink) scan(row scanner) error {
 		&aux.NotifyStatus,
 		&aux.CreatedAt,
 		&aux.UpdatedAt,
+	)
+}
+
+// encodes City311RequestNote to auxCity311RequestNote
+//
+// This function is auto-generated
+func (aux *auxCity311RequestNote) encode(res *composeType.City311RequestNote) (_ error) {
+	aux.ID = res.ID
+	aux.RequestID = res.RequestID
+	aux.AuthorType = res.AuthorType
+	aux.AuthorID = res.AuthorID
+	aux.AuthorConstituentID = res.AuthorConstituentID
+	aux.Body = res.Body
+	aux.PortalVisible = res.PortalVisible
+	aux.CreatedAt = res.CreatedAt
+	return
+}
+
+// decodes City311RequestNote from auxCity311RequestNote
+//
+// This function is auto-generated
+func (aux auxCity311RequestNote) decode() (res *composeType.City311RequestNote, _ error) {
+	res = new(composeType.City311RequestNote)
+	res.ID = aux.ID
+	res.RequestID = aux.RequestID
+	res.AuthorType = aux.AuthorType
+	res.AuthorID = aux.AuthorID
+	res.AuthorConstituentID = aux.AuthorConstituentID
+	res.Body = aux.Body
+	res.PortalVisible = aux.PortalVisible
+	res.CreatedAt = aux.CreatedAt
+	return
+}
+
+// scans row and fills auxCity311RequestNote fields
+//
+// This function is auto-generated
+func (aux *auxCity311RequestNote) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.RequestID,
+		&aux.AuthorType,
+		&aux.AuthorID,
+		&aux.AuthorConstituentID,
+		&aux.Body,
+		&aux.PortalVisible,
+		&aux.CreatedAt,
 	)
 }
 

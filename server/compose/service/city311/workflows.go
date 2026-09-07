@@ -645,10 +645,33 @@ func (svc *Service) workflowFieldUpdate(ctx context.Context, actor contract.Acto
 			}
 			current.Description = strings.TrimSpace(text)
 		case strings.HasPrefix(field, "custom_fields.") && len(strings.TrimPrefix(field, "custom_fields.")) > 0:
+			key := strings.TrimPrefix(field, "custom_fields.")
+			definitions, definitionErr := svc.customFieldDefinitions(ctx, tx, "service_request")
+			if definitionErr != nil {
+				return definitionErr
+			}
+			if len(definitions) > 0 {
+				var definition *contract.CustomFieldDefinition
+				for index := range definitions {
+					if definitions[index].Key == key {
+						definition = &definitions[index]
+						break
+					}
+				}
+				if definition == nil {
+					return validationError(contract.FieldError{Field: "/actions/field", Code: contract.ValidationInvalidValue})
+				}
+				if !definition.Active {
+					return validationError(contract.FieldError{Field: "/actions/field", Code: contract.ValidationInactiveValue})
+				}
+				if code := validateCustomFieldValue(*definition, value); code != "" {
+					return validationError(contract.FieldError{Field: "/actions/value", Code: code})
+				}
+			}
 			if current.CustomFields == nil {
 				current.CustomFields = composeTypes.City311JSON{}
 			}
-			current.CustomFields[strings.TrimPrefix(field, "custom_fields.")] = value
+			current.CustomFields[key] = value
 		default:
 			return validationError(contract.FieldError{Field: "/actions/field", Code: contract.ValidationInvalidValue})
 		}

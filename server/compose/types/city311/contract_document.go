@@ -274,7 +274,7 @@ func contractSchemas() map[string]map[string]interface{} {
 			"emails":             map[string]interface{}{"type": "array", "min_items_for_portal_account": 1, "items": map[string]interface{}{"type": "string", "format": "email"}, "verified_login_case_insensitive_unique": true},
 			"phone_numbers":      map[string]interface{}{"type": "array", "max_items": 3, "items_ref": "phone_number"},
 			"addresses":          map[string]interface{}{"type": "array", "max_items": 5, "items_ref": "structured_address", "maximum_primary_items": 1},
-			"primary_category":   map[string]interface{}{"enum_ref": "contact_category", "must_be_active": true},
+			"primary_category":   activeCategoryCodeProperty(),
 			"preferred_language": map[string]interface{}{"enum_ref": "language", "default": "EN"},
 			"email_opt_out":      map[string]interface{}{"type": "boolean", "default": false},
 			"custom_fields":      map[string]interface{}{"type": "object", "additional_properties": true},

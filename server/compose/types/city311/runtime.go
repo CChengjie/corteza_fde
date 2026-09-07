@@ -212,6 +212,23 @@ type Operation struct {
 	CompletedAt *time.Time      `json:"completed_at"`
 }
 
+type DataExportQuery struct {
+	Filters      map[string][]string
+	PageSize     uint
+	PageToken    string
+	UpdatedSince *time.Time
+}
+
+type FollowUpAction struct {
+	ActionType       string         `json:"action_type"`
+	Actor            string         `json:"actor"`
+	OccurredAt       time.Time      `json:"occurred_at"`
+	LocalDisplayTime string         `json:"local_display_time"`
+	RequestID        string         `json:"request_id"`
+	Visibility       string         `json:"visibility"`
+	Payload          map[string]any `json:"payload"`
+}
+
 type PortalRequestSummary struct {
 	RequestID        string               `json:"request_id"`
 	RequestNumber    string               `json:"request_number"`

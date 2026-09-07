@@ -41,10 +41,16 @@ var allowedAttachmentMediaTypes = map[string]bool{
 
 type (
 	Service struct {
-		store  store.Storer
-		now    func() time.Time
-		nextID func() uint64
-		mu     sync.Mutex
+		store            store.Storer
+		now              func() time.Time
+		nextID           func() uint64
+		mu               sync.Mutex
+		dataExportLimits map[uint64]dataExportLimit
+	}
+
+	dataExportLimit struct {
+		WindowStart time.Time
+		Count       int
 	}
 
 	SubmissionOptions struct {
@@ -109,7 +115,10 @@ var Default *Service
 func (e *ServiceError) Error() string { return e.Payload.Message }
 
 func New(s store.Storer) *Service {
-	return &Service{store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next}
+	return &Service{
+		store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next,
+		dataExportLimits: make(map[uint64]dataExportLimit),
+	}
 }
 
 func (svc *Service) Store() store.Storer { return svc.store }

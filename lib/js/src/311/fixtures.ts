@@ -1,5 +1,5 @@
 import { APPLICATION_ROLES, CONTRACT_VERSION, type ApplicationRole, type HelpKey, type PublicContentKey } from './enums'
-import type { Branding, C311FixtureSet, C311RoleFixture, Constituent, ContentObject, CurrentActor, HelpContent, PortalAttachment, PublicHistoryItem, RequestNote, RequestQueueItem, RequestRelationship, ServiceRequest, Session, StaffServiceRequestDetail } from './types'
+import type { Branding, C311FixtureSet, C311RoleFixture, Category, Constituent, ContentObject, CustomFieldDefinition, CurrentActor, HelpContent, PortalAttachment, PublicHistoryItem, RequestNote, RequestQueueItem, RequestRelationship, ServiceRequest, Session, StaffServiceRequestDetail } from './types'
 
 export const BENCHMARK_NOW = '2026-01-15T15:00:00.000Z'
 export const BENCHMARK_TIMEZONE = 'America/New_York'
@@ -50,6 +50,7 @@ const request: ServiceRequest = {
     latitude: 42.9001,
     longitude: -78.8801,
   },
+  custom_fields: { contact_preference: 'EMAIL' },
   version: 1,
   created_at: BENCHMARK_NOW,
   updated_at: BENCHMARK_NOW,
@@ -153,6 +154,13 @@ const branding: Branding = {
   portal_wallpaper_url: null,
 }
 
+const categories: Category[] = [
+  { code: 'RESIDENT', active: true, labels: { EN: 'Resident', ES: 'Residente', VI: 'Cu dan' }, version: 1, updated_at: BENCHMARK_NOW },
+  { code: 'LEGACY', active: false, labels: { EN: 'Legacy' }, version: 2, updated_at: BENCHMARK_NOW },
+]
+
+const customFields: CustomFieldDefinition[] = [{ key: 'contact_preference', labels: { EN: 'Contact preference', ES: 'Preferencia de contacto', VI: 'Uu tien lien he' }, entity: 'service_request', field_type: 'SINGLE_CHOICE', required: false, active: true, version: 1, updated_at: BENCHMARK_NOW, choice_values: ['EMAIL', 'PHONE'], default: 'EMAIL' }]
+
 const publicContent: Record<PublicContentKey, ContentObject> = {
   HOME: { content_key: 'HOME', body: '<p>Report an issue or find a city service.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
   SERVICE_CATALOGUE: { content_key: 'SERVICE_CATALOGUE', body: '<p>Browse available city services.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
@@ -162,14 +170,14 @@ const publicContent: Record<PublicContentKey, ContentObject> = {
 }
 
 const publicHelp: Record<HelpKey, HelpContent> = {
-  'admin.branding.publish': { help_key: 'admin.branding.publish', language: 'EN', body: '<p>Publish approved branding.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'admin.workflow.author': { help_key: 'admin.workflow.author', language: 'EN', body: '<p>Author an approved workflow.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'public.request.lookup': { help_key: 'public.request.lookup', language: 'EN', body: '<p>Use your request number and email.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'public.request.submit': { help_key: 'public.request.submit', language: 'EN', body: '<p>Describe the issue and submit it to the city.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'staff.report.create': { help_key: 'staff.report.create', language: 'EN', body: '<p>Create reports from permitted records.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.bulk-update': { help_key: 'staff.request.bulk-update', language: 'EN', body: '<p>Update selected requests.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.reassign': { help_key: 'staff.request.reassign', language: 'EN', body: '<p>Reassign a request.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.triage': { help_key: 'staff.request.triage', language: 'EN', body: '<p>Review and classify a request.</p>', version: 1, updated_at: BENCHMARK_NOW },
+  'admin.branding.publish': { help_key: 'admin.branding.publish', language: 'EN', body: '<p>Publish approved branding.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'admin.workflow.author': { help_key: 'admin.workflow.author', language: 'EN', body: '<p>Author an approved workflow.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'public.request.lookup': { help_key: 'public.request.lookup', language: 'EN', body: '<p>Use your request number and email.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'public.request.submit': { help_key: 'public.request.submit', language: 'EN', body: '<p>Describe the issue and submit it to the city.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.report.create': { help_key: 'staff.report.create', language: 'EN', body: '<p>Create reports from permitted records.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.bulk-update': { help_key: 'staff.request.bulk-update', language: 'EN', body: '<p>Update selected requests.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.reassign': { help_key: 'staff.request.reassign', language: 'EN', body: '<p>Reassign a request.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.triage': { help_key: 'staff.request.triage', language: 'EN', body: '<p>Review and classify a request.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
 }
 
 type RoleDefinition = {
@@ -239,9 +247,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Platform administrator',
     departments: ['PUBLIC_WORKS', 'STREETS', 'SANITATION', 'GENERAL_SERVICES'],
     districts: ['NORTH', 'CENTRAL', 'SOUTH'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_origin_override', 'staff_scope_override', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_update', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_origin_override', 'staff_scope_override', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_get', 'admin_help_preview', 'admin_help_publish', 'admin_help_rollback', 'admin_help_update', 'admin_help_versions', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
     scopes: ['service_requests.write', 'crm.export'],
-    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_update', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
+    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_get', 'admin_help_preview', 'admin_help_publish', 'admin_help_rollback', 'admin_help_update', 'admin_help_versions', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
     deniedScope: 'workflow.execute',
   },
   workflow_designer: {
@@ -467,6 +475,8 @@ export function createDefaultFixtureSet (): C311FixtureSet {
     notes,
     public_relationships: publicRelationships,
     public_notes: publicNotes,
+    categories,
+    custom_fields: customFields,
   }
 }
 

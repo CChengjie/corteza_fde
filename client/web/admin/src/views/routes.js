@@ -131,6 +131,12 @@ export default [
     meta: { c311: { requiresAuth: true, route: 'staff_service_request_create', capabilities: ['staff_service_request_create'], scopes: ['service_requests.write'] } },
   },
   {
+    name: 'c311.admin.config',
+    path: '/c311/admin',
+    component: () => import('./C311/Config.vue'),
+    meta: { c311: { requiresAuth: true } },
+  },
+  {
     name: 'c311.test.interaction',
     path: '/c311/test/modal',
     component: components.C311InteractionHarness,

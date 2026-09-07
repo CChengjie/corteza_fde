@@ -25,6 +25,8 @@ serviceRequest: {
 			primary_assignee_id: {ident: "primaryAssigneeID", goType: "uint64", sortable: true, dal: {type: "ID", default: 0}}
 			collaborator_ids: {ident: "collaboratorIDs", goType: "types.City311Uint64Set", dal: {type: "JSON"}}
 			duplicate_group_id: {ident: "duplicateGroupID", goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			scope_department: {goType: "*types.DepartmentCode", dal: {type: "Text", length: 64, nullable: true}}
+			scope_districts: {goType: "types.City311DistrictCodeSet", dal: {type: "JSON", nullable: true}}
 			version: {goType: "int", sortable: true, dal: {type: "Number", meta: {"rdbms:type": "integer"}, default: 1}}
 			created_at: schema.SortableTimestampNowField
 			updated_at: schema.SortableTimestampNowField

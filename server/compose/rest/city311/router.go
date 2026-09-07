@@ -120,6 +120,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Get(serviceRequestsRoute, h.staffList)
 			r.Get("/service-requests/{request_id}", h.staffDetail)
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
+			r.Post("/service-requests/{request_id}/origin-class", h.staffOriginOverride)
+			r.Post("/service-requests/{request_id}/scope-override", h.staffScopeOverride)
 			r.Post("/service-requests/{request_id}/assignment", h.staffReassign)
 			r.Post("/service-requests/{request_id}/duplicate-group", h.staffDuplicateGroupConfirm)
 			r.Delete("/service-requests/{request_id}/duplicate-group", h.staffDuplicateGroupRemove)
@@ -668,6 +670,50 @@ func (h *handler) staffReassign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.service.Reassign(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffOriginOverride(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.OriginOverride{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.OverrideOrigin(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffScopeOverride(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.ScopeOverride{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.OverrideScope(r.Context(), actor, requestID, expectedVersion, input)
 	writeResult(w, http.StatusOK, result, err)
 }
 

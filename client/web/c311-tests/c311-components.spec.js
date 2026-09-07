@@ -7,6 +7,7 @@ import { formatC311DateTime as mockFormatC311DateTime } from './time-test-helper
 import Portal from '../compose/src/views/C311/Portal.vue'
 import PublicPortal from '../compose/src/views/C311/PublicPortal.vue'
 import Staff from '../admin/src/views/C311/Staff.vue'
+import Config from '../admin/src/views/C311/Config.vue'
 import composeRoutes from '../compose/src/views/routes'
 import adminRoutes from '../admin/src/views/routes'
 
@@ -1864,6 +1865,114 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.form.summary).toBe('Keep this summary')
     expect(wrapper.vm.form.description).toBe('Keep this description while the map retries.')
     expect(wrapper.vm.form.requester.email).toBe('resident@example.test')
+  })
+
+  it('covers admin configuration lifecycle, labelled fields, and capability-gated actions', async () => {
+    const branding = { organisation_name: 'City 311', primary_colour: '#112233', accent_colour: '#445566', font_family: 'Arial', logo_url: '', public_header: 'Welcome', public_footer: 'Footer', version: 1, published: true }
+    const content = { content_key: 'HOME', body: 'Home content', version: 1, published: true }
+    const help = { help_key: 'public.request.submit', language: 'EN', body: 'Help content', version: 1, state: 'PUBLISHED', published: true }
+    const category = { code: 'GENERAL', labels: { EN: 'General', ES: 'General', VI: 'General' }, active: true, version: 1, updated_at: '2026-01-15T15:00:00.000Z' }
+    const field = { key: 'ward', labels: { EN: 'Ward' }, entity: 'service_request', field_type: 'SINGLE_CHOICE', required: false, active: true, choice_values: ['NORTH', 'SOUTH'], default: 'NORTH', validation: {}, version: 1, updated_at: '2026-01-15T15:00:00.000Z' }
+    const provider = {
+      getAdminBranding: jest.fn().mockResolvedValue(branding),
+      listBrandingVersions: jest.fn().mockResolvedValue({ items: [{ version: 1, published: true }] }),
+      updateBranding: jest.fn().mockResolvedValue({ ...branding, version: 2, published: false }),
+      previewBranding: jest.fn().mockResolvedValue({ ...branding, organisation_name: 'Preview' }),
+      publishBranding: jest.fn().mockResolvedValue({ ...branding, version: 2, published: true }),
+      rollbackBranding: jest.fn().mockResolvedValue({ ...branding, version: 3, published: true }),
+      getAdminContent: jest.fn().mockResolvedValue(content),
+      listAdminContentVersions: jest.fn().mockResolvedValue({ items: [{ version: 1, published: true }] }),
+      updateAdminContent: jest.fn().mockResolvedValue({ ...content, version: 2, published: false }),
+      previewAdminContent: jest.fn().mockResolvedValue({ ...content, body: 'Preview content' }),
+      publishAdminContent: jest.fn().mockResolvedValue({ ...content, version: 2, published: true }),
+      rollbackAdminContent: jest.fn().mockResolvedValue({ ...content, version: 3, published: true }),
+      getAdminHelp: jest.fn().mockResolvedValue(help),
+      listAdminHelpVersions: jest.fn().mockResolvedValue({ items: [{ version: 1, published: true }] }),
+      updateAdminHelp: jest.fn().mockResolvedValue({ ...help, version: 2, state: 'DRAFT', published: false }),
+      previewAdminHelp: jest.fn().mockResolvedValue({ ...help, body: 'Preview help', state: 'DRAFT', published: false }),
+      publishAdminHelp: jest.fn().mockResolvedValue({ ...help, version: 2, state: 'PUBLISHED', published: true }),
+      rollbackAdminHelp: jest.fn().mockResolvedValue({ ...help, version: 3, state: 'PUBLISHED', published: true }),
+      listAdminCategories: jest.fn().mockResolvedValue({ items: [category] }),
+      updateAdminCategory: jest.fn().mockResolvedValue({ ...category, version: 2 }),
+      createAdminCategory: jest.fn().mockResolvedValue({ ...category, code: 'PARKS' }),
+      listAdminCustomFields: jest.fn().mockResolvedValue({ items: [field] }),
+      updateAdminCustomField: jest.fn().mockResolvedValue({ ...field, version: 2 }),
+      createAdminCustomField: jest.fn().mockResolvedValue({ ...field, key: 'district' }),
+    }
+    const capabilities = [
+      'admin_branding_get', 'admin_branding_update', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_versions', 'admin_branding_rollback',
+      'admin_content_get', 'admin_content_update', 'admin_content_preview', 'admin_content_publish', 'admin_content_versions', 'admin_content_rollback',
+      'admin_help_get', 'admin_help_update', 'admin_help_preview', 'admin_help_publish', 'admin_help_versions', 'admin_help_rollback',
+      'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update',
+    ]
+    const runtime = { provider, session: { actor: { actor_id: 'actor-admin', capabilities } }, can: capability => capabilities.includes(capability) }
+    const wrapper = mount(Config, {
+      mocks: { ...mocks, $C311: runtime, $router: { replace: jest.fn() } },
+      stubs: { ...stubs, 'c311-app-shell': AppShellStub, 'c311-main-nav': ChildStub, 'c311-language-selector': ChildStub },
+    })
+    await flushPromises()
+    expect(wrapper.find('#c311-branding-organisation-name').exists()).toBe(true)
+    expect(wrapper.find('#c311-branding-organisation-name').attributes('id')).toBe('c311-branding-organisation-name')
+    await wrapper.vm.previewBranding()
+    await wrapper.vm.saveBranding()
+    await wrapper.vm.publishBranding()
+    await wrapper.vm.rollbackBranding(1)
+    expect(provider.previewBranding).toHaveBeenCalled()
+    expect(provider.updateBranding).toHaveBeenCalledWith(expect.objectContaining({ organisation_name: 'City 311' }), { expectedVersion: 1 })
+
+    await wrapper.vm.selectTab('content')
+    await flushPromises()
+    await wrapper.vm.previewContent()
+    await wrapper.vm.saveContent()
+    await wrapper.vm.publishContent()
+    await wrapper.vm.rollbackContent(1)
+    await wrapper.find('[data-c311-action="edit-help"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('#c311-help-body').exists()).toBe(true)
+    await wrapper.vm.previewHelp()
+    await wrapper.vm.saveHelp()
+    await wrapper.vm.publishHelp()
+    await wrapper.vm.rollbackHelp(1)
+    expect(provider.previewAdminHelp).toHaveBeenCalledWith('admin.branding.publish', expect.objectContaining({ language: 'EN' }))
+
+    await wrapper.vm.selectTab('categories')
+    await flushPromises()
+    expect(wrapper.find('[data-c311-category="GENERAL"] input').attributes('id')).toContain('c311-category-GENERAL')
+    await wrapper.vm.saveCategory(wrapper.vm.categories[0])
+    wrapper.vm.newCategory = { code: 'PARKS', label: 'Parks' }
+    await wrapper.vm.createCategory()
+    expect(provider.updateAdminCategory).toHaveBeenCalledWith('GENERAL', expect.any(Object), { expectedVersion: 1 })
+
+    await wrapper.vm.selectTab('fields')
+    await flushPromises()
+    await wrapper.vm.editField(field)
+    expect(wrapper.find('#c311-field-default').exists()).toBe(true)
+    await wrapper.vm.saveField()
+    expect(provider.updateAdminCustomField).toHaveBeenCalledWith('ward', expect.objectContaining({ default: 'NORTH' }), { expectedVersion: 1 })
+    expect(wrapper.find('[data-c311-action="save-branding"]').exists()).toBe(false)
+  })
+
+  it('preserves admin drafts when a version conflict is reloaded and reapplied', async () => {
+    const conflict = { code: 'VERSION_CONFLICT', currentVersion: 7, message: 'Conflict' }
+    const category = { code: 'GENERAL', labels: { EN: 'General' }, active: true, version: 1, updated_at: '2026-01-15T15:00:00.000Z' }
+    const provider = {
+      getAdminBranding: jest.fn().mockResolvedValue({ organisation_name: 'City 311', version: 1, published: true }),
+      listBrandingVersions: jest.fn().mockResolvedValue({ items: [] }),
+      listAdminCategories: jest.fn().mockResolvedValue({ items: [{ ...category, version: 2 }] }),
+      updateAdminCategory: jest.fn().mockRejectedValueOnce(conflict).mockResolvedValueOnce({ ...category, labels: { EN: 'Edited' }, version: 3 }),
+    }
+    const capabilities = ['admin_branding_get', 'admin_categories_list', 'admin_categories_update']
+    const wrapper = mount(Config, { mocks: { ...mocks, $C311: { provider, session: { actor: { capabilities } }, can: capability => capabilities.includes(capability) }, $router: { replace: jest.fn() } }, stubs: { ...stubs, 'c311-app-shell': AppShellStub, 'c311-main-nav': ChildStub, 'c311-language-selector': ChildStub } })
+    await flushPromises()
+    await wrapper.vm.selectTab('categories')
+    await flushPromises()
+    wrapper.vm.categories[0].labels.EN = 'Edited'
+    await wrapper.vm.saveCategory(wrapper.vm.categories[0])
+    expect(wrapper.vm.conflict.currentVersion).toBe(7)
+    await wrapper.vm.reloadConflict()
+    expect(wrapper.vm.conflict.reloaded).toBe(true)
+    await wrapper.vm.reapplyConflict()
+    expect(provider.updateAdminCategory).toHaveBeenCalledTimes(2)
   })
 
 })

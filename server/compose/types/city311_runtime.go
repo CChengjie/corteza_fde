@@ -38,6 +38,7 @@ type (
 		PrimaryRequester  City311JSON                       `json:"primaryRequester"`
 		Location          City311JSON                       `json:"location"`
 		CustomFields      City311JSON                       `json:"customFields"`
+		ExternalWorkOrder City311JSON                       `json:"externalWorkOrder"`
 		PrimaryAssigneeID uint64                            `json:"primaryAssigneeID,string,omitempty"`
 		CollaboratorIDs   City311Uint64Set                  `json:"collaboratorIDs"`
 		DuplicateGroupID  string                            `json:"duplicateGroupID,omitempty"`

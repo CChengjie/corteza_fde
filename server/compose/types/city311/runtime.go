@@ -221,6 +221,16 @@ type CalendarExport struct {
 	Body        string `json:"body"`
 }
 
+type CivicWorksWorkOrderCreate struct {
+	SourceCaseID         string         `json:"source_case_id"`
+	ServiceRequestNumber string         `json:"service_request_number"`
+	ServiceType          ServiceType    `json:"service_type"`
+	Summary              string         `json:"summary"`
+	DepartmentCode       DepartmentCode `json:"department_code"`
+	Location             map[string]any `json:"location,omitempty"`
+	CallbackURL          string         `json:"callback_url"`
+}
+
 type DataExportQuery struct {
 	Filters      map[string][]string
 	PageSize     uint
@@ -296,16 +306,16 @@ type AuditEvent struct {
 }
 
 type StaffServiceRequestDetail struct {
-	Request           ServiceRequest      `json:"request"`
-	ConstituentLinks  []ConstituentLink   `json:"constituent_links,omitempty"`
-	Notes             []RequestNote       `json:"notes,omitempty"`
-	AvailableActions  []string            `json:"available_actions"`
-	PrimaryAssigneeID *string             `json:"primary_assignee_id"`
-	CollaboratorIDs   []string            `json:"collaborator_ids"`
-	Reminders         []Reminder          `json:"reminders"`
-	History           []PublicHistoryItem `json:"history"`
-	Audit             []AuditEvent        `json:"audit"`
-	ExternalWorkOrder any                 `json:"external_work_order"`
+	Request           ServiceRequest       `json:"request"`
+	ConstituentLinks  []ConstituentLink    `json:"constituent_links,omitempty"`
+	Notes             []RequestNote        `json:"notes,omitempty"`
+	AvailableActions  []string             `json:"available_actions"`
+	PrimaryAssigneeID *string              `json:"primary_assignee_id"`
+	CollaboratorIDs   []string             `json:"collaborator_ids"`
+	Reminders         []Reminder           `json:"reminders"`
+	History           []PublicHistoryItem  `json:"history"`
+	Audit             []AuditEvent         `json:"audit"`
+	ExternalWorkOrder *CivicWorksWorkOrder `json:"external_work_order"`
 }
 
 type RequestQueueItem struct {

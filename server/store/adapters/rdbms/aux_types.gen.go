@@ -404,6 +404,7 @@ type (
 		PrimaryRequester  composeType.City311JSON            `db:"primary_requester"`
 		Location          composeType.City311JSON            `db:"location"`
 		CustomFields      composeType.City311JSON            `db:"custom_fields"`
+		ExternalWorkOrder composeType.City311JSON            `db:"external_work_order"`
 		PrimaryAssigneeID uint64                             `db:"primary_assignee_id"`
 		CollaboratorIDs   composeType.City311Uint64Set       `db:"collaborator_ids"`
 		DuplicateGroupID  string                             `db:"duplicate_group_id"`
@@ -2309,6 +2310,7 @@ func (aux *auxCity311ServiceRequest) encode(res *composeType.City311ServiceReque
 	aux.PrimaryRequester = res.PrimaryRequester
 	aux.Location = res.Location
 	aux.CustomFields = res.CustomFields
+	aux.ExternalWorkOrder = res.ExternalWorkOrder
 	aux.PrimaryAssigneeID = res.PrimaryAssigneeID
 	aux.CollaboratorIDs = res.CollaboratorIDs
 	aux.DuplicateGroupID = res.DuplicateGroupID
@@ -2338,6 +2340,7 @@ func (aux auxCity311ServiceRequest) decode() (res *composeType.City311ServiceReq
 	res.PrimaryRequester = aux.PrimaryRequester
 	res.Location = aux.Location
 	res.CustomFields = aux.CustomFields
+	res.ExternalWorkOrder = aux.ExternalWorkOrder
 	res.PrimaryAssigneeID = aux.PrimaryAssigneeID
 	res.CollaboratorIDs = aux.CollaboratorIDs
 	res.DuplicateGroupID = aux.DuplicateGroupID
@@ -2367,6 +2370,7 @@ func (aux *auxCity311ServiceRequest) scan(row scanner) error {
 		&aux.PrimaryRequester,
 		&aux.Location,
 		&aux.CustomFields,
+		&aux.ExternalWorkOrder,
 		&aux.PrimaryAssigneeID,
 		&aux.CollaboratorIDs,
 		&aux.DuplicateGroupID,

@@ -22,6 +22,7 @@ serviceRequest: {
 			primary_requester: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
 			location: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
 			custom_fields: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			external_work_order: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
 			primary_assignee_id: {ident: "primaryAssigneeID", goType: "uint64", sortable: true, dal: {type: "ID", default: 0}}
 			collaborator_ids: {ident: "collaboratorIDs", goType: "types.City311Uint64Set", dal: {type: "JSON"}}
 			duplicate_group_id: {ident: "duplicateGroupID", goType: "string", sortable: true, dal: {type: "Text", length: 64}}

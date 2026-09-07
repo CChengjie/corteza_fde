@@ -327,7 +327,8 @@ func testCity311ServiceRequests(t *testing.T, s store.City311ServiceRequests) {
 		ServiceType: contract.ServiceTypePothole, OwningDepartment: contract.DepartmentStreets, CouncilDistrict: contract.DistrictNorth,
 		SourceChannel: contract.SourceChannelAPI, OriginClass: contract.OriginClassExternal, Status: contract.ServiceRequestStatusSubmitted,
 		PrimaryRequester: composeTypes.City311JSON{"constituent_id": "C-301"}, Location: composeTypes.City311JSON{"address": "100 Example Street"},
-		CustomFields: composeTypes.City311JSON{}, CollaboratorIDs: composeTypes.City311Uint64Set{},
+		CustomFields: composeTypes.City311JSON{}, ExternalWorkOrder: composeTypes.City311JSON{"work_order_id": "WO-301", "version": float64(1)},
+		CollaboratorIDs: composeTypes.City311Uint64Set{},
 		ScopeDepartment: &scopeDepartment, ScopeDistricts: composeTypes.City311DistrictCodeSet{contract.DistrictSouth},
 		Version: 1, CreatedAt: *now(), UpdatedAt: *now(),
 	}
@@ -335,6 +336,7 @@ func testCity311ServiceRequests(t *testing.T, s store.City311ServiceRequests) {
 	fetched, err := s.LookupCity311ServiceRequestByRequestNumber(ctx, request.RequestNumber)
 	require.NoError(t, err)
 	require.Equal(t, "C-301", fetched.PrimaryRequester["constituent_id"])
+	require.Equal(t, "WO-301", fetched.ExternalWorkOrder["work_order_id"])
 	require.Equal(t, contract.DepartmentSanitation, *fetched.ScopeDepartment)
 	require.Equal(t, composeTypes.City311DistrictCodeSet{contract.DistrictSouth}, fetched.ScopeDistricts)
 	set, _, err := s.SearchCity311ServiceRequests(ctx, composeTypes.City311ServiceRequestFilter{Status: string(contract.ServiceRequestStatusSubmitted)})

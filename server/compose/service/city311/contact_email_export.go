@@ -39,7 +39,11 @@ func (svc *Service) StartContactEmailExport(ctx context.Context, actor contract.
 	if err != nil {
 		return nil, contactEmailValidationError()
 	}
-	if err = validateContactEmailFilters(filters); err != nil {
+	activeCategories, err := svc.activeContactCategories(ctx, svc.store)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateContactEmailFilters(filters, activeCategories); err != nil {
 		return nil, err
 	}
 
@@ -91,7 +95,11 @@ func (svc *Service) StartContactEmailExport(ctx context.Context, actor contract.
 	return pending, nil
 }
 
-func validateContactEmailFilters(filters map[string][]string) error {
+func validateContactEmailFilters(filters map[string][]string, categorySets ...[]contract.ContactCategory) error {
+	categories := contract.ContactCategories
+	if len(categorySets) > 0 {
+		categories = categorySets[0]
+	}
 	for key, values := range filters {
 		switch key {
 		case "department":
@@ -103,7 +111,7 @@ func validateContactEmailFilters(filters map[string][]string) error {
 				return contactEmailValidationError()
 			}
 		case "primary_category":
-			if !validExportEnum(values, contract.ContactCategories) {
+			if !validExportEnum(values, categories) {
 				return contactEmailValidationError()
 			}
 		case "preferred_language":

@@ -41,10 +41,22 @@ var allowedAttachmentMediaTypes = map[string]bool{
 
 type (
 	Service struct {
-		store  store.Storer
-		now    func() time.Time
-		nextID func() uint64
-		mu     sync.Mutex
+		store            store.Storer
+		now              func() time.Time
+		nextID           func() uint64
+		mu               sync.Mutex
+		mailMu           sync.Mutex
+		mailSender       MailSender
+		mailWait         func(context.Context, time.Duration) error
+		dataExportLimits map[uint64]dataExportLimit
+		civicWorksClient CivicWorksClient
+		civicWorksSecret string
+		civicWorksConfig error
+	}
+
+	dataExportLimit struct {
+		WindowStart time.Time
+		Count       int
 	}
 
 	SubmissionOptions struct {
@@ -109,7 +121,12 @@ var Default *Service
 func (e *ServiceError) Error() string { return e.Payload.Message }
 
 func New(s store.Storer) *Service {
-	return &Service{store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next}
+	svc := &Service{
+		store: s, now: func() time.Time { return time.Now().UTC().Round(time.Second) }, nextID: id.Next,
+		mailSender: smtpMailSender{dial: dialSMTP}, mailWait: waitForMailRetry, dataExportLimits: make(map[uint64]dataExportLimit),
+	}
+	svc.civicWorksClient, svc.civicWorksSecret, svc.civicWorksConfig = NewCivicWorksFromEnvironment(nil)
+	return svc
 }
 
 func (svc *Service) Store() store.Storer { return svc.store }
@@ -340,6 +357,21 @@ func (svc *Service) prepareSubmission(ctx context.Context, in contract.ServiceRe
 }
 
 func (svc *Service) prepareReferencedConstituent(ctx context.Context, in *contract.ServiceRequestCreate, options *SubmissionOptions) (*composeTypes.City311Constituent, error) {
+	if options.SourceChannel == contract.SourceChannelPortalAuthenticated {
+		if options.ActorID == 0 {
+			return nil, apiError(401, contract.ErrorUnauthenticated, "Authentication is required.")
+		}
+		constituentID := "C-" + strconv.FormatUint(options.ActorID, 10)
+		constituent, err := store.LookupCity311ConstituentByConstituentID(ctx, svc.store, constituentID)
+		if errors.IsNotFound(err) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		in.Requester = requesterInput(constituent.Profile)
+		return constituent, nil
+	}
 	if options.ExistingConstituentID == "" {
 		return nil, nil
 	}
@@ -492,7 +524,13 @@ func (svc *Service) persistSubmission(ctx context.Context, tx store.Storer, prep
 		return nil, err
 	}
 	stored := newStoredRequest(prepared, profile, requestID, department, year, number, now)
+	if err = svc.qualifyDuplicateGroup(ctx, tx, stored, now); err != nil {
+		return nil, err
+	}
 	if err = store.CreateCity311ServiceRequest(ctx, tx, stored); err != nil {
+		return nil, err
+	}
+	if err = svc.persistPrimaryRelationship(ctx, tx, stored, now); err != nil {
 		return nil, err
 	}
 	if err = svc.persistSubmissionAttachments(ctx, tx, requestID, prepared.attachments, now); err != nil {
@@ -626,6 +664,9 @@ func (svc *Service) Transition(ctx context.Context, actor contract.Actor, reques
 	if err := validateTransitionInput(expectedVersion, input); err != nil {
 		return nil, err
 	}
+	if input.ToStatus == contract.ServiceRequestStatusAssigned {
+		return svc.AssignCivicWorks(ctx, actor, requestID, expectedVersion)
+	}
 
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -660,6 +701,19 @@ func (svc *Service) transitionRequest(ctx context.Context, tx store.Storer, acto
 		return err
 	}
 	before := requestSnapshot(request)
+	if request.Status == contract.ServiceRequestStatusDraft && toStatus == contract.ServiceRequestStatusSubmitted {
+		if validationErr := validateWrite(draftSubmissionInput(request)); validationErr != nil {
+			return validationErr
+		}
+		year, number, allocateErr := allocateRequestNumber(ctx, tx, svc.now())
+		if allocateErr != nil {
+			return allocateErr
+		}
+		request.RequestNumber = fmt.Sprintf("SR-%04d-%05d", year, number)
+		if qualificationErr := svc.qualifyDuplicateGroup(ctx, tx, request, svc.now()); qualificationErr != nil {
+			return qualificationErr
+		}
+	}
 	request.Status = toStatus
 	request.Version++
 	request.UpdatedAt = svc.now()
@@ -683,8 +737,11 @@ func authorizeTransition(actor contract.Actor, request *composeTypes.City311Serv
 			Retryable: false, CurrentVersion: &current,
 		}}
 	}
+	if toStatus == contract.ServiceRequestStatusReopened {
+		return invalidStatusTransition("A reopen request must be approved before the service request can transition to REOPENED.")
+	}
 	if !transitionAllowed(request.Status, toStatus) {
-		return validationError(contract.FieldError{Field: "/to_status", Code: contract.ValidationInvalidValue})
+		return invalidStatusTransition("The requested service-request status transition is not allowed.")
 	}
 	return nil
 }
@@ -1022,6 +1079,14 @@ func appliedFilters(requested RequestFilter) map[string]any {
 }
 
 func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *composeTypes.City311ServiceRequest) (*contract.StaffServiceRequestDetail, error) {
+	links, _, err := store.SearchCity311RequestConstituentLinks(ctx, svc.store, composeTypes.City311RequestConstituentFilter{RequestID: stored.ID})
+	if err != nil {
+		return nil, err
+	}
+	notes, err := listRequestNotes(ctx, svc.store, stored.ID)
+	if err != nil {
+		return nil, err
+	}
 	audits, _, err := store.SearchCity311AuditEvents(ctx, svc.store, composeTypes.City311AuditEventFilter{RequestID: stored.ID})
 	if err != nil {
 		return nil, err
@@ -1030,14 +1095,34 @@ func (svc *Service) detail(ctx context.Context, actor contract.Actor, stored *co
 	if err != nil {
 		return nil, err
 	}
+	actions := availableActions(actor, stored)
+	reminders, err := svc.requestReminders(ctx, stored.ID)
+	if err != nil {
+		return nil, err
+	}
+	if requestCanBeReopened(stored.Status) && canApproveReopen(actor) {
+		pending, err := pendingReopenRequests(ctx, svc.store, stored.ID)
+		if err != nil {
+			return nil, err
+		}
+		if len(pending) > 0 {
+			actions = append(actions, "APPROVE_REOPEN")
+		}
+	}
 	primaryAssignee := optionalID(stored.PrimaryAssigneeID)
 	result := &contract.StaffServiceRequestDetail{
-		Request: toContract(stored), AvailableActions: availableActions(actor, stored), PrimaryAssigneeID: primaryAssignee,
-		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: []any{}, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: nil,
+		Request: toContract(stored), ConstituentLinks: make([]contract.ConstituentLink, 0, len(links)), Notes: notes, AvailableActions: actions, PrimaryAssigneeID: primaryAssignee,
+		CollaboratorIDs: stringifyIDs(stored.CollaboratorIDs), Reminders: reminders, History: make([]contract.PublicHistoryItem, 0, len(history)), Audit: make([]contract.AuditEvent, 0, len(audits)), ExternalWorkOrder: projectCivicWorksWorkOrder(stored.ExternalWorkOrder),
 	}
 	result.Request.Attachments, err = svc.attachmentMetadata(ctx, stored.ID)
 	if err != nil {
 		return nil, err
+	}
+	for _, link := range links {
+		result.ConstituentLinks = append(result.ConstituentLinks, contract.ConstituentLink{
+			ConstituentID: link.ConstituentID, RelationshipType: link.RelationshipType,
+			PortalVisible: link.PortalVisible, NotifyStatus: link.NotifyStatus,
+		})
 	}
 	for _, item := range history {
 		result.History = append(result.History, contract.PublicHistoryItem{Action: item.Action, OccurredAt: item.OccurredAt, ResponsibleDepartment: string(item.ResponsibleDepartment)})
@@ -1056,18 +1141,34 @@ func canRead(actor contract.Actor, request *composeTypes.City311ServiceRequest) 
 	if hasRole(actor, contract.ApplicationRolePlatformAdministrator) {
 		return true
 	}
-	if !canOperateRequest(actor) || actor.Department != request.OwningDepartment {
+	if !canOperateRequest(actor) {
 		return false
 	}
-	if hasRole(actor, contract.ApplicationRoleDepartmentManager) || request.CouncilDistrict == "" {
+	if actor.Department == request.OwningDepartment && canReadDistrict(actor, districtSet(request.CouncilDistrict)) {
 		return true
 	}
-	for _, district := range actor.Districts {
-		if district == request.CouncilDistrict {
-			return true
+	return request.ScopeDepartment != nil && actor.Department == *request.ScopeDepartment && canReadDistrict(actor, request.ScopeDistricts)
+}
+
+func canReadDistrict(actor contract.Actor, districts []contract.DistrictCode) bool {
+	if hasRole(actor, contract.ApplicationRoleDepartmentManager) || len(districts) == 0 {
+		return true
+	}
+	for _, allowed := range districts {
+		for _, district := range actor.Districts {
+			if district == allowed {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func districtSet(district contract.DistrictCode) []contract.DistrictCode {
+	if district == "" {
+		return nil
+	}
+	return []contract.DistrictCode{district}
 }
 
 func canReadConstituent(actor contract.Actor, constituent *composeTypes.City311Constituent) bool {
@@ -1090,6 +1191,10 @@ func canReadConstituent(actor contract.Actor, constituent *composeTypes.City311C
 
 func canOperateRequest(actor contract.Actor) bool {
 	return hasRole(actor, contract.ApplicationRoleServiceAgent) || hasRole(actor, contract.ApplicationRoleSupervisor) || hasRole(actor, contract.ApplicationRoleDepartmentManager) || hasRole(actor, contract.ApplicationRolePlatformAdministrator)
+}
+
+func isStaff(actor contract.Actor) bool {
+	return canOperateRequest(actor)
 }
 
 func hasRole(actor contract.Actor, role contract.ApplicationRole) bool {

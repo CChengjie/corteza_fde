@@ -21,6 +21,13 @@ func cloneMap(input map[string]any) map[string]any {
 	return out
 }
 
+func cloneOptionalMap(input map[string]any) map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	return cloneMap(input)
+}
+
 func mapFrom(value any) (map[string]any, error) {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -92,12 +99,15 @@ func locationMap(input *contract.LocationInput) map[string]any {
 
 func requestSnapshot(request *composeTypes.City311ServiceRequest) map[string]any {
 	out, _ := mapFrom(toContract(request))
+	if len(request.ExternalWorkOrder) > 0 {
+		out["external_work_order"] = cloneMap(request.ExternalWorkOrder)
+	}
 	return out
 }
 
 func responseFor(request *composeTypes.City311ServiceRequest) *contract.ServiceRequestResponse {
 	return &contract.ServiceRequestResponse{
-		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: request.RequestNumber,
+		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: publishedRequestNumber(request),
 		Status: request.Status, Version: uint64(request.Version), CreatedAt: request.CreatedAt,
 		Links: contract.ResourceLinks{Self: "/api/v1/service-requests/" + strconv.FormatUint(request.ID, 10)},
 	}
@@ -121,7 +131,7 @@ func toContract(request *composeTypes.City311ServiceRequest) contract.ServiceReq
 		district = &value
 	}
 	return contract.ServiceRequest{
-		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: request.RequestNumber,
+		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: publishedRequestNumber(request),
 		Summary: request.Summary, Description: request.Description, ServiceType: request.ServiceType,
 		OwningDepartment: request.OwningDepartment, CouncilDistrict: district, SourceChannel: request.SourceChannel,
 		OriginClass: request.OriginClass, Status: request.Status, PrimaryRequester: requester, Location: location,
@@ -155,12 +165,19 @@ func stringifyIDs(values []uint64) []string {
 
 func queueItem(actor contract.Actor, request *composeTypes.City311ServiceRequest) contract.RequestQueueItem {
 	return contract.RequestQueueItem{
-		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: request.RequestNumber, Summary: request.Summary,
+		RequestID: strconv.FormatUint(request.ID, 10), RequestNumber: publishedRequestNumber(request), Summary: request.Summary,
 		ServiceType: request.ServiceType, Status: request.Status, OwningDepartment: request.OwningDepartment,
 		CouncilDistrict: request.CouncilDistrict, OriginClass: request.OriginClass, SourceChannel: request.SourceChannel,
 		PrimaryAssigneeID: optionalID(request.PrimaryAssigneeID), DuplicateGroupID: optionalString(request.DuplicateGroupID),
 		Version: uint64(request.Version), UpdatedAt: request.UpdatedAt, AvailableActions: availableActions(actor, request),
 	}
+}
+
+func publishedRequestNumber(request *composeTypes.City311ServiceRequest) string {
+	if request.Status == contract.ServiceRequestStatusDraft {
+		return ""
+	}
+	return request.RequestNumber
 }
 
 func availableActions(actor contract.Actor, request *composeTypes.City311ServiceRequest) []string {
@@ -177,9 +194,9 @@ func availableActions(actor contract.Actor, request *composeTypes.City311Service
 	case contract.ServiceRequestStatusInProgress:
 		return []string{"RESOLVE"}
 	case contract.ServiceRequestStatusResolved:
-		return []string{"CLOSE", "REQUEST_REOPEN"}
+		return []string{"CLOSE"}
 	case contract.ServiceRequestStatusClosed:
-		return []string{"REQUEST_REOPEN"}
+		return []string{}
 	default:
 		return []string{}
 	}

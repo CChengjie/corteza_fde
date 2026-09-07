@@ -1,6 +1,9 @@
 package city311
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // PortalAttachment is a single-use upload receipt, not a download credential.
 type PortalAttachment struct {
@@ -25,6 +28,29 @@ type BinaryAttachment struct {
 	ContentDisposition string `json:"content_disposition"`
 	Body               string `json:"body"`
 	BodyEncoding       string `json:"body_encoding"`
+}
+
+type OperationStatus string
+
+const (
+	OperationStatusPending   OperationStatus = "PENDING"
+	OperationStatusRunning   OperationStatus = "RUNNING"
+	OperationStatusSucceeded OperationStatus = "SUCCEEDED"
+	OperationStatusFailed    OperationStatus = "FAILED"
+	OperationStatusCancelled OperationStatus = "CANCELLED"
+)
+
+// PortalDraftWrite is a partial draft update. Missing fields preserve the
+// existing draft value; a draft may be created before any required submission
+// fields are complete.
+type PortalDraftWrite struct {
+	Summary          *string         `json:"summary,omitempty"`
+	Description      *string         `json:"description,omitempty"`
+	ServiceType      *ServiceType    `json:"service_type,omitempty"`
+	Requester        *RequesterInput `json:"requester,omitempty"`
+	Location         *LocationInput  `json:"location,omitempty"`
+	CustomFields     *map[string]any `json:"custom_fields,omitempty"`
+	AttachmentTokens *[]string       `json:"attachment_tokens,omitempty"`
 }
 
 // PortalServiceRequestSubmit is the public-portal submission DTO.
@@ -57,6 +83,216 @@ type RequestTransition struct {
 	Reason   string               `json:"reason,omitempty"`
 }
 
+type AnonymousRequestLink struct {
+	RequestNumber string `json:"request_number"`
+	Email         string `json:"email"`
+}
+
+type ConstituentLink struct {
+	ConstituentID    string           `json:"constituent_id"`
+	RelationshipType RelationshipType `json:"relationship_type"`
+	PortalVisible    bool             `json:"portal_visible"`
+	NotifyStatus     bool             `json:"notify_status"`
+}
+
+type ConstituentUnlink struct {
+	Reason *string `json:"reason"`
+}
+
+type RequestNoteWrite struct {
+	Body          string `json:"body"`
+	PortalVisible *bool  `json:"portal_visible"`
+}
+
+type RequestNote struct {
+	NoteID              string         `json:"note_id"`
+	RequestID           string         `json:"request_id"`
+	AuthorType          AuditActorType `json:"author_type"`
+	AuthorID            string         `json:"author_id"`
+	AuthorConstituentID string         `json:"author_constituent_id,omitempty"`
+	Body                string         `json:"body"`
+	PortalVisible       bool           `json:"portal_visible"`
+	CreatedAt           time.Time      `json:"created_at"`
+}
+
+type ReopenRequest struct {
+	RequestID string `json:"request_id"`
+	Status    string `json:"status"`
+}
+
+type ReopenApproval struct {
+	Reason string `json:"reason"`
+}
+
+type OriginOverride struct {
+	OriginClass OriginClass `json:"origin_class"`
+	Reason      string      `json:"reason"`
+}
+
+type ScopeOverride struct {
+	DepartmentCode DepartmentCode `json:"department_code"`
+	DistrictCodes  []DistrictCode `json:"district_codes"`
+	Reason         string         `json:"reason"`
+}
+
+type DuplicateGroupChange struct {
+	DuplicateGroupID string `json:"duplicate_group_id"`
+	Reason           string `json:"reason"`
+}
+
+type BulkAction string
+
+const (
+	BulkActionUpdate BulkAction = "UPDATE"
+	BulkActionClose  BulkAction = "CLOSE"
+)
+
+type BulkRequestItem struct {
+	RequestID       string `json:"request_id"`
+	ExpectedVersion uint64 `json:"expected_version"`
+}
+
+// BulkChanges uses raw values so the service can distinguish an omitted
+// primary_assignee_id from an explicit null, which clears the assignment.
+// The frozen contract intentionally keeps this object extensible at the JSON
+// schema layer; the runtime enforces its four-field allow-list.
+type BulkChanges map[string]json.RawMessage
+
+type BulkRequest struct {
+	RequestItems []BulkRequestItem `json:"request_items"`
+	Action       BulkAction        `json:"action"`
+	Changes      *BulkChanges      `json:"changes"`
+}
+
+type BulkResult struct {
+	UpdatedRequestIDs []string `json:"updated_request_ids"`
+	UpdatedCount      int      `json:"updated_count"`
+}
+
+type AuditFilter struct {
+	RequestIDs     []string         `json:"request_id,omitempty"`
+	EntityTypes    []string         `json:"entity_type,omitempty"`
+	EntityIDs      []string         `json:"entity_id,omitempty"`
+	EventTypes     []string         `json:"event_type,omitempty"`
+	ActorTypes     []AuditActorType `json:"actor_type,omitempty"`
+	ActorIDs       []string         `json:"actor_id,omitempty"`
+	SourceChannels []SourceChannel  `json:"source_channel,omitempty"`
+	OccurredFrom   *time.Time       `json:"occurred_from,omitempty"`
+	OccurredTo     *time.Time       `json:"occurred_to,omitempty"`
+}
+
+type AuditQuery struct {
+	Filters   AuditFilter
+	PageSize  uint
+	PageToken string
+	Sort      string
+}
+
+type AuditExport struct {
+	Filters AuditFilter `json:"filters"`
+}
+
+type AuditListResponse struct {
+	Items          []AuditEvent   `json:"items"`
+	NextPageToken  *string        `json:"next_page_token"`
+	TotalCount     int            `json:"total_count"`
+	AppliedFilters map[string]any `json:"applied_filters"`
+	Sort           []string       `json:"sort"`
+}
+
+type Operation struct {
+	OperationID string          `json:"operation_id"`
+	Kind        string          `json:"kind"`
+	Status      OperationStatus `json:"status"`
+	Progress    int             `json:"progress"`
+	Result      map[string]any  `json:"result"`
+	Error       *APIError       `json:"error"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+	CompletedAt *time.Time      `json:"completed_at"`
+}
+
+type CalendarImport struct {
+	ICS string `json:"ics"`
+}
+
+type CalendarExport struct {
+	ContentType string `json:"content_type"`
+	Body        string `json:"body"`
+}
+
+type CivicWorksWorkOrderCreate struct {
+	SourceCaseID         string         `json:"source_case_id"`
+	ServiceRequestNumber string         `json:"service_request_number"`
+	ServiceType          ServiceType    `json:"service_type"`
+	Summary              string         `json:"summary"`
+	DepartmentCode       DepartmentCode `json:"department_code"`
+	Location             map[string]any `json:"location,omitempty"`
+	CallbackURL          string         `json:"callback_url"`
+}
+
+type DataExportQuery struct {
+	Filters      map[string][]string
+	PageSize     uint
+	PageToken    string
+	UpdatedSince *time.Time
+}
+
+type ContactEmailExport struct {
+	Filters map[string][]string `json:"filters"`
+}
+
+type MailCompose struct {
+	TemplateID  *string           `json:"template_id,omitempty"`
+	To          []string          `json:"to"`
+	Subject     string            `json:"subject"`
+	Text        string            `json:"text"`
+	HTML        string            `json:"html,omitempty"`
+	Attachments []AttachmentInput `json:"attachments,omitempty"`
+}
+
+type MailPreview struct {
+	Subject string `json:"subject"`
+	Text    string `json:"text"`
+	HTML    string `json:"html"`
+}
+
+type MailDelivery struct {
+	DeliveryID string    `json:"delivery_id"`
+	Status     string    `json:"status"`
+	Attempts   int       `json:"attempts"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	Error      *APIError `json:"error,omitempty"`
+}
+
+type FollowUpAction struct {
+	ActionType       string         `json:"action_type"`
+	Actor            string         `json:"actor"`
+	OccurredAt       time.Time      `json:"occurred_at"`
+	LocalDisplayTime string         `json:"local_display_time"`
+	RequestID        string         `json:"request_id"`
+	Visibility       string         `json:"visibility"`
+	Payload          map[string]any `json:"payload"`
+}
+
+type PortalRequestSummary struct {
+	RequestID        string               `json:"request_id"`
+	RequestNumber    string               `json:"request_number"`
+	Summary          string               `json:"summary"`
+	ServiceType      ServiceType          `json:"service_type"`
+	Status           ServiceRequestStatus `json:"status"`
+	OwningDepartment DepartmentCode       `json:"owning_department"`
+	UpdatedAt        time.Time            `json:"updated_at"`
+}
+
+type PortalRequestList struct {
+	Items          []PortalRequestSummary `json:"items"`
+	NextPageToken  *string                `json:"next_page_token"`
+	TotalCount     int                    `json:"total_count"`
+	AppliedFilters map[string]any         `json:"applied_filters"`
+	Sort           []string               `json:"sort"`
+}
+
 type AuditEvent struct {
 	EntityType    string         `json:"entity_type"`
 	EntityID      string         `json:"entity_id"`
@@ -70,14 +306,16 @@ type AuditEvent struct {
 }
 
 type StaffServiceRequestDetail struct {
-	Request           ServiceRequest      `json:"request"`
-	AvailableActions  []string            `json:"available_actions"`
-	PrimaryAssigneeID *string             `json:"primary_assignee_id"`
-	CollaboratorIDs   []string            `json:"collaborator_ids"`
-	Reminders         []any               `json:"reminders"`
-	History           []PublicHistoryItem `json:"history"`
-	Audit             []AuditEvent        `json:"audit"`
-	ExternalWorkOrder any                 `json:"external_work_order"`
+	Request           ServiceRequest       `json:"request"`
+	ConstituentLinks  []ConstituentLink    `json:"constituent_links,omitempty"`
+	Notes             []RequestNote        `json:"notes,omitempty"`
+	AvailableActions  []string             `json:"available_actions"`
+	PrimaryAssigneeID *string              `json:"primary_assignee_id"`
+	CollaboratorIDs   []string             `json:"collaborator_ids"`
+	Reminders         []Reminder           `json:"reminders"`
+	History           []PublicHistoryItem  `json:"history"`
+	Audit             []AuditEvent         `json:"audit"`
+	ExternalWorkOrder *CivicWorksWorkOrder `json:"external_work_order"`
 }
 
 type RequestQueueItem struct {

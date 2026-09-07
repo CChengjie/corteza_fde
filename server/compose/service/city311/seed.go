@@ -257,6 +257,9 @@ func (svc *Service) seedRequestRecord(ctx context.Context, tx store.Storer, benc
 	if err = svc.seedConstituent(ctx, tx, request); err != nil {
 		return err
 	}
+	if err = svc.persistPrimaryRelationship(ctx, tx, request, request.CreatedAt); err != nil {
+		return err
+	}
 	if err = svc.ensureSeedAudit(ctx, tx, request); err != nil {
 		return err
 	}

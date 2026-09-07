@@ -284,6 +284,11 @@ func TestRecordScopeAndOptimisticTransition(t *testing.T) {
 	require.Equal(t, 403, serviceErr.Status)
 }
 
+func TestIsStaffRequiresCRMOperationalRole(t *testing.T) {
+	require.False(t, isStaff(contract.Actor{Roles: []contract.ApplicationRole{contract.ApplicationRoleWorkflowDesigner}}))
+	require.True(t, isStaff(contract.Actor{Roles: []contract.ApplicationRole{contract.ApplicationRoleWorkflowDesigner, contract.ApplicationRoleServiceAgent}}))
+}
+
 func TestListUsesOpaqueCursorTotalAndPublishedSort(t *testing.T) {
 	svc, _ := testService(t)
 	ctx := context.Background()

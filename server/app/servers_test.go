@@ -34,6 +34,7 @@ func TestHealthzReportsIdentityConfigurationReadiness(t *testing.T) {
 	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
 	t.Setenv("MAP_BASE_URL", "https://mapping.example.invalid")
 	t.Setenv("MAP_API_TOKEN", "runtime-map-token")
+	setCivicWorksHealthEnvironment(t)
 
 	t.Setenv("SESSION_SECRET", "")
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
@@ -73,6 +74,7 @@ func TestHealthzReportsMappingConfigurationReadiness(t *testing.T) {
 	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
 	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")
 	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
+	setCivicWorksHealthEnvironment(t)
 
 	t.Setenv("MAP_BASE_URL", "")
 	t.Setenv("MAP_API_TOKEN", "")
@@ -100,4 +102,42 @@ func TestHealthzReportsMappingConfigurationReadiness(t *testing.T) {
 	application.healthz(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	require.Equal(t, http.StatusOK, response.Code)
 	require.JSONEq(t, `{"status":"ok","database":"ok"}`, response.Body.String())
+}
+
+func setCivicWorksHealthEnvironment(t *testing.T) {
+	t.Helper()
+	t.Setenv("CIVICWORKS_BASE_URL", "https://civicworks.example.invalid")
+	t.Setenv("CIVICWORKS_API_TOKEN", "runtime-civicworks-token")
+	t.Setenv("CIVICWORKS_WEBHOOK_SECRET", "runtime-civicworks-webhook-secret")
+	t.Setenv("BENCHMARK_RUN_ID", "benchmark-run-health")
+}
+
+func TestHealthzReportsCivicWorksConfigurationReadiness(t *testing.T) {
+	ctx := context.Background()
+	st, err := sqlite.Connect(ctx, fmt.Sprintf("sqlite3://file:%s-health?mode=memory&cache=shared", t.Name()))
+	require.NoError(t, err)
+	logCore, observedLogs := observer.New(zap.ErrorLevel)
+	application := &CortezaApp{Store: st, Log: zap.New(logCore)}
+	t.Setenv("SESSION_SECRET", "runtime-identity-secret")
+	t.Setenv("APP_BASE_URL", "https://city311.example.invalid")
+	t.Setenv("CITY311_SEED_CONSTITUENT_PASSWORD", "SeedConstituentPassword1!")
+	t.Setenv("CITY311_SEED_CONSTITUENT_TWO_PASSWORD", "SeedConstituentPassword2!")
+	t.Setenv("MAP_BASE_URL", "https://mapping.example.invalid")
+	t.Setenv("MAP_API_TOKEN", "runtime-map-token")
+	t.Setenv("CIVICWORKS_BASE_URL", "")
+	t.Setenv("CIVICWORKS_API_TOKEN", "")
+	t.Setenv("CIVICWORKS_WEBHOOK_SECRET", "")
+	t.Setenv("BENCHMARK_RUN_ID", "")
+
+	response := httptest.NewRecorder()
+	application.healthz(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.Contains(t, response.Body.String(), "A required City 311 CivicWorks configuration is unavailable.")
+	require.NotContains(t, response.Body.String(), "CIVICWORKS_BASE_URL")
+	require.Contains(t, observedLogs.All()[0].ContextMap()["error"], "CIVICWORKS_BASE_URL is required")
+
+	setCivicWorksHealthEnvironment(t)
+	response = httptest.NewRecorder()
+	application.healthz(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	require.Equal(t, http.StatusOK, response.Code)
 }

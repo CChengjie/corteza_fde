@@ -102,6 +102,90 @@ func testCity311RequestAttachments(t *testing.T, s store.City311RequestAttachmen
 	require.NoError(t, s.DeleteCity311RequestAttachmentByID(ctx, attachment.ID))
 }
 
+func testCity311RequestConstituentLinks(t *testing.T, s store.City311RequestConstituentLinks) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311RequestConstituentLinks(ctx))
+	link := &composeTypes.City311RequestConstituent{
+		ID: 275, RequestID: 301, ConstituentID: "C-151",
+		RelationshipType: contract.RelationshipAffectedResident, PortalVisible: true, NotifyStatus: true,
+		CreatedAt: *now(), UpdatedAt: *now(),
+	}
+	require.NoError(t, s.CreateCity311RequestConstituentLink(ctx, link))
+	duplicate := *link
+	duplicate.ID++
+	require.Error(t, s.CreateCity311RequestConstituentLink(ctx, &duplicate))
+	primary := &composeTypes.City311RequestConstituent{
+		ID: 277, RequestID: 301, ConstituentID: "C-151",
+		RelationshipType: contract.RelationshipPrimaryRequester, PortalVisible: true, NotifyStatus: true,
+		CreatedAt: *now(), UpdatedAt: *now(),
+	}
+	require.NoError(t, s.CreateCity311RequestConstituentLink(ctx, primary))
+	secondPrimary := *primary
+	secondPrimary.ID++
+	secondPrimary.ConstituentID = "C-152"
+	require.Error(t, s.CreateCity311RequestConstituentLink(ctx, &secondPrimary))
+	fetched, err := s.LookupCity311RequestConstituentLinkByID(ctx, link.ID)
+	require.NoError(t, err)
+	require.Equal(t, contract.RelationshipAffectedResident, fetched.RelationshipType)
+	set, _, err := s.SearchCity311RequestConstituentLinks(ctx, composeTypes.City311RequestConstituentFilter{
+		RequestID: link.RequestID, ConstituentID: link.ConstituentID,
+	})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	fetched.NotifyStatus = false
+	require.NoError(t, s.UpdateCity311RequestConstituentLink(ctx, fetched))
+	require.NoError(t, s.DeleteCity311RequestConstituentLinkByID(ctx, link.ID))
+	require.NoError(t, s.DeleteCity311RequestConstituentLinkByID(ctx, primary.ID))
+}
+
+func testCity311RequestNotes(t *testing.T, s store.City311RequestNotes) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311RequestNotes(ctx))
+	note := &composeTypes.City311RequestNote{
+		ID: 290, RequestID: 301, AuthorType: contract.AuditActorConstituent,
+		AuthorID: 151, AuthorConstituentID: "C-151", Body: "Please check the east side of the street.",
+		PortalVisible: true, CreatedAt: *now(),
+	}
+	require.NoError(t, s.CreateCity311RequestNote(ctx, note))
+	fetched, err := s.LookupCity311RequestNoteByID(ctx, note.ID)
+	require.NoError(t, err)
+	require.Equal(t, note.Body, fetched.Body)
+	set, _, err := s.SearchCity311RequestNotes(ctx, composeTypes.City311RequestNoteFilter{RequestID: note.RequestID})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	require.Equal(t, note.AuthorConstituentID, set[0].AuthorConstituentID)
+}
+
+func testCity311ReopenRequests(t *testing.T, s store.City311ReopenRequests) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311ReopenRequests(ctx))
+	request := &composeTypes.City311ReopenRequest{
+		ID: 295, RequestID: 301, RequestedBy: "C-151", RequestReason: "The issue has returned.",
+		Status: "PENDING_APPROVAL", RequestedAt: *now(),
+	}
+	require.NoError(t, s.CreateCity311ReopenRequest(ctx, request))
+	duplicate := *request
+	duplicate.ID++
+	require.Error(t, s.CreateCity311ReopenRequest(ctx, &duplicate))
+	fetched, err := s.LookupCity311ReopenRequestByID(ctx, request.ID)
+	require.NoError(t, err)
+	require.Equal(t, request.RequestReason, fetched.RequestReason)
+	set, _, err := s.SearchCity311ReopenRequests(ctx, composeTypes.City311ReopenRequestFilter{
+		RequestID: request.RequestID, Status: "PENDING_APPROVAL",
+	})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	approvedAt := *now()
+	fetched.Status = "APPROVED"
+	fetched.ApprovedBy = 401
+	fetched.ApprovalReason = "Approved after review."
+	fetched.ApprovedAt = &approvedAt
+	require.NoError(t, s.UpdateCity311ReopenRequest(ctx, fetched))
+	second := duplicate
+	require.NoError(t, s.CreateCity311ReopenRequest(ctx, &second))
+	require.NoError(t, s.DeleteCity311ReopenRequestByID(ctx, second.ID))
+}
+
 func testCity311PublicHistoryItems(t *testing.T, s store.City311PublicHistoryItems) {
 	ctx := context.Background()
 	require.NoError(t, s.TruncateCity311PublicHistoryItems(ctx))
@@ -237,17 +321,24 @@ func testCity311RequestSequences(t *testing.T, s store.City311RequestSequences) 
 func testCity311ServiceRequests(t *testing.T, s store.City311ServiceRequests) {
 	ctx := context.Background()
 	require.NoError(t, s.TruncateCity311ServiceRequests(ctx))
+	scopeDepartment := contract.DepartmentSanitation
 	request := &composeTypes.City311ServiceRequest{
 		ID: 301, RequestNumber: "SR-2026-00041", Summary: "Pothole on Example Street", Description: "A deep pothole blocks one traffic lane.",
 		ServiceType: contract.ServiceTypePothole, OwningDepartment: contract.DepartmentStreets, CouncilDistrict: contract.DistrictNorth,
 		SourceChannel: contract.SourceChannelAPI, OriginClass: contract.OriginClassExternal, Status: contract.ServiceRequestStatusSubmitted,
 		PrimaryRequester: composeTypes.City311JSON{"constituent_id": "C-301"}, Location: composeTypes.City311JSON{"address": "100 Example Street"},
-		CustomFields: composeTypes.City311JSON{}, CollaboratorIDs: composeTypes.City311Uint64Set{}, Version: 1, CreatedAt: *now(), UpdatedAt: *now(),
+		CustomFields: composeTypes.City311JSON{}, ExternalWorkOrder: composeTypes.City311JSON{"work_order_id": "WO-301", "version": float64(1)},
+		CollaboratorIDs: composeTypes.City311Uint64Set{},
+		ScopeDepartment: &scopeDepartment, ScopeDistricts: composeTypes.City311DistrictCodeSet{contract.DistrictSouth},
+		Version: 1, CreatedAt: *now(), UpdatedAt: *now(),
 	}
 	require.NoError(t, s.CreateCity311ServiceRequest(ctx, request))
 	fetched, err := s.LookupCity311ServiceRequestByRequestNumber(ctx, request.RequestNumber)
 	require.NoError(t, err)
 	require.Equal(t, "C-301", fetched.PrimaryRequester["constituent_id"])
+	require.Equal(t, "WO-301", fetched.ExternalWorkOrder["work_order_id"])
+	require.Equal(t, contract.DepartmentSanitation, *fetched.ScopeDepartment)
+	require.Equal(t, composeTypes.City311DistrictCodeSet{contract.DistrictSouth}, fetched.ScopeDistricts)
 	set, _, err := s.SearchCity311ServiceRequests(ctx, composeTypes.City311ServiceRequestFilter{Status: string(contract.ServiceRequestStatusSubmitted)})
 	require.NoError(t, err)
 	require.Len(t, set, 1)
@@ -255,4 +346,33 @@ func testCity311ServiceRequests(t *testing.T, s store.City311ServiceRequests) {
 	fetched.Version++
 	require.NoError(t, s.UpdateCity311ServiceRequest(ctx, fetched))
 	require.NoError(t, s.DeleteCity311ServiceRequestByID(ctx, request.ID))
+}
+
+func testCity311Operations(t *testing.T, s store.City311Operations) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311Operations(ctx))
+	createdAt := *now()
+	operation := &composeTypes.City311Operation{
+		ID: 302, Kind: "AUDIT_EXPORT", Status: "PENDING", ActorID: 41,
+		Result: composeTypes.City311JSON{}, Error: composeTypes.City311JSON{}, CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	require.NoError(t, s.CreateCity311Operation(ctx, operation))
+	fetched, err := s.LookupCity311OperationByID(ctx, operation.ID)
+	require.NoError(t, err)
+	require.Equal(t, "PENDING", fetched.Status)
+	completedAt := createdAt.Add(time.Second)
+	fetched.Status = "SUCCEEDED"
+	fetched.Progress = 100
+	fetched.Result = composeTypes.City311JSON{"download_url": "/api/v1/operations/op-302/result"}
+	fetched.Content = []byte("header\r\nvalue\r\n")
+	fetched.ContentType = "text/csv; charset=utf-8"
+	fetched.Filename = "audit-events.csv"
+	fetched.CompletedAt = &completedAt
+	fetched.UpdatedAt = completedAt
+	require.NoError(t, s.UpdateCity311Operation(ctx, fetched))
+	set, _, err := s.SearchCity311Operations(ctx, composeTypes.City311OperationFilter{ActorID: 41, Status: "SUCCEEDED"})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	require.Equal(t, []byte("header\r\nvalue\r\n"), set[0].Content)
+	require.NoError(t, s.DeleteCity311OperationByID(ctx, operation.ID))
 }

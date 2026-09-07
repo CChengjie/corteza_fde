@@ -22,9 +22,12 @@ serviceRequest: {
 			primary_requester: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
 			location: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
 			custom_fields: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			external_work_order: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
 			primary_assignee_id: {ident: "primaryAssigneeID", goType: "uint64", sortable: true, dal: {type: "ID", default: 0}}
 			collaborator_ids: {ident: "collaboratorIDs", goType: "types.City311Uint64Set", dal: {type: "JSON"}}
 			duplicate_group_id: {ident: "duplicateGroupID", goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			scope_department: {goType: "*types.DepartmentCode", dal: {type: "Text", length: 64, nullable: true}}
+			scope_districts: {goType: "types.City311DistrictCodeSet", dal: {type: "JSON", nullable: true}}
 			version: {goType: "int", sortable: true, dal: {type: "Number", meta: {"rdbms:type": "integer"}, default: 1}}
 			created_at: schema.SortableTimestampNowField
 			updated_at: schema.SortableTimestampNowField
@@ -95,6 +98,111 @@ constituent: {
 			{fields: ["constituent_id"], constraintCheck: true},
 		]
 	}
+}
+
+requestConstituentLink: {
+	model: {
+		ident:            "compose_city311_request_constituent"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			request_id: {ident: "requestID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			constituent_id: {ident: "constituentID", goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			relationship_type: {goType: "types.RelationshipType", sortable: true, dal: {type: "Text", length: 32}}
+			portal_visible: {goType: "bool", dal: {type: "Boolean", default: false}}
+			notify_status: {goType: "bool", dal: {type: "Boolean", default: false}}
+			created_at: schema.SortableTimestampNowField
+			updated_at: schema.SortableTimestampNowField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_primary: {
+				attribute: "request_id"
+				predicate: "relationship_type = 'PRIMARY_REQUESTER'"
+			}
+			unique_relationship: {attributes: ["request_id", "constituent_id", "relationship_type"]}
+			request: {attributes: ["request_id", "created_at"]}
+			constituent: {attributes: ["constituent_id", "created_at"]}
+		}
+	}
+	filter: {
+		struct: {
+			request_id: {ident: "requestID", goType: "uint64"}
+			constituent_id: {ident: "constituentID", goType: "string"}
+			relationship_type: {goType: "string"}
+		}
+		byValue: ["request_id", "constituent_id", "relationship_type"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {
+		ident: "city311RequestConstituentLink"
+		api: lookups: [{fields: ["id"]}]
+	}
+}
+
+requestNote: {
+	model: {
+		ident:            "compose_city311_request_note"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			request_id: {ident: "requestID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			author_type: {goType: "types.AuditActorType", dal: {type: "Text", length: 32}}
+			author_id: {ident: "authorID", goType: "uint64", dal: {type: "ID"}}
+			author_constituent_id: {ident: "authorConstituentID", goType: "string", dal: {type: "Text", length: 64}}
+			body: {goType: "string", dal: {type: "Text", length: 2000}}
+			portal_visible: {goType: "bool", dal: {type: "Boolean", default: false}}
+			created_at: schema.SortableTimestampNowField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			request: {attributes: ["request_id", "created_at"]}
+		}
+	}
+	filter: {
+		struct: {request_id: {ident: "requestID", goType: "uint64"}}
+		byValue: ["request_id"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {ident: "city311RequestNote", api: lookups: [{fields: ["id"]}]}
+}
+
+reopenRequest: {
+	model: {
+		ident:            "compose_city311_reopen_request"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			request_id: {ident: "requestID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			requested_by: {goType: "string", dal: {type: "Text", length: 64}}
+			request_reason: {goType: "string", dal: {type: "Text", length: 2000}}
+			status: {goType: "string", sortable: true, dal: {type: "Text", length: 32}}
+			requested_at: schema.SortableTimestampNowField
+			approved_by: {ident: "approvedBy", goType: "uint64", dal: {type: "ID", default: 0}}
+			approval_reason: {goType: "string", dal: {type: "Text", length: 2000, default: ""}}
+			approved_at: schema.SortableTimestampNilField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			request: {attributes: ["request_id", "requested_at"]}
+			unique_pending: {
+				attribute: "request_id"
+				predicate: "status = 'PENDING_APPROVAL'"
+			}
+		}
+	}
+	filter: {
+		struct: {
+			request_id: {ident: "requestID", goType: "uint64"}
+			status: {goType: "string"}
+		}
+		byValue: ["request_id", "status"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {ident: "city311ReopenRequest", api: lookups: [{fields: ["id"]}]}
 }
 
 requestSequence: {
@@ -210,6 +318,39 @@ stagedAttachment: {
 	features: {labels: false, flags: false}
 	envoy: {omit: true}
 	store: {ident: "city311StagedAttachment", api: lookups: [{fields: ["id"]}, {fields: ["token_hash"], constraintCheck: true}]}
+}
+
+operation: {
+	model: {
+		ident:            "compose_city311_operation"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			kind: {goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			status: {goType: "string", sortable: true, dal: {type: "Text", length: 32}}
+			progress: {goType: "int", dal: {type: "Number", meta: {"rdbms:type": "integer"}, default: 0}}
+			actor_id: {ident: "actorID", goType: "uint64", sortable: true, dal: {type: "ID"}}
+			result: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			error: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			content: {goType: "[]byte", dal: {type: "Blob", nullable: true}}
+			content_type: {goType: "string", dal: {type: "Text", length: 128}}
+			filename: {goType: "string", dal: {type: "Text", length: 160}}
+			created_at: schema.SortableTimestampNowField
+			updated_at: schema.SortableTimestampNowField
+			completed_at: schema.SortableTimestampNilField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			actor: {attributes: ["actor_id", "created_at"]}
+		}
+	}
+	filter: {
+		struct: {actor_id: {ident: "actorID", goType: "uint64"}, kind: {goType: "string"}, status: {goType: "string"}}
+		byValue: ["actor_id", "kind", "status"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {ident: "city311Operation", api: lookups: [{fields: ["id"]}]}
 }
 
 requestAttachment: {

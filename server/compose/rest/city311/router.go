@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -66,6 +67,33 @@ type staffQueueFilters struct {
 	DuplicateGroup stringList `json:"duplicate_group"`
 }
 
+type constituentLinkWrite struct {
+	ConstituentID    string                    `json:"constituent_id"`
+	RelationshipType contract.RelationshipType `json:"relationship_type"`
+	PortalVisible    *bool                     `json:"portal_visible"`
+	NotifyStatus     *bool                     `json:"notify_status"`
+}
+
+type auditFilterInput struct {
+	RequestID     stringList `json:"request_id"`
+	EntityType    stringList `json:"entity_type"`
+	EntityID      stringList `json:"entity_id"`
+	EventType     stringList `json:"event_type"`
+	ActorType     stringList `json:"actor_type"`
+	ActorID       stringList `json:"actor_id"`
+	SourceChannel stringList `json:"source_channel"`
+	OccurredFrom  string     `json:"occurred_from"`
+	OccurredTo    string     `json:"occurred_to"`
+}
+
+type auditExportWrite struct {
+	Filters *auditFilterInput `json:"filters"`
+}
+
+type contactEmailExportWrite struct {
+	Filters *map[string]stringList `json:"filters"`
+}
+
 func MountRoutes() func(chi.Router) {
 	return MountRoutesWithServices(city311Service.Default, city311Service.DefaultIdentity)
 }
@@ -86,6 +114,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Post("/auth/password-reset/request", h.passwordResetRequest)
 		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
 		r.Patch("/preferences/language", h.languageUpdate)
+		r.With(requireIdentity).Get("/operations/{operation_id}", h.operationGet)
+		r.With(requireIdentity).Get("/operations/{operation_id}/result", h.operationResult)
 		r.Route("/account", func(r chi.Router) {
 			r.Use(requireCityIdentitySession)
 			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
@@ -94,15 +124,47 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Post("/login-identifier", h.loginIdentifierChange)
 		})
 		r.With(requireScope(contract.ScopeRequestWrite)).Post(serviceRequestsRoute, h.integrationSubmit)
+		r.With(requireScope(contract.ScopeCRMExport)).Get("/export/{entity}", h.dataExport)
 		r.Post("/portal/service-requests", h.portalSubmit)
 		r.Post("/portal/attachments", h.attachmentUpload)
 		r.With(requireIdentity).Get("/attachments/{attachment_id}", h.attachmentDownload)
+		r.With(requireConstituentIdentitySession).Post("/portal/service-request-drafts", h.draftCreate)
+		r.With(requireConstituentIdentitySession).Get("/portal/service-request-drafts/{request_id}", h.draftGet)
+		r.With(requireConstituentIdentitySession).Patch("/portal/service-request-drafts/{request_id}", h.draftUpdate)
+		r.With(requireConstituentIdentitySession).Delete("/portal/service-request-drafts/{request_id}", h.draftDelete)
+		r.With(requireConstituentIdentitySession).Post("/portal/service-request-drafts/{request_id}/submit", h.draftSubmit)
+		r.With(requireConstituentSession).Get("/portal/service-requests", h.portalMyRequests)
+		r.With(requireConstituentSession).Post("/portal/service-requests/link", h.portalLinkAnonymousRequest)
+		r.With(requireConstituentSession).Post("/portal/service-requests/{request_id}/notes", h.portalNoteCreate)
+		r.With(requireConstituentSession).Post("/portal/service-requests/{request_id}/reopen", h.portalReopenRequest)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
+			r.Get("/audit-events", h.staffAuditList)
+			r.Post("/audit-events/export", h.staffAuditExport)
+			r.Post("/contact-email-export", h.contactEmailExport)
+			r.Post("/mail/preview", h.mailPreview)
+			r.Post("/mail", h.mailSend)
+			r.Get("/mail/{delivery_id}", h.mailDeliveryGet)
+			r.Post("/calendar/import", h.calendarImport)
+			r.Get("/calendar/export", h.calendarExport)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
+			r.Post("/service-requests/bulk", h.staffBulk)
 			r.Get(serviceRequestsRoute, h.staffList)
 			r.Get("/service-requests/{request_id}", h.staffDetail)
 			r.Post("/service-requests/{request_id}/transitions", h.staffTransition)
+			r.Post("/service-requests/{request_id}/origin-class", h.staffOriginOverride)
+			r.Post("/service-requests/{request_id}/scope-override", h.staffScopeOverride)
+			r.Post("/service-requests/{request_id}/assignment", h.staffReassign)
+			r.Post("/service-requests/{request_id}/duplicate-group", h.staffDuplicateGroupConfirm)
+			r.Delete("/service-requests/{request_id}/duplicate-group", h.staffDuplicateGroupRemove)
+			r.Put("/service-requests/{request_id}/collaborators/{staff_id}", h.staffCollaboratorAdd)
+			r.Delete("/service-requests/{request_id}/collaborators/{staff_id}", h.staffCollaboratorRemove)
+			r.Post("/service-requests/{request_id}/reminders", h.staffReminderCreate)
+			r.Post("/reminders/{reminder_id}/{action}", h.staffReminderAction)
+			r.Post("/service-requests/{request_id}/notes", h.staffNoteCreate)
+			r.Post("/service-requests/{request_id}/reopen/approve", h.staffReopenApprove)
+			r.Post("/service-requests/{request_id}/constituents", h.staffConstituentLink)
+			r.Delete("/service-requests/{request_id}/constituents/{constituent_id}", h.staffConstituentUnlink)
 		})
 	}
 }
@@ -146,6 +208,26 @@ func requireCityIdentitySession(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+func requireConstituentSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		resolved := identitySessionFromContext(r.Context())
+		if resolved == nil || resolved.User == nil {
+			writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: authenticationRequiredMessage, Retryable: false})
+			return
+		}
+		if resolved.Actor != nil {
+			for _, role := range resolved.Actor.ApplicationRoles {
+				if role == contract.ApplicationRoleConstituent {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+		writeJSON(w, http.StatusForbidden, contract.APIError{Error: contract.ErrorForbidden, Message: "A constituent account is required.", Retryable: false})
 	})
 }
 
@@ -254,6 +336,68 @@ func (h *handler) integrationSubmit(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, status, response, err)
 }
 
+func (h *handler) dataExport(w http.ResponseWriter, r *http.Request) {
+	identity := auth.GetIdentityFromContext(r.Context())
+	if retryAfter := h.service.CheckDataExportLimit(identity.Identity()); retryAfter > 0 {
+		w.Header().Set(contract.RetryAfterHeader, strconv.Itoa(retryAfter))
+		writeJSON(w, http.StatusTooManyRequests, contract.APIError{
+			Error: contract.ErrorRateLimited, Message: "The client request limit has been exceeded.", Retryable: true,
+		})
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), identity.Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	query, err := parseDataExportQuery(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ExportData(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "entity")), query)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func parseDataExportQuery(r *http.Request) (contract.DataExportQuery, error) {
+	query := contract.DataExportQuery{PageSize: 50, PageToken: r.URL.Query().Get("page_token"), Filters: map[string][]string{}}
+	if raw := strings.TrimSpace(r.URL.Query().Get("page_size")); raw != "" {
+		pageSize, err := strconv.ParseUint(raw, 10, 16)
+		if err != nil || pageSize == 0 || pageSize > 100 {
+			return contract.DataExportQuery{}, dataExportInputError("page_size must be between 1 and 100.")
+		}
+		query.PageSize = uint(pageSize)
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("updated_since")); raw != "" {
+		updatedSince, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return contract.DataExportQuery{}, dataExportInputError("updated_since must be an ISO 8601 date-time.")
+		}
+		updatedSince = updatedSince.UTC()
+		query.UpdatedSince = &updatedSince
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("filters")); raw != "" {
+		input := map[string]stringList{}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		if err := decoder.Decode(&input); err != nil {
+			return contract.DataExportQuery{}, dataExportInputError("filters must be an object of string values or arrays.")
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			return contract.DataExportQuery{}, dataExportInputError("filters must contain one JSON object.")
+		}
+		for key, values := range input {
+			query.Filters[key] = append([]string(nil), values...)
+		}
+	}
+	return query, nil
+}
+
+func dataExportInputError(message string) error {
+	return &city311Service.ServiceError{Status: http.StatusUnprocessableEntity, Payload: contract.APIError{
+		Error: contract.ErrorInvalidFilter, Message: message, Retryable: false,
+	}}
+}
+
 func (h *handler) portalSubmit(w http.ResponseWriter, r *http.Request) {
 	input := contract.PortalServiceRequestSubmit{}
 	if !decodeJSON(w, r, &input) {
@@ -284,6 +428,61 @@ func (h *handler) portalSubmit(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 	writeResult(w, status, response, err)
+}
+
+func (h *handler) portalMyRequests(w http.ResponseWriter, r *http.Request) {
+	pageSize := uint64(50)
+	var err error
+	if raw := r.URL.Query().Get("page_size"); raw != "" {
+		pageSize, err = strconv.ParseUint(raw, 10, 16)
+		if err != nil || pageSize == 0 {
+			writeValidation(w, "/query/page_size", contract.ValidationInvalidFormat)
+			return
+		}
+	}
+	resolved := identitySessionFromContext(r.Context())
+	result, err := h.service.ListPortalRequests(r.Context(), resolved.User.ID, city311Service.PortalRequestFilter{
+		PageSize: uint(pageSize), PageToken: r.URL.Query().Get("page_token"), Sort: r.URL.Query().Get("sort"),
+	})
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) portalLinkAnonymousRequest(w http.ResponseWriter, r *http.Request) {
+	input := contract.AnonymousRequestLink{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	resolved := identitySessionFromContext(r.Context())
+	result, err := h.service.LinkAnonymousRequest(r.Context(), resolved.User.ID, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) portalNoteCreate(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	input := contract.RequestNoteWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	resolved := identitySessionFromContext(r.Context())
+	result, err := h.service.CreatePortalNote(r.Context(), resolved.User.ID, requestID, input)
+	writeResult(w, http.StatusCreated, result, err)
+}
+
+func (h *handler) portalReopenRequest(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	input := contract.ReopenApproval{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	resolved := identitySessionFromContext(r.Context())
+	result, err := h.service.RequestReopen(r.Context(), resolved.User.ID, requestID, input)
+	writeResult(w, http.StatusAccepted, result, err)
 }
 
 func (h *handler) staffSubmit(w http.ResponseWriter, r *http.Request) {
@@ -380,6 +579,235 @@ func (h *handler) staffList(w http.ResponseWriter, r *http.Request) {
 	requestFilter.Sort = r.URL.Query().Get("sort")
 	result, err := h.service.List(r.Context(), actor, requestFilter)
 	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffAuditList(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	filters, err := parseStaffAuditFilters(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	pageSize := uint64(50)
+	if raw := r.URL.Query().Get("page_size"); raw != "" {
+		pageSize, err = strconv.ParseUint(raw, 10, 16)
+		if err != nil || pageSize == 0 {
+			writeValidation(w, "/query/page_size", contract.ValidationInvalidFormat)
+			return
+		}
+	}
+	result, err := h.service.ListAuditEvents(r.Context(), actor, contract.AuditQuery{
+		Filters: filters, PageSize: uint(pageSize), PageToken: r.URL.Query().Get("page_token"), Sort: r.URL.Query().Get("sort"),
+	})
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffAuditExport(w http.ResponseWriter, r *http.Request) {
+	input := auditExportWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Filters == nil {
+		writeValidation(w, "/filters", contract.ValidationRequired)
+		return
+	}
+	filters, err := auditFilterFromInput(*input.Filters, "/filters")
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.StartAuditExport(r.Context(), actor, contract.AuditExport{Filters: filters})
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) contactEmailExport(w http.ResponseWriter, r *http.Request) {
+	input := contactEmailExportWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Filters == nil {
+		writeValidation(w, "/filters", contract.ValidationRequired)
+		return
+	}
+	filters := make(map[string][]string, len(*input.Filters))
+	for key, values := range *input.Filters {
+		filters[key] = trimStringList(values)
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.StartContactEmailExport(r.Context(), actor, contract.ContactEmailExport{Filters: filters})
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) mailPreview(w http.ResponseWriter, r *http.Request) {
+	input := contract.MailCompose{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.PreviewMail(actor, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) mailSend(w http.ResponseWriter, r *http.Request) {
+	input := contract.MailCompose{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.SendMail(r.Context(), actor, r.Header.Get(contract.IdempotencyHeader), input)
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) mailDeliveryGet(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.GetMailDelivery(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "delivery_id")))
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) calendarImport(w http.ResponseWriter, r *http.Request) {
+	input := contract.CalendarImport{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ImportCalendar(r.Context(), actor, input)
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) calendarExport(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ExportCalendar(r.Context(), actor)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) operationGet(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.GetOperation(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "operation_id")))
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) operationResult(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.DownloadOperation(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "operation_id")))
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", result.ContentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": result.Filename}))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(result.Content)
+}
+
+func parseStaffAuditFilters(r *http.Request) (contract.AuditFilter, error) {
+	input := auditFilterInput{}
+	raw := r.URL.Query().Get("filters")
+	if raw != "" {
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			return contract.AuditFilter{}, queueFilterError("filters", contract.ValidationInvalidFormat)
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			return contract.AuditFilter{}, queueFilterError("filters", contract.ValidationInvalidFormat)
+		}
+	} else {
+		query := r.URL.Query()
+		input.RequestID = queryValues(query, "request_id")
+		input.EntityType = queryValues(query, "entity_type")
+		input.EntityID = queryValues(query, "entity_id")
+		input.EventType = queryValues(query, "event_type")
+		input.ActorType = queryValues(query, "actor_type")
+		input.ActorID = queryValues(query, "actor_id")
+		input.SourceChannel = queryValues(query, "source_channel")
+		input.OccurredFrom = firstQueryValue(queryValues(query, "occurred_from"))
+		input.OccurredTo = firstQueryValue(queryValues(query, "occurred_to"))
+	}
+	return auditFilterFromInput(input, "/query/filters")
+}
+
+func auditFilterFromInput(input auditFilterInput, prefix string) (contract.AuditFilter, error) {
+	from, err := parseAuditTime(input.OccurredFrom, prefix+"/occurred_from")
+	if err != nil {
+		return contract.AuditFilter{}, err
+	}
+	to, err := parseAuditTime(input.OccurredTo, prefix+"/occurred_to")
+	if err != nil {
+		return contract.AuditFilter{}, err
+	}
+	return contract.AuditFilter{
+		RequestIDs: trimStringList(input.RequestID), EntityTypes: trimStringList(input.EntityType), EntityIDs: trimStringList(input.EntityID),
+		EventTypes: trimStringList(input.EventType), ActorTypes: convertStrings(trimStringList(input.ActorType), contract.AuditActorType("")),
+		ActorIDs: trimStringList(input.ActorID), SourceChannels: convertStrings(trimStringList(input.SourceChannel), contract.SourceChannel("")),
+		OccurredFrom: from, OccurredTo: to,
+	}, nil
+}
+
+func parseAuditTime(value, field string) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, &city311Service.ServiceError{Status: http.StatusUnprocessableEntity, Payload: contract.APIError{
+			Error: contract.ErrorValidation, Message: invalidFieldsMessage, Retryable: false,
+			Errors: []contract.FieldError{{Field: field, Code: contract.ValidationInvalidFormat}},
+		}}
+	}
+	parsed = parsed.UTC()
+	return &parsed, nil
+}
+
+func trimStringList(values stringList) stringList {
+	out := make(stringList, 0, len(values))
+	for _, value := range values {
+		out = append(out, strings.TrimSpace(value))
+	}
+	return out
 }
 
 func parseStaffQueueFilters(r *http.Request) (city311Service.RequestFilter, error) {
@@ -546,12 +974,340 @@ func (h *handler) staffTransition(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, http.StatusOK, result, err)
 }
 
+func (h *handler) staffReassign(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.Reassignment{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.Reassign(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffOriginOverride(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.OriginOverride{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.OverrideOrigin(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffScopeOverride(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.ScopeOverride{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.OverrideScope(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffDuplicateGroupConfirm(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.DuplicateGroupChange{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ConfirmDuplicateGroup(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffDuplicateGroupRemove(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.Reason{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.RemoveDuplicateGroup(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffBulk(w http.ResponseWriter, r *http.Request) {
+	input := contract.BulkRequest{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.Bulk(r.Context(), actor, input, r.Header.Get(contract.IdempotencyHeader))
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffCollaboratorAdd(w http.ResponseWriter, r *http.Request) {
+	h.staffCollaboratorChange(w, r, true)
+}
+
+func (h *handler) staffCollaboratorRemove(w http.ResponseWriter, r *http.Request) {
+	h.staffCollaboratorChange(w, r, false)
+}
+
+func (h *handler) staffCollaboratorChange(w http.ResponseWriter, r *http.Request, add bool) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	staffID, err := strconv.ParseUint(chi.URLParam(r, "staff_id"), 10, 64)
+	if err != nil || staffID == 0 {
+		writeValidation(w, "/path/staff_id", contract.ValidationInvalidFormat)
+		return
+	}
+	expectedVersion, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.Reason{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	var result *contract.StaffServiceRequestDetail
+	if add {
+		result, err = h.service.AddCollaborator(r.Context(), actor, requestID, expectedVersion, staffID, input)
+	} else {
+		result, err = h.service.RemoveCollaborator(r.Context(), actor, requestID, expectedVersion, staffID, input)
+	}
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffReminderCreate(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	input := contract.ReminderWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.CreateReminder(r.Context(), actor, requestID, input)
+	writeResult(w, http.StatusCreated, result, err)
+}
+
+func (h *handler) staffReminderAction(w http.ResponseWriter, r *http.Request) {
+	reminderID, err := strconv.ParseUint(chi.URLParam(r, "reminder_id"), 10, 64)
+	if err != nil || reminderID == 0 {
+		writeValidation(w, "/path/reminder_id", contract.ValidationInvalidFormat)
+		return
+	}
+	action := contract.ReminderAction(strings.TrimSpace(chi.URLParam(r, "action")))
+	input := contract.ReminderActionInput{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ActionReminder(r.Context(), actor, reminderID, action, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffNoteCreate(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	input := contract.RequestNoteWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.CreateStaffNote(r.Context(), actor, requestID, input)
+	writeResult(w, http.StatusCreated, result, err)
+}
+
+func (h *handler) staffReopenApprove(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, err := parseIfMatch(r.Header.Get(contract.IfMatchHeader))
+	if err != nil {
+		writeResult(w, 0, nil, &city311Service.ServiceError{Status: 428, Payload: contract.APIError{Error: contract.ErrorExpectedVersionRequired, Message: "If-Match must identify the expected record version.", Retryable: false}})
+		return
+	}
+	input := contract.ReopenApproval{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ApproveReopen(r.Context(), actor, requestID, expectedVersion, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffConstituentLink(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, err := parseIfMatch(r.Header.Get(contract.IfMatchHeader))
+	if err != nil {
+		writeResult(w, 0, nil, &city311Service.ServiceError{Status: 428, Payload: contract.APIError{Error: contract.ErrorExpectedVersionRequired, Message: "If-Match must identify the expected record version.", Retryable: false}})
+		return
+	}
+	input := constituentLinkWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	var missing []contract.FieldError
+	if input.PortalVisible == nil {
+		missing = append(missing, contract.FieldError{Field: "/portal_visible", Code: contract.ValidationRequired})
+	}
+	if input.NotifyStatus == nil {
+		missing = append(missing, contract.FieldError{Field: "/notify_status", Code: contract.ValidationRequired})
+	}
+	if len(missing) > 0 {
+		writeJSON(w, http.StatusUnprocessableEntity, contract.APIError{Error: contract.ErrorValidation, Message: invalidFieldsMessage, Retryable: false, Errors: missing})
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.LinkConstituent(r.Context(), actor, requestID, expectedVersion, contract.ConstituentLink{
+		ConstituentID: input.ConstituentID, RelationshipType: input.RelationshipType,
+		PortalVisible: *input.PortalVisible, NotifyStatus: *input.NotifyStatus,
+	})
+	writeResult(w, http.StatusCreated, result, err)
+}
+
+func (h *handler) staffConstituentUnlink(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	expectedVersion, err := parseIfMatch(r.Header.Get(contract.IfMatchHeader))
+	if err != nil {
+		writeResult(w, 0, nil, &city311Service.ServiceError{Status: 428, Payload: contract.APIError{Error: contract.ErrorExpectedVersionRequired, Message: "If-Match must identify the expected record version.", Retryable: false}})
+		return
+	}
+	constituentID := strings.TrimSpace(chi.URLParam(r, "constituent_id"))
+	if constituentID == "" {
+		writeValidation(w, "/path/constituent_id", contract.ValidationRequired)
+		return
+	}
+	input := contract.ConstituentUnlink{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.UnlinkConstituent(r.Context(), actor, requestID, expectedVersion, constituentID, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func staffRequestID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
+	requestID, err := strconv.ParseUint(chi.URLParam(r, "request_id"), 10, 64)
+	if err != nil || requestID == 0 {
+		writeValidation(w, "/path/request_id", contract.ValidationInvalidFormat)
+		return 0, false
+	}
+	return requestID, true
+}
+
 func parseIfMatch(value string) (uint64, error) {
 	value = strings.TrimSpace(value)
 	if !strongVersionPattern.MatchString(value) {
 		return 0, errors.New("If-Match must be one quoted positive decimal version")
 	}
 	return strconv.ParseUint(value[1:len(value)-1], 10, 64)
+}
+
+func requiredVersion(w http.ResponseWriter, r *http.Request) (uint64, bool) {
+	version, err := parseIfMatch(r.Header.Get(contract.IfMatchHeader))
+	if err != nil {
+		writeResult(w, 0, nil, &city311Service.ServiceError{Status: http.StatusPreconditionRequired, Payload: contract.APIError{
+			Error: contract.ErrorExpectedVersionRequired, Message: "If-Match must identify the expected record version.", Retryable: false,
+		}})
+		return 0, false
+	}
+	return version, true
 }
 
 func requireIdentity(next http.Handler) http.Handler {

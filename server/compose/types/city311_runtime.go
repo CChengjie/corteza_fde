@@ -407,6 +407,27 @@ type (
 		filter.Paging
 	}
 	City311WorkflowExecutionSet []*City311WorkflowExecution
+
+	City311ConfigurationRevision struct {
+		ID           uint64      `json:"id,string"`
+		ResourceType string      `json:"resourceType"`
+		ResourceKey  string      `json:"resourceKey"`
+		Language     string      `json:"language,omitempty"`
+		Payload      City311JSON `json:"payload"`
+		Version      int         `json:"version"`
+		Published    bool        `json:"published"`
+		CreatedAt    time.Time   `json:"createdAt"`
+	}
+	City311ConfigurationRevisionFilter struct {
+		ResourceType string
+		ResourceKey  string
+		Language     string
+		Published    bool
+		Check        func(*City311ConfigurationRevision) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311ConfigurationRevisionSet []*City311ConfigurationRevision
 )
 
 func scanCity311JSON(src, dst any) error {

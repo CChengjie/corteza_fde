@@ -239,6 +239,18 @@ type (
 		CreatedAt     time.Time                  `db:"created_at"`
 	}
 
+	// auxCity311ConfigurationRevision is an auxiliary structure used for transporting to/from RDBMS store
+	auxCity311ConfigurationRevision struct {
+		ID           uint64                  `db:"id"`
+		ResourceType string                  `db:"resource_type"`
+		ResourceKey  string                  `db:"resource_key"`
+		Language     string                  `db:"language"`
+		Payload      composeType.City311JSON `db:"payload"`
+		Version      int                     `db:"version"`
+		Published    bool                    `db:"published"`
+		CreatedAt    time.Time               `db:"created_at"`
+	}
+
 	// auxCity311Constituent is an auxiliary structure used for transporting to/from RDBMS store
 	auxCity311Constituent struct {
 		ID               uint64                     `db:"id"`
@@ -1725,6 +1737,53 @@ func (aux *auxCity311AuditEvent) scan(row scanner) error {
 		&aux.SourceChannel,
 		&aux.Before,
 		&aux.After,
+		&aux.CreatedAt,
+	)
+}
+
+// encodes City311ConfigurationRevision to auxCity311ConfigurationRevision
+//
+// This function is auto-generated
+func (aux *auxCity311ConfigurationRevision) encode(res *composeType.City311ConfigurationRevision) (_ error) {
+	aux.ID = res.ID
+	aux.ResourceType = res.ResourceType
+	aux.ResourceKey = res.ResourceKey
+	aux.Language = res.Language
+	aux.Payload = res.Payload
+	aux.Version = res.Version
+	aux.Published = res.Published
+	aux.CreatedAt = res.CreatedAt
+	return
+}
+
+// decodes City311ConfigurationRevision from auxCity311ConfigurationRevision
+//
+// This function is auto-generated
+func (aux auxCity311ConfigurationRevision) decode() (res *composeType.City311ConfigurationRevision, _ error) {
+	res = new(composeType.City311ConfigurationRevision)
+	res.ID = aux.ID
+	res.ResourceType = aux.ResourceType
+	res.ResourceKey = aux.ResourceKey
+	res.Language = aux.Language
+	res.Payload = aux.Payload
+	res.Version = aux.Version
+	res.Published = aux.Published
+	res.CreatedAt = aux.CreatedAt
+	return
+}
+
+// scans row and fills auxCity311ConfigurationRevision fields
+//
+// This function is auto-generated
+func (aux *auxCity311ConfigurationRevision) scan(row scanner) error {
+	return row.Scan(
+		&aux.ID,
+		&aux.ResourceType,
+		&aux.ResourceKey,
+		&aux.Language,
+		&aux.Payload,
+		&aux.Version,
+		&aux.Published,
 		&aux.CreatedAt,
 	)
 }

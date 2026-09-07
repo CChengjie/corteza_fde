@@ -142,6 +142,9 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Get("/audit-events", h.staffAuditList)
 			r.Post("/audit-events/export", h.staffAuditExport)
 			r.Post("/contact-email-export", h.contactEmailExport)
+			r.Post("/mail/preview", h.mailPreview)
+			r.Post("/mail", h.mailSend)
+			r.Get("/mail/{delivery_id}", h.mailDeliveryGet)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
 			r.Post("/service-requests/bulk", h.staffBulk)
 			r.Get(serviceRequestsRoute, h.staffList)
@@ -644,6 +647,44 @@ func (h *handler) contactEmailExport(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.StartContactEmailExport(r.Context(), actor, contract.ContactEmailExport{Filters: filters})
 	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) mailPreview(w http.ResponseWriter, r *http.Request) {
+	input := contract.MailCompose{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.PreviewMail(actor, input)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) mailSend(w http.ResponseWriter, r *http.Request) {
+	input := contract.MailCompose{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.SendMail(r.Context(), actor, r.Header.Get(contract.IdempotencyHeader), input)
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) mailDeliveryGet(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.GetMailDelivery(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "delivery_id")))
+	writeResult(w, http.StatusOK, result, err)
 }
 
 func (h *handler) operationGet(w http.ResponseWriter, r *http.Request) {

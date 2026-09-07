@@ -101,6 +101,29 @@ func clientMocks() map[string]MockContract {
 		"civicworks_invalid_signature": mock(401, APIError{
 			Error: ErrorInvalidSignature, Message: "The CivicWorks event signature is invalid.", Retryable: false,
 		}),
+		"admin_category_updated": mock(200, map[string]interface{}{
+			"code": "VETERAN", "active": true, "labels": map[string]string{"EN": "Veteran", "ES": "Veterano", "VI": "Cựu chiến binh"},
+			"version": 4, "updated_at": "2026-08-25T11:04:00Z",
+		}),
+		"admin_category_update_request": mock(0, map[string]interface{}{
+			"code": "VETERAN", "active": true, "labels": map[string]string{"EN": "Veteran", "ES": "Veterano", "VI": "Cựu chiến binh"},
+		}),
+		"admin_category_version_conflict": mock(409, APIError{
+			Error: ErrorVersionConflict, Message: "The category has changed.", Retryable: false, CurrentVersion: uint64Pointer(4),
+		}),
+		"admin_category_version_required": mock(428, APIError{
+			Error: ErrorExpectedVersionRequired, Message: "If-Match is required for this update.", Retryable: false,
+		}),
+		"admin_category_in_use": mock(422, APIError{
+			Error: ErrorValidation, Message: "The request contains invalid fields.", Retryable: false,
+			Errors: []FieldError{{Field: "/active", Code: ValidationConflict}},
+		}),
+		"admin_category_audit_event": mock(200, map[string]interface{}{
+			"items": []interface{}{
+				map[string]interface{}{"entity_type": "contact_category", "entity_id": "VETERAN", "event_type": "CONTACT_CATEGORY_UPDATED", "actor_type": "staff", "actor_id": "staff-manager-1", "occurred_at": "2026-08-25T11:04:00Z", "source_channel": "STAFF_IN_PERSON", "before": map[string]interface{}{"version": 3, "active": true}, "after": map[string]interface{}{"version": 4, "active": true}},
+			},
+			"next_page_token": nil, "total_count": 1, "applied_filters": map[string]interface{}{"entity_type": []string{"contact_category"}}, "sort": []string{"-occurred_at"},
+		}),
 	}
 }
 
@@ -153,6 +176,12 @@ func linkMocks(mocks map[string]MockContract) {
 		"civicworks_event_acknowledged":     "civicworks_event_callback",
 		"civicworks_duplicate_acknowledged": "civicworks_event_callback",
 		"civicworks_invalid_signature":      "civicworks_event_callback",
+		"admin_category_updated":            "admin_categories_update",
+		"admin_category_update_request":     "admin_categories_update",
+		"admin_category_version_conflict":   "admin_categories_update",
+		"admin_category_version_required":   "admin_categories_update",
+		"admin_category_in_use":             "admin_categories_update",
+		"admin_category_audit_event":        "audit_list",
 	}
 	for name, item := range mocks {
 		endpoint, present := endpointByMock[name]
@@ -161,10 +190,12 @@ func linkMocks(mocks map[string]MockContract) {
 		}
 		item.Endpoint = endpoint
 		item.Role = "response"
-		if name == "civicworks_completed_event" {
+		if name == "civicworks_completed_event" || name == "admin_category_update_request" {
 			item.Role = "request"
 			item.HTTPStatus = 0
 		}
 		mocks[name] = item
 	}
 }
+
+func uint64Pointer(value uint64) *uint64 { return &value }

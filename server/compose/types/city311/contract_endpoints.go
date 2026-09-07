@@ -158,7 +158,7 @@ func configureEndpointMechanics(document *ContractDocument) {
 		"staff_constituent_link", "staff_constituent_unlink", "staff_duplicate_group_confirm", "staff_duplicate_group_remove",
 		"staff_reopen_approve", "staff_origin_override", "staff_scope_override", "admin_branding_update", "admin_branding_publish",
 		"admin_branding_rollback", "admin_content_update", "admin_content_publish", "admin_content_rollback", "admin_custom_fields_update",
-		"admin_help_update",
+		"admin_help_update", "admin_categories_update",
 		"workflow_update", "workflow_activate", "workflow_deactivate", "identity_configuration_update", "integration_update", "integration_rotate",
 		"integration_revoke", "saved_report_update", "saved_report_share",
 	} {
@@ -196,6 +196,12 @@ func configureEndpointMechanics(document *ContractDocument) {
 		endpoint := document.Endpoints[name]
 		endpoint.EntityResponseSchemas = map[string]string{"items": itemSchema}
 		endpoint.QueryParameters = standardListQuery()
+		document.Endpoints[name] = endpoint
+	}
+
+	for _, name := range []string{"admin_categories_create", "admin_categories_update"} {
+		endpoint := document.Endpoints[name]
+		endpoint.ResponseHeaders = map[string]string{"ETag": "success response: quoted decimal category revision"}
 		document.Endpoints[name] = endpoint
 	}
 

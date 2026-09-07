@@ -145,6 +145,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Post("/mail/preview", h.mailPreview)
 			r.Post("/mail", h.mailSend)
 			r.Get("/mail/{delivery_id}", h.mailDeliveryGet)
+			r.Post("/calendar/import", h.calendarImport)
+			r.Get("/calendar/export", h.calendarExport)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
 			r.Post("/service-requests/bulk", h.staffBulk)
 			r.Get(serviceRequestsRoute, h.staffList)
@@ -684,6 +686,30 @@ func (h *handler) mailDeliveryGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.service.GetMailDelivery(r.Context(), actor, strings.TrimSpace(chi.URLParam(r, "delivery_id")))
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) calendarImport(w http.ResponseWriter, r *http.Request) {
+	input := contract.CalendarImport{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ImportCalendar(r.Context(), actor, input)
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
+func (h *handler) calendarExport(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ExportCalendar(r.Context(), actor)
 	writeResult(w, http.StatusOK, result, err)
 }
 

@@ -212,6 +212,15 @@ type Operation struct {
 	CompletedAt *time.Time      `json:"completed_at"`
 }
 
+type CalendarImport struct {
+	ICS string `json:"ics"`
+}
+
+type CalendarExport struct {
+	ContentType string `json:"content_type"`
+	Body        string `json:"body"`
+}
+
 type DataExportQuery struct {
 	Filters      map[string][]string
 	PageSize     uint

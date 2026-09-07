@@ -23,7 +23,12 @@ type city311ReminderPayload struct {
 	RequestID     uint64                   `json:"request_id"`
 	Title         string                   `json:"title"`
 	DueAt         time.Time                `json:"due_at"`
+	EndAt         *time.Time               `json:"end_at,omitempty"`
 	Timezone      string                   `json:"timezone"`
+	Description   string                   `json:"description,omitempty"`
+	CalendarUID   string                   `json:"calendar_uid,omitempty"`
+	Recurrence    string                   `json:"recurrence_rule,omitempty"`
+	LastModified  *time.Time               `json:"last_modified,omitempty"`
 	Channel       contract.ReminderChannel `json:"channel"`
 	Status        contract.ReminderStatus  `json:"status"`
 	PreviousDueAt []time.Time              `json:"previous_due_at,omitempty"`

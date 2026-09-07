@@ -191,6 +191,57 @@ func TestMutatingVersionedEndpointsRequireIfMatch(t *testing.T) {
 	}
 }
 
+func TestContextualHelpAdministrationContractIsComplete(t *testing.T) {
+	contract := NewContractDocument()
+	helpOperations := []string{
+		"admin_help_get", "admin_help_update", "admin_help_preview", "admin_help_publish", "admin_help_versions", "admin_help_rollback",
+	}
+	for _, name := range helpOperations {
+		endpoint, present := contract.Endpoints[name]
+		if !present || endpoint.RequiredCapability != name || endpoint.Authentication.Mode != "session_cookie" {
+			t.Errorf("contextual-help operation %s is missing its administrator capability boundary", name)
+		}
+	}
+	for _, name := range []string{"admin_help_update", "admin_help_publish", "admin_help_rollback"} {
+		endpoint := contract.Endpoints[name]
+		if !contains(endpoint.RequiredHeaders, IfMatchHeader) || endpoint.ErrorStatuses[string(ErrorVersionConflict)] != 409 || endpoint.ErrorStatuses[string(ErrorExpectedVersionRequired)] != 428 {
+			t.Errorf("contextual-help mutation %s has an incomplete optimistic-concurrency contract", name)
+		}
+	}
+	for _, name := range []string{"admin_help_get", "admin_help_publish", "admin_help_versions", "admin_help_rollback"} {
+		language := contract.Endpoints[name].QueryParameters["language"]
+		if language["enum_ref"] != "language" || language["default"] != "EN" {
+			t.Errorf("contextual-help operation %s does not publish its language selector", name)
+		}
+	}
+	help := contract.Schemas["help_content"]
+	if !reflect.DeepEqual(help["required"], []string{"help_key", "language", "body", "state", "published", "version", "updated_at"}) {
+		t.Fatalf("help DTO does not expose the complete lifecycle state: %#v", help["required"])
+	}
+
+	session := contract.Protocol["session_and_authorization"].(map[string]interface{})
+	fixtures := session["administration_role_capability_fixtures"].(map[string]interface{})
+	for _, role := range contract.Enums["application_role"] {
+		if _, present := fixtures[role]; !present {
+			t.Errorf("administration capability fixture is missing role %s", role)
+		}
+	}
+	if _, present := fixtures["integration_client"]; !present {
+		t.Error("administration capability fixtures must explicitly deny integration clients")
+	}
+	if !reflect.DeepEqual(fixtures["platform_administrator"], helpOperations) {
+		t.Fatal("platform administrator fixture must grant every contextual-help operation")
+	}
+	for _, name := range []string{
+		"admin_help_current", "admin_help_preview", "admin_help_draft", "admin_help_published", "admin_help_versions",
+		"admin_help_rolled_back", "admin_help_update_request", "admin_help_rollback_request", "admin_help_version_conflict", "admin_help_version_required", "admin_help_audit_events",
+	} {
+		if _, present := contract.Mocks[name]; !present {
+			t.Errorf("contextual-help fixture %s is missing", name)
+		}
+	}
+}
+
 func TestSubmissionAndRetryIdempotencyIsConsistent(t *testing.T) {
 	contract := NewContractDocument()
 	for _, name := range []string{"service_request_create", "portal_service_request_submit", "staff_request_bulk", "mail_send", "workflow_action_execute", "civicworks_work_order_create"} {

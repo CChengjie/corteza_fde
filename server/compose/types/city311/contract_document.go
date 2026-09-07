@@ -95,7 +95,7 @@ func NewContractDocument() ContractDocument {
 			Stability:             "frozen",
 			EffectiveAt:           "merge_to_2024.9.x",
 			FirstPublishedVersion: "1.0.0",
-			SupportedMajor:        2,
+			SupportedMajor:        3,
 			MajorVersionRule:      "after first publication, any consumer-incompatible contract revision increments the major version",
 		},
 		Maintainer: "Developer 1 - backend, integrations, and runtime",

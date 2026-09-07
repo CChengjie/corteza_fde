@@ -3,7 +3,7 @@ package city311
 import "time"
 
 // ContractVersion identifies the frozen City 311 client/server contract.
-const ContractVersion = "2.0.0"
+const ContractVersion = "3.0.0"
 
 type (
 	ServiceRequestStatus string

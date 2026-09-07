@@ -73,7 +73,12 @@ func addContractEndpoints(document *ContractDocument) {
 		{"admin_content_publish", "POST", "/api/v1/admin/content/{content_key}/publish", "platform_administrator", "empty_request", "content_object", 200},
 		{"admin_content_versions", "GET", "/api/v1/admin/content/{content_key}/versions", "platform_administrator", "", "list_response", 200},
 		{"admin_content_rollback", "POST", "/api/v1/admin/content/{content_key}/rollback", "platform_administrator", "rollback", "content_object", 200},
+		{"admin_help_get", "GET", "/api/v1/admin/help/{help_key}", "platform_administrator", "", "help_content", 200},
 		{"admin_help_update", "PATCH", "/api/v1/admin/help/{help_key}", "platform_administrator", "help_write", "help_content", 200},
+		{"admin_help_preview", "POST", "/api/v1/admin/help/{help_key}/preview", "platform_administrator", "help_write", "help_content", 200},
+		{"admin_help_publish", "POST", "/api/v1/admin/help/{help_key}/publish", "platform_administrator", "empty_request", "help_content", 200},
+		{"admin_help_versions", "GET", "/api/v1/admin/help/{help_key}/versions", "platform_administrator", "", "list_response", 200},
+		{"admin_help_rollback", "POST", "/api/v1/admin/help/{help_key}/rollback", "platform_administrator", "rollback", "help_content", 200},
 		{"admin_categories_list", "GET", "/api/v1/admin/contact-categories", "department_manager or platform_administrator", "", "list_response", 200},
 		{"admin_categories_create", "POST", "/api/v1/admin/contact-categories", "department_manager or platform_administrator", "category_write", "category", 201},
 		{"admin_categories_update", "PATCH", "/api/v1/admin/contact-categories/{category_code}", "department_manager or platform_administrator", "category_write", "category", 200},
@@ -158,7 +163,7 @@ func configureEndpointMechanics(document *ContractDocument) {
 		"staff_constituent_link", "staff_constituent_unlink", "staff_duplicate_group_confirm", "staff_duplicate_group_remove",
 		"staff_reopen_approve", "staff_origin_override", "staff_scope_override", "admin_branding_update", "admin_branding_publish",
 		"admin_branding_rollback", "admin_content_update", "admin_content_publish", "admin_content_rollback", "admin_custom_fields_update",
-		"admin_help_update",
+		"admin_help_update", "admin_help_publish", "admin_help_rollback",
 		"workflow_update", "workflow_activate", "workflow_deactivate", "identity_configuration_update", "integration_update", "integration_rotate",
 		"integration_revoke", "saved_report_update", "saved_report_share",
 	} {
@@ -187,7 +192,7 @@ func configureEndpointMechanics(document *ContractDocument) {
 	for name, itemSchema := range map[string]string{
 		"portal_my_requests": "portal_request_summary", "staff_request_queue": "request_queue_item",
 		"staff_constituent_search": "constituent", "admin_branding_versions": "branding",
-		"admin_content_list": "content_object", "admin_content_versions": "content_object",
+		"admin_content_list": "content_object", "admin_content_versions": "content_object", "admin_help_versions": "help_content",
 		"admin_categories_list": "category", "admin_custom_fields_list": "custom_field_definition",
 		"workflow_list": "workflow_definition", "workflow_execution_list": "workflow_execution",
 		"integration_list": "integration_connection", "report_catalogue": "report_catalogue_item",
@@ -196,6 +201,21 @@ func configureEndpointMechanics(document *ContractDocument) {
 		endpoint := document.Endpoints[name]
 		endpoint.EntityResponseSchemas = map[string]string{"items": itemSchema}
 		endpoint.QueryParameters = standardListQuery()
+		document.Endpoints[name] = endpoint
+	}
+
+	for _, name := range []string{"admin_help_get", "admin_help_publish", "admin_help_versions", "admin_help_rollback"} {
+		endpoint := document.Endpoints[name]
+		if endpoint.QueryParameters == nil {
+			endpoint.QueryParameters = map[string]map[string]interface{}{}
+		}
+		endpoint.QueryParameters["language"] = map[string]interface{}{"enum_ref": "language", "default": "EN"}
+		document.Endpoints[name] = endpoint
+	}
+
+	for _, name := range []string{"public_help_get", "admin_help_get", "admin_help_update", "admin_help_preview", "admin_help_publish", "admin_help_rollback"} {
+		endpoint := document.Endpoints[name]
+		endpoint.ResponseHeaders = map[string]string{"ETag": "success response: quoted decimal language-specific help revision"}
 		document.Endpoints[name] = endpoint
 	}
 

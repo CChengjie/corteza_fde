@@ -122,6 +122,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Post("/service-requests/{request_id}/assignment", h.staffReassign)
 			r.Put("/service-requests/{request_id}/collaborators/{staff_id}", h.staffCollaboratorAdd)
 			r.Delete("/service-requests/{request_id}/collaborators/{staff_id}", h.staffCollaboratorRemove)
+			r.Post("/service-requests/{request_id}/reminders", h.staffReminderCreate)
+			r.Post("/reminders/{reminder_id}/{action}", h.staffReminderAction)
 			r.Post("/service-requests/{request_id}/notes", h.staffNoteCreate)
 			r.Post("/service-requests/{request_id}/reopen/approve", h.staffReopenApprove)
 			r.Post("/service-requests/{request_id}/constituents", h.staffConstituentLink)
@@ -703,6 +705,44 @@ func (h *handler) staffCollaboratorChange(w http.ResponseWriter, r *http.Request
 	} else {
 		result, err = h.service.RemoveCollaborator(r.Context(), actor, requestID, expectedVersion, staffID, input)
 	}
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) staffReminderCreate(w http.ResponseWriter, r *http.Request) {
+	requestID, ok := staffRequestID(w, r)
+	if !ok {
+		return
+	}
+	input := contract.ReminderWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.CreateReminder(r.Context(), actor, requestID, input)
+	writeResult(w, http.StatusCreated, result, err)
+}
+
+func (h *handler) staffReminderAction(w http.ResponseWriter, r *http.Request) {
+	reminderID, err := strconv.ParseUint(chi.URLParam(r, "reminder_id"), 10, 64)
+	if err != nil || reminderID == 0 {
+		writeValidation(w, "/path/reminder_id", contract.ValidationInvalidFormat)
+		return
+	}
+	action := contract.ReminderAction(strings.TrimSpace(chi.URLParam(r, "action")))
+	input := contract.ReminderActionInput{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.service.FindActor(r.Context(), auth.GetIdentityFromContext(r.Context()).Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ActionReminder(r.Context(), actor, reminderID, action, input)
 	writeResult(w, http.StatusOK, result, err)
 }
 

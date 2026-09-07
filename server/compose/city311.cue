@@ -335,8 +335,8 @@ operation: {
 			content: {goType: "[]byte", dal: {type: "Blob", nullable: true}}
 			content_type: {goType: "string", dal: {type: "Text", length: 128}}
 			filename: {goType: "string", dal: {type: "Text", length: 160}}
-			created_at: schema.SortableTimestampNowField
-			updated_at: schema.SortableTimestampNowField
+			created_at:   schema.SortableTimestampNowField
+			updated_at:   schema.SortableTimestampNowField
 			completed_at: schema.SortableTimestampNilField
 		}
 		indexes: {
@@ -559,4 +559,90 @@ identityNotification: {
 	features: {labels: false, flags: false}
 	envoy: {omit: true}
 	store: {ident: "city311IdentityNotification", api: lookups: [{fields: ["id"]}]}
+}
+
+city311WorkflowDefinition: {
+	model: {
+		ident:            "compose_city311_workflow_definition"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			workflow_id: {ident: "workflowID", goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			name: {goType: "string", sortable: true, dal: {type: "Text", length: 120}}
+			trigger: {goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			active: {goType: "bool", sortable: true, dal: {type: "Boolean", default: false}}
+			definition: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			version: {goType: "int", sortable: true, dal: {type: "Number", meta: {"rdbms:type": "integer"}, default: 1}}
+			created_at: schema.SortableTimestampNowField
+			updated_at: schema.SortableTimestampNowField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_workflow_id: {attribute: "workflow_id"}
+			trigger_active: {attributes: ["trigger", "active", "updated_at"]}
+		}
+	}
+	filter: {
+		struct: {
+			workflow_id: {ident: "workflowID", goType: "string"}
+			trigger: {goType: "string"}
+			active: {goType: "bool"}
+		}
+		byValue: ["workflow_id", "trigger", "active"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {
+		ident: "city311WorkflowDefinition"
+		api: lookups: [
+			{fields: ["id"]},
+			{fields: ["workflow_id"], constraintCheck: true},
+		]
+	}
+}
+
+city311WorkflowExecution: {
+	model: {
+		ident:            "compose_city311_workflow_execution"
+		omitGetterSetter: true
+		attributes: {
+			id: schema.IdField
+			execution_id: {ident: "executionID", goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			workflow_id: {ident: "workflowID", goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			workflow_version: {goType: "int", sortable: true, dal: {type: "Number", meta: {"rdbms:type": "integer"}}}
+			request_id: {ident: "requestID", goType: "uint64", sortable: true, dal: {type: "ID", default: 0}}
+			trigger: {goType: "string", sortable: true, dal: {type: "Text", length: 64}}
+			outcome: {goType: "string", dal: {type: "Text", length: 160}}
+			actions_attempted: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			succeeded: {goType: "bool", sortable: true, dal: {type: "Boolean", default: false}}
+			response_status: {goType: "int", dal: {type: "Number", meta: {"rdbms:type": "integer"}, default: 0}}
+			error: {goType: "types.City311JSON", dal: {type: "JSON", defaultEmptyObject: true}}
+			occurred_at: schema.SortableTimestampNowField
+		}
+		indexes: {
+			primary: {attribute: "id"}
+			unique_execution_id: {attribute: "execution_id"}
+			workflow_time: {attributes: ["workflow_id", "occurred_at"]}
+			request_time: {attributes: ["request_id", "occurred_at"]}
+		}
+	}
+	filter: {
+		struct: {
+			execution_id: {ident: "executionID", goType: "string"}
+			workflow_id: {ident: "workflowID", goType: "string"}
+			request_id: {ident: "requestID", goType: "uint64"}
+			trigger: {goType: "string"}
+			succeeded: {goType: "bool"}
+		}
+		byValue: ["execution_id", "workflow_id", "request_id", "trigger", "succeeded"]
+	}
+	features: {labels: false, flags: false}
+	envoy: {omit: true}
+	store: {
+		ident: "city311WorkflowExecution"
+		api: lookups: [
+			{fields: ["id"]},
+			{fields: ["execution_id"], constraintCheck: true},
+		]
+	}
 }

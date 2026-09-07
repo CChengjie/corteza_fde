@@ -27,6 +27,8 @@ component: schema.#component & {
 		"city311-reopen-request":        reopenRequest
 		"city311-service-request":       serviceRequest
 		"city311-staged-attachment":     stagedAttachment
+		"city311-workflow-definition":   city311WorkflowDefinition
+		"city311-workflow-execution":    city311WorkflowExecution
 		"module":                        module
 		"module-field":                  moduleField
 		"namespace":                     namespace

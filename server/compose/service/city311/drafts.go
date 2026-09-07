@@ -178,8 +178,6 @@ func (svc *Service) SubmitDraft(ctx context.Context, ownerID, requestID, expecte
 		return nil, apiError(428, contract.ErrorExpectedVersionRequired, "If-Match must identify the expected draft version.")
 	}
 	svc.mu.Lock()
-	defer svc.mu.Unlock()
-
 	var result *contract.ServiceRequestResponse
 	err := store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
 		request, err := store.LookupCity311ServiceRequestByID(ctx, tx, requestID)
@@ -226,6 +224,17 @@ func (svc *Service) SubmitDraft(ctx context.Context, ownerID, requestID, expecte
 		result = responseFor(request)
 		return nil
 	})
+	svc.mu.Unlock()
+	if err == nil && result != nil {
+		if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
+			actor := contract.Actor{ID: ownerID}
+			if storedActor, actorErr := svc.FindActor(ctx, ownerID); actorErr == nil {
+				actor = storedActor
+			}
+			svc.runActiveWorkflows(ctx, actor, WorkflowTriggerCreated, request)
+			result = responseFor(request)
+		}
+	}
 	return result, err
 }
 

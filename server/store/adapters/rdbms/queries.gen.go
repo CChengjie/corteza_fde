@@ -3147,6 +3147,226 @@ var (
 		}
 	}
 
+	// city311WorkflowDefinitionTable represents city311WorkflowDefinitions store table
+	//
+	// This value is auto-generated
+	city311WorkflowDefinitionTable = goqu.T("compose_city311_workflow_definition")
+
+	// city311WorkflowDefinitionSelectQuery assembles select query for fetching city311WorkflowDefinitions
+	//
+	// This function is auto-generated
+	city311WorkflowDefinitionSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"workflow_id",
+			"name",
+			"trigger",
+			"active",
+			"definition",
+			"version",
+			"created_at",
+			"updated_at",
+		).From(city311WorkflowDefinitionTable)
+	}
+
+	// city311WorkflowDefinitionInsertQuery assembles query inserting city311WorkflowDefinitions
+	//
+	// This function is auto-generated
+	city311WorkflowDefinitionInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311WorkflowDefinition) *goqu.InsertDataset {
+		return d.Insert(city311WorkflowDefinitionTable).
+			Rows(goqu.Record{
+				"id":          res.ID,
+				"workflow_id": res.WorkflowID,
+				"name":        res.Name,
+				"trigger":     res.Trigger,
+				"active":      res.Active,
+				"definition":  res.Definition,
+				"version":     res.Version,
+				"created_at":  res.CreatedAt,
+				"updated_at":  res.UpdatedAt,
+			})
+	}
+
+	// city311WorkflowDefinitionUpsertQuery assembles (insert+on-conflict) query for replacing city311WorkflowDefinitions
+	//
+	// This function is auto-generated
+	city311WorkflowDefinitionUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311WorkflowDefinition) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311WorkflowDefinitionInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"workflow_id": res.WorkflowID,
+						"name":        res.Name,
+						"trigger":     res.Trigger,
+						"active":      res.Active,
+						"definition":  res.Definition,
+						"version":     res.Version,
+						"created_at":  res.CreatedAt,
+						"updated_at":  res.UpdatedAt,
+					},
+				),
+			)
+	}
+
+	// city311WorkflowDefinitionUpdateQuery assembles query for updating city311WorkflowDefinitions
+	//
+	// This function is auto-generated
+	city311WorkflowDefinitionUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311WorkflowDefinition) *goqu.UpdateDataset {
+		return d.Update(city311WorkflowDefinitionTable).
+			Set(goqu.Record{
+				"workflow_id": res.WorkflowID,
+				"name":        res.Name,
+				"trigger":     res.Trigger,
+				"active":      res.Active,
+				"definition":  res.Definition,
+				"version":     res.Version,
+				"created_at":  res.CreatedAt,
+				"updated_at":  res.UpdatedAt,
+			}).
+			Where(city311WorkflowDefinitionPrimaryKeys(res))
+	}
+
+	// city311WorkflowDefinitionDeleteQuery assembles delete query for removing city311WorkflowDefinitions
+	//
+	// This function is auto-generated
+	city311WorkflowDefinitionDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311WorkflowDefinitionTable).Where(ee...)
+	}
+
+	// city311WorkflowDefinitionDeleteQuery assembles delete query for removing city311WorkflowDefinitions
+	//
+	// This function is auto-generated
+	city311WorkflowDefinitionTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311WorkflowDefinitionTable)
+	}
+
+	// city311WorkflowDefinitionPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311WorkflowDefinitionPrimaryKeys = func(res *composeType.City311WorkflowDefinition) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
+	// city311WorkflowExecutionTable represents city311WorkflowExecutions store table
+	//
+	// This value is auto-generated
+	city311WorkflowExecutionTable = goqu.T("compose_city311_workflow_execution")
+
+	// city311WorkflowExecutionSelectQuery assembles select query for fetching city311WorkflowExecutions
+	//
+	// This function is auto-generated
+	city311WorkflowExecutionSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"execution_id",
+			"workflow_id",
+			"workflow_version",
+			"request_id",
+			"trigger",
+			"outcome",
+			"actions_attempted",
+			"succeeded",
+			"response_status",
+			"error",
+			"occurred_at",
+		).From(city311WorkflowExecutionTable)
+	}
+
+	// city311WorkflowExecutionInsertQuery assembles query inserting city311WorkflowExecutions
+	//
+	// This function is auto-generated
+	city311WorkflowExecutionInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311WorkflowExecution) *goqu.InsertDataset {
+		return d.Insert(city311WorkflowExecutionTable).
+			Rows(goqu.Record{
+				"id":                res.ID,
+				"execution_id":      res.ExecutionID,
+				"workflow_id":       res.WorkflowID,
+				"workflow_version":  res.WorkflowVersion,
+				"request_id":        res.RequestID,
+				"trigger":           res.Trigger,
+				"outcome":           res.Outcome,
+				"actions_attempted": res.ActionsAttempted,
+				"succeeded":         res.Succeeded,
+				"response_status":   res.ResponseStatus,
+				"error":             res.Error,
+				"occurred_at":       res.OccurredAt,
+			})
+	}
+
+	// city311WorkflowExecutionUpsertQuery assembles (insert+on-conflict) query for replacing city311WorkflowExecutions
+	//
+	// This function is auto-generated
+	city311WorkflowExecutionUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311WorkflowExecution) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311WorkflowExecutionInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"execution_id":      res.ExecutionID,
+						"workflow_id":       res.WorkflowID,
+						"workflow_version":  res.WorkflowVersion,
+						"request_id":        res.RequestID,
+						"trigger":           res.Trigger,
+						"outcome":           res.Outcome,
+						"actions_attempted": res.ActionsAttempted,
+						"succeeded":         res.Succeeded,
+						"response_status":   res.ResponseStatus,
+						"error":             res.Error,
+						"occurred_at":       res.OccurredAt,
+					},
+				),
+			)
+	}
+
+	// city311WorkflowExecutionUpdateQuery assembles query for updating city311WorkflowExecutions
+	//
+	// This function is auto-generated
+	city311WorkflowExecutionUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311WorkflowExecution) *goqu.UpdateDataset {
+		return d.Update(city311WorkflowExecutionTable).
+			Set(goqu.Record{
+				"execution_id":      res.ExecutionID,
+				"workflow_id":       res.WorkflowID,
+				"workflow_version":  res.WorkflowVersion,
+				"request_id":        res.RequestID,
+				"trigger":           res.Trigger,
+				"outcome":           res.Outcome,
+				"actions_attempted": res.ActionsAttempted,
+				"succeeded":         res.Succeeded,
+				"response_status":   res.ResponseStatus,
+				"error":             res.Error,
+				"occurred_at":       res.OccurredAt,
+			}).
+			Where(city311WorkflowExecutionPrimaryKeys(res))
+	}
+
+	// city311WorkflowExecutionDeleteQuery assembles delete query for removing city311WorkflowExecutions
+	//
+	// This function is auto-generated
+	city311WorkflowExecutionDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311WorkflowExecutionTable).Where(ee...)
+	}
+
+	// city311WorkflowExecutionDeleteQuery assembles delete query for removing city311WorkflowExecutions
+	//
+	// This function is auto-generated
+	city311WorkflowExecutionTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311WorkflowExecutionTable)
+	}
+
+	// city311WorkflowExecutionPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311WorkflowExecutionPrimaryKeys = func(res *composeType.City311WorkflowExecution) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
 	// composeAttachmentTable represents composeAttachments store table
 	//
 	// This value is auto-generated

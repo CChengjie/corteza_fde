@@ -360,6 +360,53 @@ type (
 		filter.Paging
 	}
 	City311IdentityNotificationSet []*City311IdentityNotification
+
+	City311WorkflowDefinition struct {
+		ID         uint64      `json:"id,string"`
+		WorkflowID string      `json:"workflowID"`
+		Name       string      `json:"name"`
+		Trigger    string      `json:"trigger"`
+		Active     bool        `json:"active"`
+		Definition City311JSON `json:"definition"`
+		Version    int         `json:"version"`
+		CreatedAt  time.Time   `json:"createdAt"`
+		UpdatedAt  time.Time   `json:"updatedAt"`
+	}
+	City311WorkflowDefinitionFilter struct {
+		WorkflowID string
+		Trigger    string
+		Active     bool
+		Check      func(*City311WorkflowDefinition) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311WorkflowDefinitionSet []*City311WorkflowDefinition
+
+	City311WorkflowExecution struct {
+		ID               uint64      `json:"id,string"`
+		ExecutionID      string      `json:"executionID"`
+		WorkflowID       string      `json:"workflowID"`
+		WorkflowVersion  int         `json:"workflowVersion"`
+		RequestID        uint64      `json:"requestID,string,omitempty"`
+		Trigger          string      `json:"trigger"`
+		Outcome          string      `json:"outcome"`
+		ActionsAttempted City311JSON `json:"actionsAttempted"`
+		Succeeded        bool        `json:"succeeded"`
+		ResponseStatus   int         `json:"responseStatus,omitempty"`
+		Error            City311JSON `json:"error"`
+		OccurredAt       time.Time   `json:"occurredAt"`
+	}
+	City311WorkflowExecutionFilter struct {
+		ExecutionID string
+		WorkflowID  string
+		RequestID   uint64
+		Trigger     string
+		Succeeded   bool
+		Check       func(*City311WorkflowExecution) (bool, error)
+		filter.Sorting
+		filter.Paging
+	}
+	City311WorkflowExecutionSet []*City311WorkflowExecution
 )
 
 func scanCity311JSON(src, dst any) error {

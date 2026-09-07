@@ -200,35 +200,43 @@ func (svc *Service) SetCivicWorks(client CivicWorksClient, webhookSecret string)
 
 func (svc *Service) AssignCivicWorks(ctx context.Context, actor contract.Actor, requestID, expectedVersion uint64) (*contract.StaffServiceRequestDetail, error) {
 	svc.mu.Lock()
-	defer svc.mu.Unlock()
 	request, err := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID)
 	if err != nil {
+		svc.mu.Unlock()
 		return nil, requestLookupError(err)
 	}
 	if len(request.ExternalWorkOrder) > 0 {
 		if !canRead(actor, request) || !canOperateRequest(actor) {
+			svc.mu.Unlock()
 			return nil, apiError(http.StatusForbidden, contract.ErrorForbidden, requestScopeDeniedMessage)
 		}
 		if uint64(request.Version) != expectedVersion {
+			svc.mu.Unlock()
 			return nil, versionConflict(request.Version)
 		}
 		if request.Status == contract.ServiceRequestStatusAssigned {
+			svc.mu.Unlock()
 			return svc.Find(ctx, actor, requestID)
 		}
+		svc.mu.Unlock()
 		return nil, invalidStatusTransition("The request already has a CivicWorks work order.")
 	}
 	if err = authorizeTransition(actor, request, expectedVersion, contract.ServiceRequestStatusAssigned); err != nil {
+		svc.mu.Unlock()
 		return nil, err
 	}
 	if svc.civicWorksConfig != nil || svc.civicWorksClient == nil {
+		svc.mu.Unlock()
 		return nil, civicWorksUnavailableError()
 	}
 	input := civicWorksCreateInput(request)
 	workOrder, err := svc.civicWorksClient.CreateWorkOrder(ctx, input, civicWorksIdempotencyKey(request.ID))
 	if err != nil {
+		svc.mu.Unlock()
 		return nil, err
 	}
 	if err = decodeCivicWorksResponseMustMatch(workOrder, input); err != nil {
+		svc.mu.Unlock()
 		return nil, civicWorksUnavailableError()
 	}
 
@@ -261,8 +269,12 @@ func (svc *Service) AssignCivicWorks(ctx context.Context, actor contract.Actor, 
 			Before: composeTypes.City311JSON{}, After: cloneMap(mapped), CreatedAt: stored.UpdatedAt,
 		})
 	})
+	svc.mu.Unlock()
 	if err != nil {
 		return nil, err
+	}
+	if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
+		svc.runActiveWorkflows(ctx, actor, WorkflowTriggerStatusChanged, request)
 	}
 	return svc.Find(ctx, actor, requestID)
 }
@@ -282,8 +294,9 @@ func (svc *Service) HandleCivicWorksEvent(ctx context.Context, body []byte, head
 	}
 
 	svc.mu.Lock()
-	defer svc.mu.Unlock()
-	return store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+	statusChanged := false
+	requestID := uint64(0)
+	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
 		processed, _, searchErr := store.SearchCity311AuditEvents(ctx, tx, composeTypes.City311AuditEventFilter{
 			EntityType: civicWorksEventEntity, EntityID: event.EventID,
 		})
@@ -341,9 +354,21 @@ func (svc *Service) HandleCivicWorksEvent(ctx context.Context, body []byte, head
 					return auditErr
 				}
 			}
+			statusChanged = true
+			requestID = request.ID
 		}
 		return svc.persistCivicWorksReceipt(ctx, tx, request, event, civicWorksEventApplied)
 	})
+	svc.mu.Unlock()
+	if err != nil || !statusChanged {
+		return err
+	}
+	request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	svc.runActiveWorkflows(ctx, contract.Actor{Roles: []contract.ApplicationRole{contract.ApplicationRoleIntegrationClient}}, WorkflowTriggerStatusChanged, request)
+	return nil
 }
 
 func decodeCivicWorksEvent(body []byte, headerEventID string) (contract.CivicWorksEvent, error) {

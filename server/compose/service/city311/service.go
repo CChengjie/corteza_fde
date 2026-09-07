@@ -46,12 +46,15 @@ type (
 		nextID           func() uint64
 		mu               sync.Mutex
 		mailMu           sync.Mutex
+		workflowMu       sync.Mutex
 		mailSender       MailSender
 		mailWait         func(context.Context, time.Duration) error
 		dataExportLimits map[uint64]dataExportLimit
 		civicWorksClient CivicWorksClient
 		civicWorksSecret string
 		civicWorksConfig error
+		workflowHTTP     WorkflowHTTPClient
+		workflowConfig   error
 	}
 
 	dataExportLimit struct {
@@ -126,6 +129,7 @@ func New(s store.Storer) *Service {
 		mailSender: smtpMailSender{dial: dialSMTP}, mailWait: waitForMailRetry, dataExportLimits: make(map[uint64]dataExportLimit),
 	}
 	svc.civicWorksClient, svc.civicWorksSecret, svc.civicWorksConfig = NewCivicWorksFromEnvironment(nil)
+	svc.workflowHTTP, svc.workflowConfig = NewWorkflowHTTPClientFromEnvironment(nil)
 	return svc
 }
 
@@ -305,14 +309,34 @@ func (svc *Service) Submit(ctx context.Context, in contract.ServiceRequestCreate
 	// The benchmark runtime has one application service. The lock complements the
 	// database transaction so sequence allocation and same-key submissions cannot race.
 	svc.mu.Lock()
-	defer svc.mu.Unlock()
-
 	result := &submissionResult{status: http.StatusCreated}
 	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
 		attempt := *prepared
 		attempt.attachments = append([]validatedAttachment(nil), prepared.attachments...)
 		return svc.submitPrepared(ctx, tx, &attempt, result)
 	})
+	svc.mu.Unlock()
+	if err == nil && result.status == http.StatusCreated && result.response != nil {
+		requestID, parseErr := strconv.ParseUint(result.response.RequestID, 10, 64)
+		if parseErr == nil {
+			if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
+				actor := contract.Actor{ID: options.ActorID}
+				if options.StaffActor != nil {
+					actor = *options.StaffActor
+				} else if options.ActorID != 0 {
+					if storedActor, actorErr := svc.FindActor(ctx, options.ActorID); actorErr == nil {
+						actor = storedActor
+					} else if options.ActorType == contract.AuditActorIntegrationClient {
+						actor.Roles = []contract.ApplicationRole{contract.ApplicationRoleIntegrationClient}
+					}
+				}
+				svc.runActiveWorkflows(ctx, actor, WorkflowTriggerCreated, request)
+				updated := responseFor(request)
+				updated.Attachments = result.response.Attachments
+				result.response = updated
+			}
+		}
+	}
 	return result.response, result.status, err
 }
 
@@ -669,12 +693,15 @@ func (svc *Service) Transition(ctx context.Context, actor contract.Actor, reques
 	}
 
 	svc.mu.Lock()
-	defer svc.mu.Unlock()
 	err := store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
 		return svc.transitionRequest(ctx, tx, actor, requestID, expectedVersion, input.ToStatus)
 	})
+	svc.mu.Unlock()
 	if err != nil {
 		return nil, err
+	}
+	if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
+		svc.runActiveWorkflows(ctx, actor, WorkflowTriggerStatusChanged, request)
 	}
 	return svc.Find(ctx, actor, requestID)
 }

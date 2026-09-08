@@ -36,7 +36,11 @@ seal() {
   while IFS= read -r task_id; do
     git -C "${repository_root}" archive --format=tar.gz --prefix="${task_id}/" "${expected_commit}" >"${output_directory}/${task_id}-reference.tar.gz"
     shasum -a 256 "${output_directory}/${task_id}-reference.tar.gz" >"${output_directory}/${task_id}-reference.tar.gz.sha256"
-  done < <(awk '/^  C311-(ID|RQ)-(GF|B[1-5]):/{sub(":", "", $1); print $1}' "${manifest}")
+  done < <(ruby -ryaml -e '
+    YAML.load_file(ARGV.fetch(0)).fetch("tasks").each { |id, task|
+      puts id if task.fetch("reference_status") == "ready"
+    }
+  ' "${manifest}")
 }
 
 case $# in

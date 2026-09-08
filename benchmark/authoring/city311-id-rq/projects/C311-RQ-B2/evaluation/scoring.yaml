@@ -1,0 +1,36 @@
+total_points: 100
+hard_failures:
+  - id: HF-USE-01
+    condition: "No fixture create-work-order call is observed after successful staff assignment."
+    result: "score=0"
+  - id: HF-CONSTRAIN-01
+    condition: "Out-of-scope staff can create or read the work order."
+    result: "score=0"
+  - id: HF-PRESERVE-01
+    condition: "Historical request, attachment, or stable identifier is deleted, duplicated, or reassigned."
+    result: "score=0"
+dimensions:
+  - id: USE
+    points: 25
+    checks:
+      - "Authorised assignment reaches the supplied fixture with required authentication and idempotency key."
+      - "No local-only substitute is accepted."
+  - id: SYNCHRONIZE
+    points: 30
+    checks:
+      - "Created external work order has matching source case ID, request number, department, and status."
+      - "Returned external ID is persisted and visible only in staff detail."
+      - "Signed callback applies a legal lifecycle transition exactly once."
+  - id: PRESERVE
+    points: 25
+    checks:
+      - "Historical API replay, public status lookup, attachment hash, and audit history are unchanged."
+      - "Failed external creation leaves no partial mapping or invalid local transition."
+  - id: CONSTRAIN
+    points: 20
+    checks:
+      - "Department and district negative cases are rejected before the external call."
+      - "Invalid callback signature and replay do not alter state."
+release_gate:
+  minimum_score: 100
+  required: [all_hard_failures_absent, all_validator_nodes_pass]

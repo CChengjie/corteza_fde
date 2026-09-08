@@ -1,0 +1,27 @@
+task_id: C311-RQ-B2
+title: "Synchronize a triaged City 311 request with CivicWorks"
+mode: brownfield
+release_status: blocked
+blocking_reason: >
+  A task-specific B seed and a Compose-started deterministic CivicWorks fixture
+  have not yet been implemented. The old reference archive is only a candidate.
+project_layout: ../../task-project-schema.md
+customer_case: City 311
+requirements: [RQ-03]
+source_provenance:
+  document: implementer-specification-2dev-fe-be-zh.docx
+  clauses: ["10.2", "11.1", "14"]
+synthetic_data_version: city311-history:v1
+B:
+  customer_system_status: missing_task_specific_seed
+  required_source_archive: B/customer-system/source.tar.gz
+  required_image_digest: B/customer-system/image.digest
+ref_answer:
+  status: candidate_rejected_for_release
+  candidate_source_archive: /Users/xiang/WORK/phd_work/se-e2e-benchmark/corteza_fde-reference-artifacts/id-rq/C311-RQ-B2-reference.tar.gz
+  required_source_archive: ref-answer/customer-system/source.tar.gz
+  required_image_digest: ref-answer/customer-system/image.digest
+evaluation:
+  status: design_complete_implementation_pending
+  scoring: evaluation/scoring.yaml
+  validator_dag: evaluation/validator-dag.yaml

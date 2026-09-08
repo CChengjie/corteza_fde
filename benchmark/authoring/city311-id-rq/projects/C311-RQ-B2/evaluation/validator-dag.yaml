@@ -1,0 +1,24 @@
+nodes:
+  - id: ENV-01
+    check: "Compose starts City 311, PostgreSQL, and deterministic CivicWorks fixture."
+  - id: AUTH-01
+    depends_on: [ENV-01]
+    check: "Authorised Streets staff and out-of-scope staff authenticate."
+  - id: USE-01
+    depends_on: [AUTH-01]
+    check: "Authorised assignment invokes fixture create-work-order endpoint once with stable key."
+  - id: SYNC-01
+    depends_on: [USE-01]
+    check: "Fixture and City 311 store matching external mapping and status."
+  - id: SYNC-02
+    depends_on: [SYNC-01]
+    check: "Valid signed callback produces only legal local transitions."
+  - id: CONSTRAIN-01
+    depends_on: [AUTH-01]
+    check: "Out-of-scope assignment and invalid callback are rejected without fixture side effects."
+  - id: PRESERVE-01
+    depends_on: [SYNC-02]
+    check: "Historical replay, attachments, public status, and audit records remain valid."
+  - id: RESTART-01
+    depends_on: [PRESERVE-01]
+    check: "Mapping and callback receipt remain correct after app restart."

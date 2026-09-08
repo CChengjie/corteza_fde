@@ -1,0 +1,16 @@
+schema_version: 1
+# No entry below is releaseable until it has a task-specific B tree, a separate
+# B + R answer tree, immutable fixture digests, and executable evaluation.
+projects:
+  C311-ID-GF: {status: incomplete_package}
+  C311-ID-B1: {status: incomplete_package}
+  C311-ID-B2: {status: incomplete_package}
+  C311-ID-B3: {status: requires_reference_extension}
+  C311-ID-B4: {status: incomplete_package}
+  C311-ID-B5: {status: requires_reference_extension}
+  C311-RQ-GF: {status: incomplete_package}
+  C311-RQ-B1: {status: incomplete_package}
+  C311-RQ-B2: {status: blocked_missing_fixture_and_seed}
+  C311-RQ-B3: {status: requires_reference_extension}
+  C311-RQ-B4: {status: requires_reference_extension}
+  C311-RQ-B5: {status: requires_reference_extension}

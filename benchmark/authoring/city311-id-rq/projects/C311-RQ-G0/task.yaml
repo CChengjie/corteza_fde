@@ -1,0 +1,21 @@
+task_id: C311-RQ-G0
+title: "Build the City 311 service-request foundation"
+mode: greenfield
+release_status: authoring
+customer_case: City 311
+source_provenance:
+  document: implementer-specification-2dev-fe-be-zh.docx
+  clauses: ["7.6", "7.7", "8.2", "9.2", "9.4", "10.1", "11.2", "11.6", "13"]
+B:
+  source_commit: ac8cbb33913b6ae2904bc6a512dba24466779012
+  role: "Corteza build scaffold plus frozen City 311 contract; no request runtime implementation."
+ref_answer:
+  source_commit: 0463635356477fd02cbfa92e170d80d13e9dec22
+  role: "Complete City 311 implementation satisfying G0 and inherited customer constraints."
+evaluation:
+  scoring: evaluation/scoring.yaml
+  validator_dag: evaluation/validator-dag.yaml
+release_conditions:
+  - "B archive starts and exposes only the supplied scaffold/contracts."
+  - "Reference answer starts and scores 100/100 under the same synthetic fixtures."
+  - "Agent-facing bundle excludes ref-answer and hidden validators."

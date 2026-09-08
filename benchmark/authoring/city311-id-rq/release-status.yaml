@@ -2,6 +2,7 @@ schema_version: 1
 # No entry below is releaseable until it has a task-specific B tree, a separate
 # B + R answer tree, immutable fixture digests, and executable evaluation.
 projects:
+  C311-RQ-G0: {status: authoring_task_project}
   C311-ID-GF: {status: incomplete_package}
   C311-ID-B1: {status: incomplete_package}
   C311-ID-B2: {status: incomplete_package}

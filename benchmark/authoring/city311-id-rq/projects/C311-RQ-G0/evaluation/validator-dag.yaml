@@ -1,0 +1,7 @@
+nodes:
+  - {id: ENV-01, check: "Build candidate and start PostgreSQL, mapping fixture, object storage, and application."}
+  - {id: AUTH-01, depends_on: [ENV-01], check: "Authenticate seeded resident, scoped Streets staff, and out-of-scope Parks staff."}
+  - {id: USE-01, depends_on: [AUTH-01], check: "Submit request and observe mapping fixture call plus attachment write."}
+  - {id: STATE-01, depends_on: [USE-01], check: "Assert request number, SUBMITTED state, idempotency replay, and illegal transition rejection."}
+  - {id: CONSTRAIN-01, depends_on: [STATE-01], check: "Assert minimal public lookup and negative scope cases."}
+  - {id: PRESERVE-01, depends_on: [CONSTRAIN-01], check: "Restart application and replay historical request/attachment assertions."}

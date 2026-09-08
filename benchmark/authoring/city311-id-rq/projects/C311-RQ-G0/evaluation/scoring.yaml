@@ -1,0 +1,25 @@
+total_points: 100
+hard_failures:
+  - {id: HF-01, condition: "Mapping boundary is bypassed or replaced locally.", result: "score=0"}
+  - {id: HF-02, condition: "Out-of-scope staff reads a request or attachment.", result: "score=0"}
+  - {id: HF-03, condition: "Public lookup exposes private data.", result: "score=0"}
+  - {id: HF-04, condition: "A failure leaves a partial request or orphaned attachment.", result: "score=0"}
+dimensions:
+  - id: USE
+    points: 20
+    checks: ["Mapping fixture observes the request validation call.", "Attachment storage is used."]
+  - id: WORKFLOW
+    points: 25
+    checks: ["Valid submission enters SUBMITTED with a stable request number.", "Illegal transitions are rejected.", "Idempotency replay returns one logical request."]
+  - id: PRESERVE
+    points: 20
+    checks: ["Request and attachment survive restart.", "Failure rollback and historical fixture replay are intact."]
+  - id: CONSTRAIN
+    points: 25
+    checks: ["Public pair lookup has a minimal projection.", "Department and district negative cases are denied."]
+  - id: OPERABILITY
+    points: 10
+    checks: ["Build, health check, migration, and configured fixture startup pass."]
+release_gate:
+  minimum_score: 100
+  required: [all_hard_failures_absent, all_validator_nodes_pass]

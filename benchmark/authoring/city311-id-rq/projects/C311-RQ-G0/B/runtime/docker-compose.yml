@@ -44,6 +44,8 @@ services:
       HTTP_ADDR: 0.0.0.0:80
       HTTP_API_BASE_URL: /api
       HTTP_WEBAPP_ENABLED: "false"
+      APP_BASE_URL: http://127.0.0.1:18090
+      AUTH_BASE_URL: http://127.0.0.1:18090
       STORAGE_PATH: /data
       BENCHMARK_TIMEZONE: America/New_York
       BENCHMARK_NOW: "2026-02-03T15:04:05Z"

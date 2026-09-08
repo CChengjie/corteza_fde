@@ -5,7 +5,7 @@ set -Eeuo pipefail
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly repository_root="$(cd "${script_dir}/../../../../.." && pwd)"
 readonly base_commit="ac8cbb33913b6ae2904bc6a512dba24466779012"
-readonly answer_commit="0463635356477fd02cbfa92e170d80d13e9dec22"
+readonly answer_commit="b5dbc82cf9231f345364760f755080059fd87ae5"
 
 [[ $# == 1 ]] || { printf 'usage: %s OUTPUT_DIRECTORY\n' "${0##*/}" >&2; exit 2; }
 readonly output_directory=$1

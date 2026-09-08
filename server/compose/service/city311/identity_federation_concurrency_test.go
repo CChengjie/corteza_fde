@@ -27,7 +27,11 @@ func TestIdentityConfigurationWritesUseDatabaseAtomicConcurrency(t *testing.T) {
 	dsn := fmt.Sprintf("sqlite3://file:%s?_busy_timeout=5000&_journal_mode=WAL", filepath.Join(t.TempDir(), "city311.db"))
 	st, err := sqlite.Connect(ctx, dsn)
 	require.NoError(t, err)
-	testIdentityConfigurationWritesUseDatabaseAtomicConcurrency(t, st)
+	for round := 1; round <= 20; round++ {
+		t.Run(fmt.Sprintf("round-%02d", round), func(t *testing.T) {
+			testIdentityConfigurationWritesUseDatabaseAtomicConcurrencyOnce(t, st)
+		})
+	}
 }
 
 func TestIdentityConfigurationWritesUseDatabaseAtomicConcurrencyPostgreSQL(t *testing.T) {
@@ -37,10 +41,10 @@ func TestIdentityConfigurationWritesUseDatabaseAtomicConcurrencyPostgreSQL(t *te
 	}
 	st, err := postgres.Connect(context.Background(), dsn)
 	require.NoError(t, err)
-	testIdentityConfigurationWritesUseDatabaseAtomicConcurrency(t, st)
+	testIdentityConfigurationWritesUseDatabaseAtomicConcurrencyOnce(t, st)
 }
 
-func testIdentityConfigurationWritesUseDatabaseAtomicConcurrency(t *testing.T, st store.Storer) {
+func testIdentityConfigurationWritesUseDatabaseAtomicConcurrencyOnce(t *testing.T, st store.Storer) {
 	t.Helper()
 	ctx := context.Background()
 	require.NoError(t, store.Upgrade(ctx, zap.NewNop(), st))

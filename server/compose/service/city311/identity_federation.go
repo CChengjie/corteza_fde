@@ -135,9 +135,21 @@ func (svc *IdentityService) UpdateIdentityConfiguration(ctx context.Context, act
 		})
 	})
 	if err != nil {
-		return nil, err
+		return nil, svc.identityConfigurationWriteError(ctx, expectedVersion, err)
 	}
 	return svc.identityConfigurationFromRevision(next), nil
+}
+
+func (svc *IdentityService) identityConfigurationWriteError(ctx context.Context, expectedVersion uint64, err error) error {
+	var serviceErr *ServiceError
+	if stderrors.As(err, &serviceErr) {
+		return err
+	}
+	current, lookupErr := svc.latestIdentityRevision(ctx, svc.store, configurationIdentity, identityConfigurationKey)
+	if lookupErr == nil && uint64(current.Version) > expectedVersion {
+		return versionConflict(current.Version)
+	}
+	return err
 }
 
 func (svc *IdentityService) ensureIdentityConfiguration(ctx context.Context) (*composeTypes.City311ConfigurationRevision, error) {

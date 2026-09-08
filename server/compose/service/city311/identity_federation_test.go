@@ -112,6 +112,35 @@ func TestIdentityConfigurationIsVersionedAndNeverReturnsSecrets(t *testing.T) {
 	require.Len(t, audits, 1)
 }
 
+func TestIdentityConfigurationLosingInsertReturnsVersionConflict(t *testing.T) {
+	identity, st, _, now := testFederatedIdentityService(t)
+	ctx := context.Background()
+	administrator := contract.Actor{ID: 44, Roles: []contract.ApplicationRole{contract.ApplicationRolePlatformAdministrator}}
+	configuration, err := identity.IdentityConfiguration(ctx, administrator)
+	require.NoError(t, err)
+
+	raw := errors.New("write failed")
+	require.ErrorIs(t, identity.identityConfigurationWriteError(ctx, configuration.Version, raw), raw)
+	revisions, _, err := store.SearchCity311ConfigurationRevisions(ctx, st, composeTypes.City311ConfigurationRevisionFilter{})
+	require.NoError(t, err)
+	var revisionID uint64
+	for _, revision := range revisions {
+		if revision.ID >= revisionID {
+			revisionID = revision.ID + 1
+		}
+	}
+	require.NoError(t, store.CreateCity311ConfigurationRevision(ctx, st, &composeTypes.City311ConfigurationRevision{
+		ID: revisionID, ResourceType: configurationIdentity, ResourceKey: identityConfigurationKey,
+		Payload: composeTypes.City311JSON{"oidc_enabled": true, "saml_enabled": true},
+		Version: int(configuration.Version + 1), Published: true, CreatedAt: now.UTC(),
+	}))
+
+	mapped := identity.identityConfigurationWriteError(ctx, configuration.Version, store.ErrNotUnique)
+	serviceErr := requireIdentityError(t, mapped, 409, contract.ErrorVersionConflict)
+	require.NotNil(t, serviceErr.Payload.CurrentVersion)
+	require.Equal(t, configuration.Version+1, *serviceErr.Payload.CurrentVersion)
+}
+
 func TestIdentityConfigurationRejectsEnablingMissingRuntimeValues(t *testing.T) {
 	_, st, _, _ := testIdentityService(t)
 	runtime := &IdentityRuntimeConfiguration{BaseURL: "https://city311.example.test"}

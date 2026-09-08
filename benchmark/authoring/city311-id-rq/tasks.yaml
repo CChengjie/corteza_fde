@@ -1,0 +1,103 @@
+schema_version: 1
+customer: City 311
+reference_tree:
+  commit: 0463635356477fd02cbfa92e170d80d13e9dec22
+  branch: codex/city311-reference-tree
+  runtime_acceptance: ./scripts/runtime-acceptance.sh
+  synthetic_data_version: city311-public-v1
+
+# source_locator values are authoring provenance. The raw document is retained
+# separately from the agent prompt and never executes as task instructions.
+requirements:
+  ID-01: {source_locator: "spec 7.5, 9.1, 11.3", interpretation: "Municipal identity and department roles govern access."}
+  ID-02: {source_locator: "spec 9.1.2(b), 10.6, 11.5", interpretation: "An email changes only after verified confirmation."}
+  ID-03: {source_locator: "spec 9.7.5, 10.7", interpretation: "Deletion anonymizes PII while preserving permitted history."}
+  RQ-01: {source_locator: "spec 7.6, 7.7, 9.2, 9.4", interpretation: "Constituents submit and safely inspect requests with location and attachments."}
+  RQ-02: {source_locator: "spec 7.6, 7.9, 10.1", interpretation: "Stable identifiers, lifecycle, ownership, and department scope are preserved."}
+  RQ-03: {source_locator: "spec 10.2, 11.1, 14", interpretation: "Eligible requests use the supplied CivicWorks service."}
+
+tasks:
+  C311-ID-GF:
+    reference_status: ready
+    requirements: [ID-01]
+    fixtures: [city311-public-v1, "oidc-fixture:v1"]
+    seed_transform: remove-local-identity-profile-runtime
+    oracle: "cd server && go test ./compose/service/city311 ./compose/rest/city311 -run 'Test(Profile|Identity)'"
+    contracts: [USE-ID-01, CONSTRAIN-ID-01, STATE-ID-01]
+  C311-ID-B1:
+    reference_status: ready
+    requirements: [ID-02]
+    fixtures: [city311-public-v1, "mail-fixture:v1"]
+    seed_transform: remove-verified-email-replacement
+    oracle: "cd server && go test ./compose/service/city311 ./compose/rest/city311 -run 'Test.*EmailReplacement'"
+    contracts: [SYNC-ID-01, PRESERVE-ID-01, CONSTRAIN-ID-02]
+  C311-ID-B2:
+    reference_status: ready
+    requirements: [ID-01]
+    fixtures: [city311-public-v1, "oidc-fixture:v1", "saml-fixture:v1"]
+    seed_transform: remove-federated-sign-in
+    oracle: "cd server && go test ./compose/service/city311 ./compose/rest/city311 -run 'TestFederated|TestIdentityFederation'"
+    contracts: [USE-ID-02, PRESERVE-ID-02, CONSTRAIN-ID-03]
+  C311-ID-B3:
+    reference_status: requires_reference_extension
+    requirements: [ID-01]
+    fixtures: [city311-public-v1, "oidc-fixture:fault-v1"]
+    seed_transform: remove-idp-replay-key-rotation-recovery
+    oracle: "pending: dedicated deterministic IdP fault oracle"
+    contracts: [USE-ID-03, SYNC-ID-02, CONSTRAIN-ID-04]
+  C311-ID-B4:
+    reference_status: ready
+    requirements: [ID-03]
+    fixtures: ["city311-history:v1", "civicworks-fixture:v1"]
+    seed_transform: remove-account-anonymisation
+    oracle: "cd server && go test ./compose/service/city311 ./compose/rest/city311 -run 'Test.*AccountDeletion'"
+    contracts: [PRESERVE-ID-03, CONSTRAIN-ID-05, RESTART-ID-01]
+  C311-ID-B5:
+    reference_status: requires_reference_extension
+    requirements: [ID-01, ID-02, ID-03]
+    fixtures: ["city311-history:v1", "oidc-fixture:fault-v1", "mail-fixture:v1"]
+    seed_transform: remove-account-merge-release-delivery
+    oracle: "pending: account merge and release regression oracle"
+    contracts: [USE-ID-04, PRESERVE-ID-04, CONSTRAIN-ID-06, RESTART-ID-02]
+  C311-RQ-GF:
+    reference_status: ready
+    requirements: [RQ-01, RQ-02]
+    fixtures: [city311-public-v1, "mapping-fixture:v1", "object-storage:v1"]
+    seed_transform: remove-request-portal-attachments-public-status
+    oracle: "cd server && go test ./compose/service/city311 ./compose/rest/city311 -run 'Test(Portal|Attachment|PublicStatus)'"
+    contracts: [USE-RQ-01, STATE-RQ-01, CONSTRAIN-RQ-01]
+  C311-RQ-B1:
+    reference_status: ready
+    requirements: [RQ-02]
+    fixtures: ["city311-history:v1", "mail-fixture:v1"]
+    seed_transform: remove-constituent-request-relationships
+    oracle: "cd server && go test ./compose/service/city311 ./compose/rest/city311 -run 'Test.*(Relationship|Notification)'"
+    contracts: [STATE-RQ-02, PRESERVE-RQ-01, CONSTRAIN-RQ-02]
+  C311-RQ-B2:
+    reference_status: ready
+    requirements: [RQ-03]
+    fixtures: ["city311-history:v1", "civicworks-fixture:v1"]
+    seed_transform: remove-civicworks-sync-and-callback
+    oracle: "cd server && go test ./compose/service/city311 ./compose/rest/city311 -run 'TestCivicWorks'"
+    contracts: [USE-RQ-02, SYNC-RQ-01, CONSTRAIN-RQ-03]
+  C311-RQ-B3:
+    reference_status: requires_reference_extension
+    requirements: [RQ-03]
+    fixtures: ["city311-history:v1", "civicworks-fixture:ambiguous-create-v1"]
+    seed_transform: remove-ambiguous-create-reconciliation
+    oracle: "pending: external-accepted/response-timeout reconciliation oracle"
+    contracts: [USE-RQ-03, SYNC-RQ-02, PRESERVE-RQ-02, CONSTRAIN-RQ-04, RESTART-RQ-01]
+  C311-RQ-B4:
+    reference_status: requires_reference_extension
+    requirements: [RQ-01, RQ-02, RQ-03]
+    fixtures: ["city311-legacy-history:v1", "civicworks-fixture:v1", "object-storage:v1"]
+    seed_transform: remove-historical-request-work-order-migration
+    oracle: "pending: repeatable historical migration oracle"
+    contracts: [PRESERVE-RQ-03, SYNC-RQ-03, RESTART-RQ-02]
+  C311-RQ-B5:
+    reference_status: requires_reference_extension
+    requirements: [RQ-01, RQ-02, RQ-03]
+    fixtures: ["city311-legacy-history:v1", "civicworks-fixture:fault-v1", "mail-fixture:v1"]
+    seed_transform: remove-atomic-reassignment-release-delivery
+    oracle: "pending: multi-constraint release oracle"
+    contracts: [STATE-RQ-03, SYNC-RQ-04, PRESERVE-RQ-04, CONSTRAIN-RQ-05, RESTART-RQ-03]

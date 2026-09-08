@@ -381,6 +381,7 @@ type (
 		PrimaryCategory   ContactCategory `json:"primary_category"`
 		PreferredLanguage Language        `json:"preferred_language"`
 		EmailOptOut       bool            `json:"email_opt_out"`
+		CustomFields      map[string]any  `json:"custom_fields,omitempty"`
 	}
 
 	RequesterInput struct {

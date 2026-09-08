@@ -921,6 +921,14 @@ func parseStaffQueueFilters(r *http.Request) (city311Service.RequestFilter, erro
 }
 
 func explodedCustomFieldFilters(query map[string][]string) map[string]stringList {
+	return explodedCustomFieldFiltersWith(query, queryValues)
+}
+
+func explodedCustomFieldFiltersPreservingEmpty(query map[string][]string) map[string]stringList {
+	return explodedCustomFieldFiltersWith(query, queryValuesPreservingEmpty)
+}
+
+func explodedCustomFieldFiltersWith(query map[string][]string, valuesFor func(map[string][]string, string) stringList) map[string]stringList {
 	out := map[string]stringList{}
 	for rawKey := range query {
 		key := rawKey
@@ -931,7 +939,7 @@ func explodedCustomFieldFilters(query map[string][]string) map[string]stringList
 			continue
 		}
 		fieldKey := strings.TrimPrefix(key, "custom_fields.")
-		out[fieldKey] = append(out[fieldKey], queryValues(query, rawKey)...)
+		out[fieldKey] = append(out[fieldKey], valuesFor(query, rawKey)...)
 	}
 	return out
 }
@@ -945,16 +953,29 @@ func customFieldFilterValues(input map[string]stringList) map[string][]string {
 }
 
 func queryValues(query map[string][]string, field string) stringList {
-	values := query[field]
-	if len(values) == 0 {
-		values = query["filters["+field+"]"]
+	return splitQueryValues(query, field, false)
+}
+
+func queryValuesPreservingEmpty(query map[string][]string, field string) stringList {
+	return splitQueryValues(query, field, true)
+}
+
+func splitQueryValues(query map[string][]string, field string, preserveEmpty bool) stringList {
+	values, present := query[field]
+	if !present {
+		values, present = query["filters["+field+"]"]
+	}
+	if !present {
+		return nil
 	}
 	out := make(stringList, 0, len(values))
 	for _, value := range values {
 		for _, item := range strings.Split(value, ",") {
-			if item = strings.TrimSpace(item); item != "" {
-				out = append(out, item)
+			item = strings.TrimSpace(item)
+			if item == "" && !preserveEmpty {
+				continue
 			}
+			out = append(out, item)
 		}
 	}
 	return out

@@ -3053,6 +3053,7 @@
       },
       "error_statuses": {
         "FORBIDDEN": 403,
+        "INVALID_PAGE_TOKEN": 400,
         "NOT_FOUND": 404,
         "UNAUTHENTICATED": 401,
         "VALIDATION_ERROR": 422
@@ -7877,6 +7878,16 @@
       "body": {
         "error": "INVALID_SIGNATURE",
         "message": "The CivicWorks event signature is invalid.",
+        "retryable": false
+      }
+    },
+    "constituent_page_token_invalid": {
+      "endpoint": "staff_constituent_search",
+      "role": "response",
+      "http_status": 400,
+      "body": {
+        "error": "INVALID_PAGE_TOKEN",
+        "message": "The page token is invalid.",
         "retryable": false
       }
     },

@@ -27,9 +27,14 @@ func TestScopedReadContractCompleteness(t *testing.T) {
 		require.NotEmpty(t, endpoint.QueryParameters["page_token"]["binding"])
 	}
 	require.Equal(t, "display_name,constituent_id", document.Endpoints["staff_constituent_search"].QueryParameters["sort"]["default"])
+	require.Equal(t, 200, document.Endpoints["staff_constituent_search"].SuccessStatuses["success"])
+	require.Equal(t, 400, document.Endpoints["staff_constituent_search"].ErrorStatuses[string(ErrorInvalidPageToken)])
 	require.Equal(t, "-occurred_at", document.Endpoints["audit_list"].QueryParameters["sort"]["default"])
 	constituentFilters := document.Endpoints["staff_constituent_search"].QueryParameters["filters"]["properties"].(map[string]interface{})
-	require.Equal(t, "array", constituentFilters["email"].(map[string]interface{})["type"])
+	emailFilter := constituentFilters["email"].(map[string]interface{})
+	require.Equal(t, "array", emailFilter["type"])
+	require.Equal(t, true, emailFilter["unique_items"])
+	require.Equal(t, []string{"true", "false"}, constituentFilters["email_opt_out"].(map[string]interface{})["items"].(map[string]interface{})["enum"])
 	require.Equal(t, "object", constituentFilters["custom_fields"].(map[string]interface{})["type"])
 	auditFilters := document.Endpoints["audit_list"].QueryParameters["filters"]["properties"].(map[string]interface{})
 	require.Equal(t, "date-time", auditFilters["occurred_from"].(map[string]interface{})["format"])
@@ -54,4 +59,11 @@ func TestScopedReadOpenAPIUsesTypedListItems(t *testing.T) {
 		items := components[tc.response].(map[string]interface{})["properties"].(map[string]interface{})["items"].(map[string]interface{})["items"].(map[string]interface{})
 		require.Equal(t, "#/components/schemas/"+tc.item, items["$ref"])
 	}
+	operation := paths["/api/v1/staff/constituents"].(map[string]interface{})["get"].(map[string]interface{})
+	responses := operation["responses"].(map[string]interface{})
+	require.Equal(t, 200, responses["200"].(map[string]interface{})["x-city311-example"].(map[string]interface{})["status"])
+	failure := responses["400"].(map[string]interface{})["x-city311-example"].(map[string]interface{})
+	require.Equal(t, 400, failure["status"])
+	require.Equal(t, string(ErrorInvalidPageToken), failure["body"].(map[string]interface{})["error"])
+	require.Equal(t, "The page token is invalid.", failure["body"].(map[string]interface{})["message"])
 }

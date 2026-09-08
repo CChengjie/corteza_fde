@@ -17,6 +17,7 @@ func configureScopedReadContracts(document *ContractDocument) {
 		endpoint := document.Endpoints[name]
 		if name == "staff_constituent_search" {
 			endpoint.ResponseSchema = "constituent_list_response"
+			endpoint.ErrorStatuses[string(ErrorInvalidPageToken)] = 400
 		} else {
 			endpoint.ResponseSchema = "audit_event_list_response"
 		}

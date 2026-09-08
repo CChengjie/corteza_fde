@@ -13,17 +13,45 @@ import (
 )
 
 type constituentFilterInput struct {
-	ConstituentID     stringList            `json:"constituent_id"`
-	Query             stringList            `json:"query"`
-	DisplayName       stringList            `json:"display_name"`
-	Email             stringList            `json:"email"`
-	Phone             stringList            `json:"phone"`
-	PrimaryCategory   stringList            `json:"primary_category"`
-	PreferredLanguage stringList            `json:"preferred_language"`
-	EmailOptOut       stringList            `json:"email_opt_out"`
-	Department        stringList            `json:"department"`
-	District          stringList            `json:"district"`
-	CustomFields      map[string]stringList `json:"custom_fields"`
+	ConstituentID     constituentStringList         `json:"constituent_id"`
+	Query             constituentStringList         `json:"query"`
+	DisplayName       constituentStringList         `json:"display_name"`
+	Email             constituentStringList         `json:"email"`
+	Phone             constituentStringList         `json:"phone"`
+	PrimaryCategory   constituentStringList         `json:"primary_category"`
+	PreferredLanguage constituentStringList         `json:"preferred_language"`
+	EmailOptOut       constituentStringList         `json:"email_opt_out"`
+	Department        constituentStringList         `json:"department"`
+	District          constituentStringList         `json:"district"`
+	CustomFields      constituentCustomFieldFilters `json:"custom_fields"`
+}
+
+type constituentStringList []string
+type constituentCustomFieldFilters map[string]constituentStringList
+
+func (values *constituentStringList) UnmarshalJSON(data []byte) error {
+	var list []string
+	if err := decodeNonNullConstituentFilter(data, &list, "constituent filter values must be arrays"); err != nil {
+		return err
+	}
+	*values = list
+	return nil
+}
+
+func (filters *constituentCustomFieldFilters) UnmarshalJSON(data []byte) error {
+	var values map[string]constituentStringList
+	if err := decodeNonNullConstituentFilter(data, &values, "constituent custom-field filters must be an object"); err != nil {
+		return err
+	}
+	*filters = values
+	return nil
+}
+
+func decodeNonNullConstituentFilter(data []byte, target interface{}, message string) error {
+	if strings.TrimSpace(string(data)) == "null" {
+		return errors.New(message)
+	}
+	return json.Unmarshal(data, target)
 }
 
 func (h *handler) staffConstituentSearch(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +89,9 @@ func parseConstituentFilters(r *http.Request) (map[string][]string, error) {
 	input := constituentFilterInput{}
 	raw := r.URL.Query().Get("filters")
 	if raw != "" {
+		if strings.TrimSpace(raw) == "null" {
+			return nil, constituentQueryError("filters", contract.ValidationInvalidFormat)
+		}
 		decoder := json.NewDecoder(strings.NewReader(raw))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&input); err != nil {
@@ -71,33 +102,44 @@ func parseConstituentFilters(r *http.Request) (map[string][]string, error) {
 		}
 	} else {
 		query := r.URL.Query()
-		input.ConstituentID = queryValues(query, "constituent_id")
-		input.Query = queryValues(query, "query")
-		input.DisplayName = queryValues(query, "display_name")
-		input.Email = queryValues(query, "email")
-		input.Phone = queryValues(query, "phone")
-		input.PrimaryCategory = queryValues(query, "primary_category")
-		input.PreferredLanguage = queryValues(query, "preferred_language")
-		input.EmailOptOut = queryValues(query, "email_opt_out")
-		input.Department = queryValues(query, "department")
-		input.District = queryValues(query, "district")
-		input.CustomFields = explodedCustomFieldFilters(query)
+		input.ConstituentID = constituentStringList(queryValuesPreservingEmpty(query, "constituent_id"))
+		input.Query = constituentStringList(queryValuesPreservingEmpty(query, "query"))
+		input.DisplayName = constituentStringList(queryValuesPreservingEmpty(query, "display_name"))
+		input.Email = constituentStringList(queryValuesPreservingEmpty(query, "email"))
+		input.Phone = constituentStringList(queryValuesPreservingEmpty(query, "phone"))
+		input.PrimaryCategory = constituentStringList(queryValuesPreservingEmpty(query, "primary_category"))
+		input.PreferredLanguage = constituentStringList(queryValuesPreservingEmpty(query, "preferred_language"))
+		input.EmailOptOut = constituentStringList(queryValuesPreservingEmpty(query, "email_opt_out"))
+		input.Department = constituentStringList(queryValuesPreservingEmpty(query, "department"))
+		input.District = constituentStringList(queryValuesPreservingEmpty(query, "district"))
+		input.CustomFields = constituentCustomFieldFilters{}
+		for key, values := range explodedCustomFieldFiltersPreservingEmpty(query) {
+			input.CustomFields[key] = constituentStringList(values)
+		}
 	}
 	filters := map[string][]string{}
-	for key, values := range map[string]stringList{
+	for key, values := range map[string]constituentStringList{
 		"constituent_id": input.ConstituentID, "query": input.Query, "display_name": input.DisplayName,
 		"email": input.Email, "phone": input.Phone, "primary_category": input.PrimaryCategory,
 		"preferred_language": input.PreferredLanguage, "email_opt_out": input.EmailOptOut,
 		"department": input.Department, "district": input.District,
 	} {
-		if trimmed := trimStringList(values); len(trimmed) > 0 {
-			filters[key] = []string(trimmed)
+		if values != nil {
+			filters[key] = trimConstituentStringList(values)
 		}
 	}
 	for key, values := range input.CustomFields {
-		filters["custom_fields."+key] = []string(trimStringList(values))
+		filters["custom_fields."+key] = trimConstituentStringList(values)
 	}
 	return filters, nil
+}
+
+func trimConstituentStringList(values constituentStringList) []string {
+	out := make([]string, len(values))
+	for index, value := range values {
+		out[index] = strings.TrimSpace(value)
+	}
+	return out
 }
 
 func constituentQueryError(field string, code contract.ValidationCode) error {

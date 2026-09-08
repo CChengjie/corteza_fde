@@ -3,7 +3,10 @@ package city311
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +33,15 @@ func testService(t *testing.T) (*Service, store.Storer) {
 	st, err := sqlite.Connect(ctx, dsn)
 	require.NoError(t, err)
 	require.NoError(t, store.Upgrade(ctx, zap.NewNop(), st))
+	mappingFixture := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, mappingGeocodePath, r.URL.Path)
+		require.Equal(t, "Bearer test-mapping-token", r.Header.Get("Authorization"))
+		_ = json.NewEncoder(w).Encode(contract.MockGeocodeSuccess())
+	}))
+	t.Cleanup(mappingFixture.Close)
+	t.Setenv("MAP_BASE_URL", mappingFixture.URL)
+	t.Setenv("MAP_API_TOKEN", "test-mapping-token")
 
 	svc := New(st)
 	fixedNow := time.Date(2026, 2, 3, 15, 4, 5, 0, time.UTC)
@@ -48,6 +60,15 @@ func validSubmission() contract.ServiceRequestCreate {
 		Location:     &contract.LocationInput{Address: "100 Example Street, Buffalo, NY 14201", Latitude: &latitude, Longitude: &longitude},
 		CustomFields: map[string]any{"reported_damage": false},
 	}
+}
+
+func TestSubmissionRequiresConfiguredMappingWhenBoundaryValidationIsEnabled(t *testing.T) {
+	svc, _ := testService(t)
+	t.Setenv("CITY311_ENFORCE_MAPPING_ON_SUBMISSION", "true")
+	svc.mappingService = nil
+	svc.mappingConfig = nil
+	_, _, err := svc.Submit(context.Background(), validSubmission(), "mapping-required", SubmissionOptions{})
+	requireIdentityError(t, err, 503, contract.ErrorMapTemporarilyUnavailable)
 }
 
 func TestSeedIsRepeatableAndPreservesSeededRows(t *testing.T) {

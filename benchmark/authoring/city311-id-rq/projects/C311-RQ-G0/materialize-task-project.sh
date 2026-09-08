@@ -17,6 +17,8 @@ git -C "${repository_root}" cat-file -e "${answer_commit}^{commit}"
 
 mkdir -p "${project_directory}/B/customer-system" \
   "${project_directory}/B/contracts" \
+  "${project_directory}/B/fixtures" \
+  "${project_directory}/B/runtime" \
   "${project_directory}/R" \
   "${project_directory}/ref-answer/customer-system" \
   "${project_directory}/evaluation"
@@ -28,10 +30,13 @@ git -C "${repository_root}" show "${answer_commit}:server/compose/types/city311/
 cp "${script_dir}/task.yaml" "${project_directory}/task.yaml"
 cp "${script_dir}/B/customer-context.md" "${project_directory}/B/customer-context.md"
 cp "${script_dir}/B/constraints.md" "${project_directory}/B/constraints.md"
+cp -R "${script_dir}/B/fixtures/." "${project_directory}/B/fixtures/"
+cp -R "${script_dir}/B/runtime/." "${project_directory}/B/runtime/"
 cp "${script_dir}/R/requirement.md" "${project_directory}/R/requirement.md"
 cp "${script_dir}/ref-answer/README.md" "${project_directory}/ref-answer/README.md"
 cp "${script_dir}/evaluation/scoring.yaml" "${project_directory}/evaluation/scoring.yaml"
 cp "${script_dir}/evaluation/validator-dag.yaml" "${project_directory}/evaluation/validator-dag.yaml"
+cp "${script_dir}/evaluation/run.sh" "${project_directory}/evaluation/run.sh"
 
 shasum -a 256 "${project_directory}/B/customer-system/source.tar.gz" >"${project_directory}/B/customer-system/source.tar.gz.sha256"
 shasum -a 256 "${project_directory}/ref-answer/customer-system/source.tar.gz" >"${project_directory}/ref-answer/customer-system/source.tar.gz.sha256"

@@ -15,7 +15,11 @@ ref_answer:
 evaluation:
   scoring: evaluation/scoring.yaml
   validator_dag: evaluation/validator-dag.yaml
+  executable: evaluation/run.sh
+fixtures:
+  mapping: c311-rq-g0-mapping-fixture:v1
+  database: postgres:16-alpine
 release_conditions:
-  - "B archive starts and exposes only the supplied scaffold/contracts."
+  - "B runtime starts the supplied PostgreSQL and deterministic mapping fixture."
   - "Reference answer starts and scores 100/100 under the same synthetic fixtures."
   - "Agent-facing bundle excludes ref-answer and hidden validators."

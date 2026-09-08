@@ -1,0 +1,85 @@
+name: c311-rq-g0
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: c311_g0
+      POSTGRES_USER: c311_g0
+      POSTGRES_PASSWORD: c311-g0-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d c311_g0 -U c311_g0"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mapping:
+    image: python:3.12-alpine
+    volumes:
+      - ../fixtures/mapping-fixture.py:/fixture/mapping-fixture.py:ro
+    command: ["python3", "/fixture/mapping-fixture.py"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: ${CANDIDATE_ROOT:?CANDIDATE_ROOT must name the extracted candidate source}
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mapping:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-18090}:80"
+    environment:
+      DATABASE_URL: postgres://c311_g0:c311-g0-password@postgres:5432/c311_g0?sslmode=disable
+      DB_DSN: postgres://c311_g0:c311-g0-password@postgres:5432/c311_g0?sslmode=disable
+      UPGRADE_ALWAYS: "true"
+      PROVISION_ALWAYS: "true"
+      PROVISION_PATH: /corteza/provision/*
+      HTTP_ADDR: 0.0.0.0:80
+      HTTP_API_BASE_URL: /api
+      HTTP_WEBAPP_ENABLED: "false"
+      STORAGE_PATH: /data
+      BENCHMARK_TIMEZONE: America/New_York
+      BENCHMARK_NOW: "2026-02-03T15:04:05Z"
+      BENCHMARK_SEED: city311-public-v1
+      CITY311_ENFORCE_MAPPING_ON_SUBMISSION: "true"
+      MAP_BASE_URL: http://mapping:8081
+      MAP_API_TOKEN: c311-g0-mapping-token
+      SESSION_SECRET: c311-g0-session-secret
+      AUTH_JWT_SECRET: c311-g0-jwt-secret
+      AUTH_EXTERNAL_COOKIE_SECRET: c311-g0-cookie-secret
+      AUTH_CSRF_SECRET: c311-g0-csrf-secret
+      CITY311_SEED_CONSTITUENT_PASSWORD: C311G0Constituent1!
+      CITY311_SEED_CONSTITUENT_TWO_PASSWORD: C311G0Constituent2!
+      CIVICWORKS_BASE_URL: https://civicworks.example.invalid
+      CIVICWORKS_API_TOKEN: c311-g0-civicworks-token
+      CIVICWORKS_WEBHOOK_SECRET: c311-g0-webhook-secret
+      WORKFLOW_OAUTH_TOKEN_URL: https://workflow.example.invalid/oauth/token
+      WORKFLOW_API_BASE_URL: https://workflow.example.invalid
+      WORKFLOW_CLIENT_ID: c311-g0-workflow
+      WORKFLOW_CLIENT_SECRET: c311-g0-workflow-secret
+      OIDC_ISSUER_URL: https://identity.example.invalid
+      OIDC_STAFF_CLIENT_ID: c311-g0-staff
+      OIDC_PUBLIC_CLIENT_ID: c311-g0-public
+      OIDC_CLIENT_SECRET: c311-g0-oidc-secret
+      SAML_METADATA_URL: https://identity.example.invalid/saml/metadata
+      SAML_SP_ENTITY_ID: http://localhost/saml
+      CRM_API_CLIENT_ID: c311-g0-crm
+      CRM_API_CLIENT_SECRET: c311-g0-crm-secret
+      MAIL_SMTP_HOST: mail.example.invalid
+      MAIL_SMTP_PORT: "587"
+      MAIL_SMTP_USERNAME: c311-g0-mail
+      MAIL_SMTP_PASSWORD: c311-g0-mail-password
+      MAIL_API_BASE_URL: https://mail.example.invalid
+      MAIL_API_TOKEN: c311-g0-mail-token
+    volumes:
+      - attachment_data:/data
+
+volumes:
+  attachment_data:

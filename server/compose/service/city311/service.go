@@ -395,6 +395,11 @@ func (svc *Service) prepareSubmission(ctx context.Context, in contract.ServiceRe
 	if len(options.AttachmentTokens)+len(attachments) > 5 {
 		return nil, validationError(contract.FieldError{Field: attachmentField(options), Code: contract.ValidationTooManyItems})
 	}
+	if os.Getenv("CITY311_ENFORCE_MAPPING_ON_SUBMISSION") == "true" {
+		if err = svc.validateLocationWithMapping(ctx, in); err != nil {
+			return nil, err
+		}
+	}
 	if options.Operation == "" {
 		options.Operation = "service_request_create"
 	}
@@ -412,6 +417,28 @@ func (svc *Service) prepareSubmission(ctx context.Context, in contract.ServiceRe
 		input: in, options: options, idempotencyKey: idempotencyKey, requestHash: requestHash,
 		attachments: attachments, referencedConstituent: referenced,
 	}, nil
+}
+
+// validateLocationWithMapping keeps address validation at the customer-owned
+// mapping boundary. It runs before any staged attachment is consumed or a
+// service-request transaction begins, so an outage cannot leave partial state.
+func (svc *Service) validateLocationWithMapping(ctx context.Context, in contract.ServiceRequestCreate) *ServiceError {
+	if !serviceTypeRequiresLocation(in.ServiceType) || in.Location == nil {
+		return nil
+	}
+	mapping, configurationErr := svc.MappingRuntime()
+	if configurationErr != nil || mapping == nil {
+		return mappingUnavailableError()
+	}
+	_, err := mapping.Geocode(ctx, in.Location.Address)
+	if err == nil {
+		return nil
+	}
+	var serviceErr *ServiceError
+	if errors.As(err, &serviceErr) {
+		return serviceErr
+	}
+	return mappingUnavailableError()
 }
 
 func (svc *Service) prepareReferencedConstituent(ctx context.Context, in *contract.ServiceRequestCreate, options *SubmissionOptions) (*composeTypes.City311Constituent, error) {

@@ -50,6 +50,7 @@ services:
       BENCHMARK_TIMEZONE: America/New_York
       BENCHMARK_NOW: "2026-02-03T15:04:05Z"
       BENCHMARK_SEED: city311-public-v1
+      BENCHMARK_RUN_ID: c311-rq-g0
       CITY311_ENFORCE_MAPPING_ON_SUBMISSION: "true"
       MAP_BASE_URL: http://mapping:8081
       MAP_API_TOKEN: c311-g0-mapping-token

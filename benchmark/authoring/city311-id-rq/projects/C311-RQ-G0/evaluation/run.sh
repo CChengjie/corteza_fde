@@ -22,7 +22,7 @@ for command in docker curl jq; do require "${command}"; done
 # The unit layer covers atomic attachment, scope, and privacy edge cases. The
 # runtime layer below proves the candidate actually crosses the fixture boundary.
 (cd "${candidate_root}/server" && go test ./compose/service/city311 ./compose/rest/city311 \
-  -run 'Test(StagedAttachmentsAreAtomicSingleUseAndReplayable|AttachmentConsumeRollsBackOnLaterFailure|PublicStatusUsesSubmittedEmailAndMinimalProjection|PortalSubmit)')
+  -run 'Test(StagedAttachmentsAreAtomicSingleUseAndReplayable|AttachmentConsumeRollsBackOnLaterFailure|SubmissionRequiresConfiguredMappingWhenBoundaryValidationIsEnabled|PublicStatusUsesSubmittedEmailAndMinimalProjection|PortalSubmissionUsesSinglePublishedSuccessStatus)')
 
 CANDIDATE_ROOT="${candidate_root}" APP_PORT="${app_port}" "${compose[@]}" up --build --detach --wait
 

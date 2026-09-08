@@ -82,6 +82,9 @@ func TestStaffConstituentSearchPaginationSortAndValidation(t *testing.T) {
 		{name: "unknown filter", query: ConstituentSearchQuery{Filters: map[string][]string{"unknown": {"value"}}}, field: "/query/filters/unknown", code: contract.ValidationInvalidValue},
 		{name: "invalid category", query: ConstituentSearchQuery{Filters: map[string][]string{"primary_category": {"UNKNOWN"}}}, field: "/query/filters/primary_category", code: contract.ValidationInvalidValue},
 		{name: "invalid bool", query: ConstituentSearchQuery{Filters: map[string][]string{"email_opt_out": {"sometimes"}}}, field: "/query/filters/email_opt_out", code: contract.ValidationInvalidFormat},
+		{name: "non-canonical bool", query: ConstituentSearchQuery{Filters: map[string][]string{"email_opt_out": {"1"}}}, field: "/query/filters/email_opt_out", code: contract.ValidationInvalidFormat},
+		{name: "uppercase bool", query: ConstituentSearchQuery{Filters: map[string][]string{"email_opt_out": {"TRUE"}}}, field: "/query/filters/email_opt_out", code: contract.ValidationInvalidFormat},
+		{name: "duplicate value", query: ConstituentSearchQuery{Filters: map[string][]string{"query": {"resident", "resident"}}}, field: "/query/filters/query", code: contract.ValidationDuplicate},
 		{name: "unknown custom field", query: ConstituentSearchQuery{Filters: map[string][]string{"custom_fields.unknown": {"value"}}}, field: "/query/filters/custom_fields.unknown", code: contract.ValidationInvalidValue},
 		{name: "invalid sort", query: ConstituentSearchQuery{Sort: "display_name,display_name"}, field: "/query/sort", code: contract.ValidationInvalidFormat},
 	} {

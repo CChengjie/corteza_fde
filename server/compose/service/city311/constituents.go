@@ -131,10 +131,11 @@ func normalizeConstituentFilters(input map[string][]string, custom map[string]co
 			if value == "" || utf8.RuneCountInString(value) > 254 {
 				return nil, invalidConstituentFilter(key, contract.ValidationInvalidValue)
 			}
-			if !seen[value] {
-				out[key] = append(out[key], value)
-				seen[value] = true
+			if seen[value] {
+				return nil, invalidConstituentFilter(key, contract.ValidationDuplicate)
 			}
+			out[key] = append(out[key], value)
+			seen[value] = true
 		}
 	}
 	return out, nil
@@ -154,7 +155,7 @@ func validateConstituentFilters(filters map[string][]string, categories []contra
 		return invalidConstituentFilter("district", contract.ValidationInvalidValue)
 	}
 	for _, value := range filters["email_opt_out"] {
-		if _, err := strconv.ParseBool(value); err != nil {
+		if value != "true" && value != "false" {
 			return invalidConstituentFilter("email_opt_out", contract.ValidationInvalidFormat)
 		}
 	}

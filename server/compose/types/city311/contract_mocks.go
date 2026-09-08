@@ -96,6 +96,9 @@ func clientMocks() map[string]MockContract {
 			}},
 			"next_page_token": nil, "total_count": 1, "applied_filters": map[string]interface{}{"status": []string{"IN_PROGRESS"}}, "sort": []string{"-updated_at"},
 		}),
+		"constituent_page_token_invalid": mock(400, APIError{
+			Error: ErrorInvalidPageToken, Message: "The page token is invalid.", Retryable: false,
+		}),
 		"civicworks_event_acknowledged":     {HTTPStatus: 204, Body: nil},
 		"civicworks_duplicate_acknowledged": {HTTPStatus: 204, Body: nil},
 		"civicworks_invalid_signature": mock(401, APIError{
@@ -150,6 +153,7 @@ func linkMocks(mocks map[string]MockContract) {
 		"public_help_submit":                "public_help_get",
 		"identity_configuration_effective":  "identity_configuration_get",
 		"staff_queue":                       "staff_request_queue",
+		"constituent_page_token_invalid":    "staff_constituent_search",
 		"civicworks_event_acknowledged":     "civicworks_event_callback",
 		"civicworks_duplicate_acknowledged": "civicworks_event_callback",
 		"civicworks_invalid_signature":      "civicworks_event_callback",

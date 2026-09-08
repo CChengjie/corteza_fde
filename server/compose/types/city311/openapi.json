@@ -18521,6 +18521,40 @@
               "status": 200
             }
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "constituent_page_token_invalid": {
+                    "value": {
+                      "error": "INVALID_PAGE_TOKEN",
+                      "message": "The page token is invalid.",
+                      "retryable": false
+                    }
+                  },
+                  "invalid_page_token": {
+                    "value": {
+                      "error": "INVALID_PAGE_TOKEN",
+                      "message": "The page token is invalid.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "INVALID PAGE TOKEN",
+            "x-city311-example": {
+              "body": {
+                "error": "INVALID_PAGE_TOKEN",
+                "message": "The page token is invalid.",
+                "retryable": false
+              },
+              "status": 400
+            }
+          },
           "401": {
             "content": {
               "application/json": {

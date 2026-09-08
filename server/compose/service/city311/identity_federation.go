@@ -169,6 +169,11 @@ func (svc *IdentityService) ensureIdentityConfiguration(ctx context.Context) (*c
 		Version: 1, Published: true, CreatedAt: now,
 	}
 	if err = store.CreateCity311ConfigurationRevision(ctx, svc.store, revision); err != nil {
+		if errors.IsDuplicateData(err) {
+			if winner, lookupErr := svc.latestIdentityRevision(ctx, svc.store, configurationIdentity, identityConfigurationKey); lookupErr == nil {
+				return winner, nil
+			}
+		}
 		return nil, err
 	}
 	return revision, nil

@@ -34,6 +34,66 @@ func TestIdentityConfigurationWritesUseDatabaseAtomicConcurrency(t *testing.T) {
 	}
 }
 
+func TestIdentityConfigurationInitializationIsIdempotentAcrossServices(t *testing.T) {
+	for round := 1; round <= 20; round++ {
+		t.Run(fmt.Sprintf("round-%02d", round), func(t *testing.T) {
+			ctx := context.Background()
+			dsn := fmt.Sprintf("sqlite3://file:%s?_busy_timeout=5000&_journal_mode=WAL", filepath.Join(t.TempDir(), "city311.db"))
+			st, err := sqlite.Connect(ctx, dsn)
+			require.NoError(t, err)
+			require.NoError(t, store.Upgrade(ctx, zap.NewNop(), st))
+
+			runtime := &IdentityRuntimeConfiguration{
+				BaseURL: "https://city311.example.test", OIDCIssuerURL: "https://identity.example.test",
+				OIDCStaffClientID: "city311-staff", OIDCPublicClientID: "city311-public", OIDCClientSecret: "configured",
+				SAMLMetadataURL: "https://identity.example.test/saml/metadata", SAMLServiceProvider: "https://city311.example.test/saml",
+			}
+			var nextID atomic.Uint64
+			nextID.Store(945_000_000_000_000_000 + uint64(round)*1_000_000)
+			options := func() IdentityOptions {
+				return IdentityOptions{
+					Secret: []byte("identity-configuration-initialization-secret"), Runtime: runtime,
+					NextID: func() uint64 { return nextID.Add(1) },
+				}
+			}
+			first := NewIdentity(st, options())
+			second := NewIdentity(st, options())
+			administrator := contract.Actor{ID: 44, Roles: []contract.ApplicationRole{contract.ApplicationRolePlatformAdministrator}}
+
+			type result struct {
+				configuration *contract.IdentityConfiguration
+				err           error
+			}
+			ready := sync.WaitGroup{}
+			ready.Add(2)
+			start := make(chan struct{})
+			results := make(chan result, 2)
+			read := func(identity *IdentityService) {
+				ready.Done()
+				<-start
+				configuration, readErr := identity.IdentityConfiguration(ctx, administrator)
+				results <- result{configuration: configuration, err: readErr}
+			}
+			go read(first)
+			go read(second)
+			ready.Wait()
+			close(start)
+			for resultIndex := 0; resultIndex < 2; resultIndex++ {
+				result := <-results
+				require.NoError(t, result.err)
+				require.Equal(t, uint64(1), result.configuration.Version)
+			}
+
+			revisions, _, err := store.SearchCity311ConfigurationRevisions(ctx, st, composeTypes.City311ConfigurationRevisionFilter{
+				ResourceType: configurationIdentity, ResourceKey: identityConfigurationKey,
+			})
+			require.NoError(t, err)
+			require.Len(t, revisions, 1)
+			require.Equal(t, 1, revisions[0].Version)
+		})
+	}
+}
+
 func TestIdentityConfigurationWritesUseDatabaseAtomicConcurrencyPostgreSQL(t *testing.T) {
 	dsn := os.Getenv("CITY311_POSTGRES_DSN")
 	if dsn == "" {

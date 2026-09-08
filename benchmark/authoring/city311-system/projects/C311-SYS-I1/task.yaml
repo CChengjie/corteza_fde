@@ -1,0 +1,8 @@
+task_id: C311-SYS-I1
+mode: brownfield
+release_status: authoring
+predecessor: C311-SYS-D1
+requirement: R/requirement.md
+constraints: B/constraints.md
+runtime: B/runtime/docker-compose.yml
+answer_scope: "D1 plus mapping adapter and boundary error handling."

@@ -1,0 +1,8 @@
+task_id: C311-SYS-D1
+mode: brownfield
+release_status: authoring
+predecessor: C311-SYS-P1
+requirement: R/requirement.md
+constraints: B/constraints.md
+runtime: B/runtime/docker-compose.yml
+answer_scope: "P1 plus City311 contract and domain vocabulary."

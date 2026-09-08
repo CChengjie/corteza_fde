@@ -1,0 +1,8 @@
+task_id: C311-SYS-P1
+mode: whole_system_greenfield
+release_status: authoring
+predecessor: C311-SYS-B0
+requirement: R/requirement.md
+constraints: B/constraints.md
+runtime: B/runtime/docker-compose.yml
+answer_scope: "Build/runtime/configuration/health only; no City311 domain implementation."

@@ -116,6 +116,8 @@ static_checks() {
     .services.app.depends_on.postgres.condition == "service_healthy"
   ' <<<"${rendered}" >/dev/null
   grep -q 'COPY server/ ./' "${repository_root}/Dockerfile"
+  grep -q 'COPY locale/ /src/locale/' "${repository_root}/Dockerfile"
+  grep -q 'make -C pkg/locale' "${repository_root}/Dockerfile"
   grep -q '!server/webconsole/dist/.placeholder' "${repository_root}/.dockerignore"
   grep -q 'COPY --from=server-build /src/server/provision /corteza/provision' "${repository_root}/Dockerfile"
   grep -q 'go build -trimpath' "${repository_root}/Dockerfile"

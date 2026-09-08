@@ -11,6 +11,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 COPY server/ ./
+COPY locale/ /src/locale/
+RUN make -C pkg/locale
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=1 go build -trimpath \

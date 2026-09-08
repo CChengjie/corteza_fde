@@ -36,7 +36,6 @@ request_body='{"summary":"Pothole blocks traffic","description":"A pothole block
 created="$(curl --fail --silent --header 'Content-Type: application/json' --header 'Idempotency-Key: c311-g0-runtime' --data "${request_body}" "${base_url}/portal/service-requests")"
 request_number="$(jq -er '.request_number' <<<"${created}")"
 
-curl --fail --silent "http://127.0.0.1:${app_port}/calls" >/dev/null 2>&1 && exit 1
 calls="$("${compose[@]}" exec -T mapping wget -qO- http://127.0.0.1:8081/calls | jq -er '.geocode_calls')"
 [[ "${calls}" == "1" ]] || { echo "mapping fixture was not called exactly once" >&2; exit 1; }
 

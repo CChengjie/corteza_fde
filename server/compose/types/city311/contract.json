@@ -1564,18 +1564,30 @@
         "Retry-After": "required on HTTP 429; whole seconds until retry"
       }
     },
-    "federated_sign_in_callback": {
-      "method": "GET",
-      "path": "/api/v1/auth/{provider}/callback",
+    "federated_saml_callback": {
+      "method": "POST",
+      "path": "/api/v1/auth/saml/callback",
       "direction": "provided_by_crm",
       "authentication": {
         "mode": "none"
       },
-      "path_parameters": {
-        "provider": {
-          "enum_ref": "identity_provider",
-          "type": "string"
-        }
+      "request_schema": "federated_saml_callback",
+      "request_media_type": "application/x-www-form-urlencoded",
+      "response_schema": "session",
+      "success_statuses": {
+        "success": 200
+      },
+      "error_statuses": {
+        "TEMPORARILY_UNAVAILABLE": 503,
+        "UNAUTHENTICATED": 401
+      }
+    },
+    "federated_sign_in_callback": {
+      "method": "GET",
+      "path": "/api/v1/auth/oidc/callback",
+      "direction": "provided_by_crm",
+      "authentication": {
+        "mode": "none"
       },
       "response_schema": "session",
       "success_statuses": {
@@ -1584,6 +1596,26 @@
       "error_statuses": {
         "TEMPORARILY_UNAVAILABLE": 503,
         "UNAUTHENTICATED": 401
+      },
+      "query_parameters": {
+        "code": {
+          "description": "Required with state for a successful OIDC callback.",
+          "example": "authorization-code",
+          "min_length": 1,
+          "type": "string"
+        },
+        "error": {
+          "description": "Provider error alternative to state and code.",
+          "example": "access_denied",
+          "min_length": 1,
+          "type": "string"
+        },
+        "state": {
+          "description": "Required with code for a successful OIDC callback.",
+          "example": "returned-state",
+          "min_length": 1,
+          "type": "string"
+        }
       }
     },
     "federated_sign_in_start": {
@@ -1602,6 +1634,23 @@
       "response_schema": "federated_redirect",
       "success_statuses": {
         "success": 200
+      },
+      "error_statuses": {
+        "NOT_FOUND": 404,
+        "TEMPORARILY_UNAVAILABLE": 503,
+        "VALIDATION_ERROR": 422
+      },
+      "query_parameters": {
+        "client": {
+          "default": "staff",
+          "description": "Selects the OIDC relying-party client. SAML accepts only staff.",
+          "enum": [
+            "staff",
+            "public"
+          ],
+          "example": "public",
+          "type": "string"
+        }
       }
     },
     "geocode_proxy": {
@@ -4448,6 +4497,7 @@
       "civicworks_event_callback",
       "contact_email_export",
       "data_export",
+      "federated_saml_callback",
       "federated_sign_in_callback",
       "federated_sign_in_start",
       "geocode_proxy",
@@ -5847,6 +5897,24 @@
       },
       "required": [
         "authorization_url"
+      ],
+      "type": "object"
+    },
+    "federated_saml_callback": {
+      "properties": {
+        "RelayState": {
+          "min_length": 1,
+          "type": "string"
+        },
+        "SAMLResponse": {
+          "min_length": 1,
+          "type": "string",
+          "write_only": true
+        }
+      },
+      "required": [
+        "RelayState",
+        "SAMLResponse"
       ],
       "type": "object"
     },
@@ -7915,6 +7983,158 @@
       "body": {
         "error": "EXPIRED_RESET_TOKEN",
         "message": "The reset token has expired.",
+        "retryable": false
+      }
+    },
+    "federated_oidc_callback_authenticated": {
+      "endpoint": "federated_sign_in_callback",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "actor": {
+          "actor_id": "staff-0042",
+          "application_roles": [
+            "service_agent"
+          ],
+          "available_routes": [
+            "staff_request_queue"
+          ],
+          "capabilities": [
+            "staff_request_queue"
+          ],
+          "department_codes": [
+            "STREETS"
+          ],
+          "display_name": "Federated Staff",
+          "district_codes": [
+            "NORTH"
+          ],
+          "scopes": []
+        },
+        "authenticated": true,
+        "expires_at": "2026-08-25T20:00:00Z",
+        "preferred_language": "EN"
+      }
+    },
+    "federated_oidc_callback_rejected": {
+      "endpoint": "federated_sign_in_callback",
+      "role": "response",
+      "http_status": 401,
+      "body": {
+        "error": "UNAUTHENTICATED",
+        "message": "Federated authentication failed. Please return to sign in and try again.",
+        "retryable": false
+      }
+    },
+    "federated_oidc_callback_unavailable": {
+      "endpoint": "federated_sign_in_callback",
+      "role": "response",
+      "http_status": 503,
+      "body": {
+        "error": "TEMPORARILY_UNAVAILABLE",
+        "message": "Federated identity is temporarily unavailable.",
+        "retryable": true
+      }
+    },
+    "federated_oidc_start_public": {
+      "endpoint": "federated_sign_in_start",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "authorization_url": "https://identity.example.test/authorize?client_id=city311-public\u0026state=returned-state"
+      }
+    },
+    "federated_saml_callback_authenticated": {
+      "endpoint": "federated_saml_callback",
+      "role": "response",
+      "http_status": 200,
+      "body": {
+        "actor": {
+          "actor_id": "staff-0042",
+          "application_roles": [
+            "service_agent"
+          ],
+          "available_routes": [
+            "staff_request_queue"
+          ],
+          "capabilities": [
+            "staff_request_queue"
+          ],
+          "department_codes": [
+            "STREETS"
+          ],
+          "display_name": "Federated Staff",
+          "district_codes": [
+            "NORTH"
+          ],
+          "scopes": []
+        },
+        "authenticated": true,
+        "expires_at": "2026-08-25T20:00:00Z",
+        "preferred_language": "EN"
+      }
+    },
+    "federated_saml_callback_rejected": {
+      "endpoint": "federated_saml_callback",
+      "role": "response",
+      "http_status": 401,
+      "body": {
+        "error": "UNAUTHENTICATED",
+        "message": "Federated authentication failed. Please return to sign in and try again.",
+        "retryable": false
+      }
+    },
+    "federated_saml_callback_request": {
+      "endpoint": "federated_saml_callback",
+      "role": "request",
+      "body": {
+        "RelayState": "returned-state",
+        "SAMLResponse": "signed-assertion"
+      }
+    },
+    "federated_saml_callback_unavailable": {
+      "endpoint": "federated_saml_callback",
+      "role": "response",
+      "http_status": 503,
+      "body": {
+        "error": "TEMPORARILY_UNAVAILABLE",
+        "message": "Federated identity is temporarily unavailable.",
+        "retryable": true
+      }
+    },
+    "federated_start_invalid_client": {
+      "endpoint": "federated_sign_in_start",
+      "role": "response",
+      "http_status": 422,
+      "body": {
+        "error": "VALIDATION_ERROR",
+        "message": "The request contains invalid fields.",
+        "retryable": false,
+        "errors": [
+          {
+            "field": "/query/client",
+            "code": "INVALID_VALUE"
+          }
+        ]
+      }
+    },
+    "federated_start_unavailable": {
+      "endpoint": "federated_sign_in_start",
+      "role": "response",
+      "http_status": 503,
+      "body": {
+        "error": "TEMPORARILY_UNAVAILABLE",
+        "message": "Federated identity is temporarily unavailable.",
+        "retryable": true
+      }
+    },
+    "federated_start_unknown_provider": {
+      "endpoint": "federated_sign_in_start",
+      "role": "response",
+      "http_status": 404,
+      "body": {
+        "error": "NOT_FOUND",
+        "message": "The identity provider was not found.",
         "retryable": false
       }
     },

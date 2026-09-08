@@ -125,6 +125,29 @@ func TestIdentityConfigurationRejectsEnablingMissingRuntimeValues(t *testing.T) 
 	require.Equal(t, "/oidc_enabled", validation.Payload.Errors[0].Field)
 }
 
+func TestFederatedStartErrorsMatchPublishedContract(t *testing.T) {
+	identity, _, provider, _ := testFederatedIdentityService(t)
+	ctx := context.Background()
+
+	_, _, err := identity.StartFederatedSignIn(ctx, "unknown", federatedClientStaff, nil)
+	requireIdentityError(t, err, 404, contract.ErrorNotFound)
+	_, _, err = identity.StartFederatedSignIn(ctx, federatedProviderSAML, federatedClientPublic, nil)
+	validation := requireIdentityError(t, err, 422, contract.ErrorValidation)
+	require.Equal(t, "/query/client", validation.Payload.Errors[0].Field)
+
+	_, _, err = identity.StartFederatedSignIn(ctx, federatedProviderOIDC, "", nil)
+	require.NoError(t, err)
+	require.Equal(t, federatedClientStaff, provider.starts[len(provider.starts)-1].Client)
+
+	administrator := contract.Actor{ID: 44, Roles: []contract.ApplicationRole{contract.ApplicationRolePlatformAdministrator}}
+	configuration, err := identity.IdentityConfiguration(ctx, administrator)
+	require.NoError(t, err)
+	_, err = identity.UpdateIdentityConfiguration(ctx, administrator, configuration.Version, contract.IdentityConfigurationWrite{OIDCEnabled: boolPointer(false)})
+	require.NoError(t, err)
+	_, _, err = identity.StartFederatedSignIn(ctx, federatedProviderOIDC, federatedClientPublic, nil)
+	requireIdentityError(t, err, 503, contract.ErrorTemporarilyUnavailable)
+}
+
 func TestFederatedOIDCPKCEProvisioningAndImmutableSubjectUpdate(t *testing.T) {
 	identity, st, provider, _ := testFederatedIdentityService(t)
 	ctx := context.Background()

@@ -65,9 +65,14 @@ func validSubmission() contract.ServiceRequestCreate {
 func TestSubmissionRequiresConfiguredMappingWhenBoundaryValidationIsEnabled(t *testing.T) {
 	svc, _ := testService(t)
 	t.Setenv("CITY311_ENFORCE_MAPPING_ON_SUBMISSION", "true")
+	created, status, err := svc.Submit(context.Background(), validSubmission(), "mapping-available", SubmissionOptions{})
+	require.NoError(t, err)
+	require.Equal(t, 201, status)
+	require.NotEmpty(t, created.RequestNumber)
+
 	svc.mappingService = nil
 	svc.mappingConfig = nil
-	_, _, err := svc.Submit(context.Background(), validSubmission(), "mapping-required", SubmissionOptions{})
+	_, _, err = svc.Submit(context.Background(), validSubmission(), "mapping-required", SubmissionOptions{})
 	requireIdentityError(t, err, 503, contract.ErrorMapTemporarilyUnavailable)
 }
 

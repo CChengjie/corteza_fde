@@ -422,7 +422,7 @@ func (svc *Service) prepareSubmission(ctx context.Context, in contract.ServiceRe
 // validateLocationWithMapping keeps address validation at the customer-owned
 // mapping boundary. It runs before any staged attachment is consumed or a
 // service-request transaction begins, so an outage cannot leave partial state.
-func (svc *Service) validateLocationWithMapping(ctx context.Context, in contract.ServiceRequestCreate) *ServiceError {
+func (svc *Service) validateLocationWithMapping(ctx context.Context, in contract.ServiceRequestCreate) error {
 	if !serviceTypeRequiresLocation(in.ServiceType) || in.Location == nil {
 		return nil
 	}

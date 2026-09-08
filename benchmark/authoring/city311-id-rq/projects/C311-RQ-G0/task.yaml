@@ -1,7 +1,7 @@
 task_id: C311-RQ-G0
 title: "Build the City 311 service-request foundation"
 mode: greenfield
-release_status: authoring
+release_status: ready
 customer_case: City 311
 source_provenance:
   document: implementer-specification-2dev-fe-be-zh.docx
@@ -10,15 +10,20 @@ B:
   source_commit: ac8cbb33913b6ae2904bc6a512dba24466779012
   role: "Corteza build scaffold plus frozen City 311 contract; no request runtime implementation."
 ref_answer:
-  source_commit: b5dbc82cf9231f345364760f755080059fd87ae5
+  source_commit: 5781c9db9a15a3f4e2f6ddccf596bfb553b9263f
   role: "Complete City 311 implementation satisfying G0 and inherited customer constraints."
 evaluation:
   scoring: evaluation/scoring.yaml
   validator_dag: evaluation/validator-dag.yaml
   executable: evaluation/run.sh
 fixtures:
-  mapping: c311-rq-g0-mapping-fixture:v1
-  database: postgres:16-alpine
+  mapping:
+    version: c311-rq-g0-mapping-fixture:v1
+    runtime_image: python:3.12-alpine
+    image_id: sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a
+  database:
+    runtime_image: postgres:16-alpine
+    image_id: sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
 release_conditions:
   - "B runtime starts the supplied PostgreSQL and deterministic mapping fixture."
   - "Reference answer starts and scores 100/100 under the same synthetic fixtures."

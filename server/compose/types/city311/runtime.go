@@ -608,6 +608,43 @@ type LoginIdentifierChange struct {
 	LoginIdentifier string `json:"login_identifier"`
 }
 
+// FederatedRedirect describes the provider authorization hand-off. Account
+// linking is never inferred from a matching email address; callers must first
+// establish a local session and deliberately start another federated flow.
+type FederatedRedirect struct {
+	AuthorizationURL         string `json:"authorization_url"`
+	LinkConfirmationRequired bool   `json:"link_confirmation_required,omitempty"`
+}
+
+type ActorRoleMapping struct {
+	AssertedRole    ActorRole       `json:"asserted_role"`
+	ApplicationRole ApplicationRole `json:"application_role"`
+}
+
+// IdentityConfiguration combines administrator-controlled enablement with
+// effective, read-only runtime values. The OIDC secret itself is never part of
+// this projection.
+type IdentityConfiguration struct {
+	OIDCEnabled                bool               `json:"oidc_enabled"`
+	SAMLEnabled                bool               `json:"saml_enabled"`
+	OIDCIssuerURL              string             `json:"oidc_issuer_url"`
+	OIDCStaffClientID          string             `json:"oidc_staff_client_id"`
+	OIDCPublicClientID         string             `json:"oidc_public_client_id"`
+	OIDCClientSecretConfigured bool               `json:"oidc_client_secret_configured"`
+	SAMLMetadataURL            string             `json:"saml_metadata_url"`
+	SAMLSPServiceEntityID      string             `json:"saml_sp_entity_id"`
+	ActorRoleMappings          []ActorRoleMapping `json:"actor_role_mappings"`
+	Version                    uint64             `json:"version"`
+	UpdatedAt                  time.Time          `json:"updated_at"`
+}
+
+// IdentityConfigurationWrite uses pointers because the frozen PATCH schema
+// permits either enablement flag to be omitted.
+type IdentityConfigurationWrite struct {
+	OIDCEnabled *bool `json:"oidc_enabled,omitempty"`
+	SAMLEnabled *bool `json:"saml_enabled,omitempty"`
+}
+
 // Actor carries server-resolved roles and record scope.
 type Actor struct {
 	ID         uint64

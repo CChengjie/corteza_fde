@@ -541,7 +541,7 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.actorID).toBe('staff-1')
     expect(wrapper.vm.navItems).toEqual(expect.arrayContaining([
       expect.objectContaining({ route: '/c311/staff/reports', capability: 'report_catalogue' }),
-      expect.objectContaining({ route: '/c311/staff/workflows', scope: 'workflow.execute' }),
+      expect.objectContaining({ route: '/c311/staff/workflows', capability: 'workflow_list' }),
     ]))
     expect(wrapper.vm.translatedColumns[4].format('2026-07-15T15:00:00.000Z')).toBe('07/15/2026 11:00 AM EDT')
     expect(wrapper.vm.translatedColumns[2].format('SUBMITTED')).toContain('SUBMITTED')
@@ -924,8 +924,8 @@ describe('C311 shared components', () => {
   it('renders anonymous public identity navigation and protects private entries', async () => {
     const provider = {
       getBranding: jest.fn().mockResolvedValue({ organisation_name: 'Fixture City' }),
-      getPublicContent: jest.fn().mockResolvedValue({ body: '<p>Welcome</p>' }),
-      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Help</p>' }),
+      getPublicContent: jest.fn().mockResolvedValue({ body: '<p>Welcome</p>', sanitized: true }),
+      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Help</p>', sanitized: true }),
     }
     const wrapper = mount(PublicPortal, {
       mocks: { ...mocks, $route: { name: 'c311.portal', query: {} }, $C311: { provider, session: { authenticated: false } } },
@@ -948,11 +948,39 @@ describe('C311 shared components', () => {
     expect(provider.getPublicContent).toHaveBeenCalledWith('HOME')
   })
 
+  it('rejects public markup without the provider safety marker', async () => {
+    const provider = {
+      getBranding: jest.fn().mockResolvedValue({ organisation_name: 'Fixture City' }),
+      getPublicContent: jest.fn().mockResolvedValue({ body: '<img src=x onerror=alert(1)>' }),
+      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Help</p>', sanitized: true }),
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.portal', query: {} }, $C311: { provider, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.vm.load()
+    expect(wrapper.vm.state).toBe('validation-error')
+    expect(wrapper.vm.contentBody).toBe('')
+    expect(wrapper.find('[data-c311-page="home"] [onerror]').exists()).toBe(false)
+  })
+
+  it('marks the login form dirty when the password changes', async () => {
+    const provider = { getBranding: jest.fn().mockResolvedValue({ organisation_name: 'Fixture City' }) }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.sign-in', query: {} }, $C311: { provider, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await wrapper.find('#c311-login-password').setValue('fixture-password')
+    expect(wrapper.vm.c311Dirty).toBe(true)
+    expect(wrapper.find('#c311-login-password').attributes('aria-required')).toBe('true')
+    expect(wrapper.find('#c311-login-password').attributes('aria-describedby')).toContain('c311-error-summary')
+  })
+
   it('loads public HELP content and contextual help independently', async () => {
     const provider = {
       getBranding: jest.fn().mockResolvedValue({ organisation_name: 'Fixture City' }),
-      getPublicContent: jest.fn().mockResolvedValue({ content_key: 'HELP', body: '<p>Published help</p>' }),
-      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Context help</p>' }),
+      getPublicContent: jest.fn().mockResolvedValue({ content_key: 'HELP', body: '<p>Published help</p>', sanitized: true }),
+      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Context help</p>', sanitized: true }),
     }
     const wrapper = mount(PublicPortal, {
       mocks: { ...mocks, $route: { name: 'c311.help', query: {} }, $C311: { provider, session: { authenticated: false } } },
@@ -979,7 +1007,7 @@ describe('C311 shared components', () => {
   it('renders safe branding fields and keeps HELP content when contextual help fails', async () => {
     const provider = {
       getBranding: jest.fn().mockResolvedValue({ organisation_name: 'Fixture City', public_header: 'City services', public_footer: 'Support', primary_colour: '#155eef', accent_colour: 'red; background:url(javascript:bad)', font_family: 'Inter, system-ui', logo_url: 'javascript:bad' }),
-      getPublicContent: jest.fn().mockResolvedValue({ content_key: 'HELP', body: '<p>Published help</p>' }),
+      getPublicContent: jest.fn().mockResolvedValue({ content_key: 'HELP', body: '<p>Published help</p>', sanitized: true }),
       getPublicHelp: jest.fn().mockRejectedValue({ status: 503, retryable: true, message: 'context unavailable' }),
     }
     const wrapper = mount(PublicPortal, {
@@ -1024,8 +1052,8 @@ describe('C311 shared components', () => {
     const route = { name: 'c311.portal', query: {} }
     const provider = {
       getBranding: jest.fn().mockResolvedValue({ organisation_name: 'Fixture City' }),
-      getPublicContent: jest.fn().mockImplementation(contentKey => Promise.resolve({ content_key: contentKey, body: `<p>${contentKey}</p>` })),
-      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Context help</p>' }),
+      getPublicContent: jest.fn().mockImplementation(contentKey => Promise.resolve({ content_key: contentKey, body: `<p>${contentKey}</p>`, sanitized: true })),
+      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Context help</p>', sanitized: true }),
       listPortalRequests: jest.fn().mockResolvedValue({ items: [{ request_id: 'request-1' }] }),
       getProfile: jest.fn().mockResolvedValue({ display_name: 'Alex Example', preferred_language: 'EN', login_identifier: 'alex' }),
     }
@@ -1070,8 +1098,8 @@ describe('C311 shared components', () => {
     const route = { name: 'c311.services', query: {} }
     const provider = {
       getBranding: jest.fn().mockResolvedValue({ organisation_name: 'Fixture City' }),
-      getPublicContent: jest.fn().mockResolvedValue({ body: '<p>SERVICE_CATALOGUE</p>' }),
-      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Context help</p>' }),
+      getPublicContent: jest.fn().mockResolvedValue({ body: '<p>SERVICE_CATALOGUE</p>', sanitized: true }),
+      getPublicHelp: jest.fn().mockResolvedValue({ body: '<p>Context help</p>', sanitized: true }),
       completeFederatedSignIn: jest.fn().mockResolvedValue({ authenticated: true, actor: { actor_id: 'actor-1' } }),
     }
     const wrapper = mount(PublicPortal, {

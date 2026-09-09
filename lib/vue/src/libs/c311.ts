@@ -81,6 +81,15 @@ export function c311StateForError (error: C311ErrorLike, hasData = false): C311D
   return 'terminal-error'
 }
 
+/**
+ * The provider is the trust boundary for HTML. A string without an explicit
+ * sanitized marker must stay text-only in the UI.
+ */
+export function isC311SanitizedMarkup (value: unknown): value is { body: string, sanitized: true } {
+  const candidate = value as { body?: unknown, sanitized?: unknown }
+  return !!value && typeof value === 'object' && candidate.sanitized === true && typeof candidate.body === 'string'
+}
+
 export function c311DataState (options: { loading?: boolean; items?: unknown[] | null; error?: C311ErrorLike | null }): C311DataState {
   if (options.loading) return 'loading'
   if (options.error) return c311StateForError(options.error, !!options.items?.length)

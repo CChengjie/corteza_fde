@@ -47,7 +47,7 @@
     <section v-if="isRequestFormRoute" aria-labelledby="submit-heading" class="mt-4 c311-request-page">
       <h2 id="submit-heading" class="h4">{{ isStaffAssistRoute ? t('portal.submit.staffTitle', 'Submit a request for a resident') : t('portal.submit.title', 'Submit a service request') }}</h2>
       <p v-if="isStaffAssistRoute" class="text-muted">{{ t('portal.submit.staffDescription', 'This request will be created using your staff permissions.') }}</p>
-      <c311-error-summary :errors="formErrors" :title="t('error.review', 'Review your request')" />
+      <c311-error-summary :errors="formErrors" :field-targets="formFieldTargets" :title="t('error.review', 'Review your request')" />
       <div v-if="versionConflict" class="alert alert-warning" role="alert" data-c311-version-conflict>
         <p class="mb-2">{{ t('status.versionConflict', 'The draft changed on the server. Current server version: ' + versionConflict.current_version + '.', { version: versionConflict.current_version }) }}</p>
         <div class="d-flex flex-wrap gap-2">
@@ -64,7 +64,7 @@
         </div>
         <div class="form-group">
           <label for="c311-summary">{{ t('field.summary', 'Summary') }}</label>
-          <input id="c311-summary" v-model.trim="form.summary" class="form-control" :aria-invalid="hasError('summary') ? 'true' : 'false'" aria-describedby="c311-summary-help" @input="markDirty">
+          <input id="c311-summary" v-model.trim="form.summary" class="form-control" aria-required="true" :aria-invalid="hasError('summary') ? 'true' : 'false'" aria-describedby="c311-summary-help c311-error-summary" @input="markDirty">
           <small id="c311-summary-help" class="form-text text-muted">{{ t('field.summaryHelp', 'Briefly describe the issue.') }}</small>
         </div>
         <div class="form-group">
@@ -76,11 +76,11 @@
           <legend>{{ t('portal.submit.requester', 'Requester') }}</legend>
           <div class="form-group">
             <label for="c311-requester-name">{{ t('field.displayName', 'Display name') }}</label>
-            <input id="c311-requester-name" v-model.trim="form.requester.display_name" class="form-control" autocomplete="name" :aria-invalid="hasError('requester.display_name') ? 'true' : 'false'" @input="markDirty">
+            <input id="c311-requester-name" v-model.trim="form.requester.display_name" class="form-control" autocomplete="name" aria-required="true" aria-describedby="c311-error-summary" :aria-invalid="hasError('requester.display_name') ? 'true' : 'false'" @input="markDirty">
           </div>
           <div class="form-group">
             <label for="c311-requester-email">{{ t('field.email', 'Email') }}</label>
-            <input id="c311-requester-email" v-model.trim="form.requester.email" class="form-control" type="email" autocomplete="email" :aria-invalid="hasError('requester.email') ? 'true' : 'false'" @input="markDirty">
+            <input id="c311-requester-email" v-model.trim="form.requester.email" class="form-control" type="email" autocomplete="email" aria-required="true" aria-describedby="c311-error-summary" :aria-invalid="hasError('requester.email') ? 'true' : 'false'" @input="markDirty">
           </div>
           <div class="form-group">
             <label for="c311-requester-phone">{{ t('field.phone', 'Phone (optional)') }}</label>
@@ -133,7 +133,7 @@
         </div>
 
         <div class="form-check mb-3">
-          <input id="c311-consent" v-model="form.consent" class="form-check-input" type="checkbox" :aria-invalid="hasError('consent') ? 'true' : 'false'" @change="markDirty">
+          <input id="c311-consent" v-model="form.consent" class="form-check-input" type="checkbox" aria-required="true" aria-describedby="c311-error-summary" :aria-invalid="hasError('consent') ? 'true' : 'false'" @change="markDirty">
           <label class="form-check-label" for="c311-consent">{{ t('field.consent', 'I confirm that the information provided is accurate.') }}</label>
         </div>
 
@@ -183,7 +183,7 @@ const c311DirtyGuard = mixins?.c311DirtyGuard || {
   methods: {
     c311MarkDirty (value = true) { this.c311Dirty = value },
     c311ReadDirtyDraft () { return null },
-    c311SaveDirtyDraft () {},
+    c311SaveDirtyDraft () { return undefined },
     c311ClearDirtyDraft () { this.c311Dirty = false },
   },
 }
@@ -317,6 +317,21 @@ export default {
       return items
     },
     translatedColumns () { return this.columns.map(column => ({ ...column, label: this.t(column.labelKey, column.labelKey) })) },
+    formFieldTargets () {
+      return {
+        service_type: 'c311-service-type',
+        summary: 'c311-summary',
+        description: 'c311-description',
+        'requester.display_name': 'c311-requester-name',
+        'requester.email': 'c311-requester-email',
+        'requester.phone': 'c311-requester-phone',
+        'location.address': 'c311-location-address',
+        'location.latitude': 'c311-location-latitude',
+        'location.longitude': 'c311-location-longitude',
+        custom_fields: 'c311-custom-fields',
+        consent: 'c311-consent',
+      }
+    },
   },
   watch: {
     form: { deep: true, handler () { if (this.isRequestFormRoute && this.c311Dirty) this.c311SaveDirtyDraft(this.draftStorageValue()) } },
@@ -977,7 +992,15 @@ export default {
       }
     },
     onCustomFieldsInput () {
-      try { const value = JSON.parse(this.customFieldsText || '{}'); if (value && typeof value === 'object' && !Array.isArray(value)) this.form.custom_fields = value } catch (_error) {}
+      try {
+        const value = JSON.parse(this.customFieldsText || '{}')
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Custom fields must be an object.')
+        this.form.custom_fields = value
+        this.formErrors = this.formErrors.filter(error => error.field !== 'custom_fields')
+      } catch (error) {
+        this.formErrors = [{ field: 'custom_fields', code: 'INVALID_FORMAT', message: this.t('error.customFields', 'Custom fields must be valid JSON.') }]
+        void error
+      }
       this.markDirty()
     },
   },

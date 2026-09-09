@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { canAccessC311Route, c311DataState, c311StateForError, hasC311Capability, hasC311Route, hasC311Scope } from './c311'
+import { canAccessC311Route, c311DataState, c311StateForError, hasC311Capability, hasC311Route, hasC311Scope, isC311SanitizedMarkup } from './c311'
 import { sanitizeC311Draft } from '../mixins/c311-dirty-guard.js'
 import { createDefaultFixtureSet } from '../../../../lib/js/src/311/fixtures'
 import { APPLICATION_ROLES } from '../../../../lib/js/src/311/enums'
@@ -46,6 +46,12 @@ describe('C311 shared frontend helpers', () => {
       summary: 'draft',
       nested: { value: 'keep' },
     })
+  })
+
+  it('requires an explicit provider safety marker before rendering markup', () => {
+    expect(isC311SanitizedMarkup({ body: '<p>safe</p>', sanitized: true })).to.equal(true)
+    expect(isC311SanitizedMarkup({ body: '<img onerror="alert(1)">' })).to.equal(false)
+    expect(isC311SanitizedMarkup({ body: '<p>safe</p>', sanitized: false })).to.equal(false)
   })
 
   it('keeps every FE-00 role from entering its denied route, capability or scope', () => {

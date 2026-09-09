@@ -30,8 +30,8 @@ export default {
     visibleItems () {
       return this.items.filter(item => {
         if (!item.capability) return true
-        if (!this.$C311 || !this.$C311.can(item.capability)) return false
-        return !item.scope || this.$C311.hasScope(item.scope)
+        if (!this.$C311 || typeof this.$C311.can !== 'function' || !this.$C311.can(item.capability)) return false
+        return !item.scope || (typeof this.$C311.hasScope === 'function' && this.$C311.hasScope(item.scope))
       })
     },
   },

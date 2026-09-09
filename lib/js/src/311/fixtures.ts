@@ -162,22 +162,22 @@ const categories: Category[] = [
 const customFields: CustomFieldDefinition[] = [{ key: 'contact_preference', labels: { EN: 'Contact preference', ES: 'Preferencia de contacto', VI: 'Uu tien lien he' }, entity: 'service_request', field_type: 'SINGLE_CHOICE', required: false, active: true, version: 1, updated_at: BENCHMARK_NOW, choice_values: ['EMAIL', 'PHONE'], default: 'EMAIL' }]
 
 const publicContent: Record<PublicContentKey, ContentObject> = {
-  HOME: { content_key: 'HOME', body: '<p>Report an issue or find a city service.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  SERVICE_CATALOGUE: { content_key: 'SERVICE_CATALOGUE', body: '<p>Browse available city services.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  HELP: { content_key: 'HELP', body: '<p>Find answers and contact support.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  FOOTER: { content_key: 'FOOTER', body: '<p>City 311</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  TERMS: { content_key: 'TERMS', body: '<p>Terms of service.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  HOME: { content_key: 'HOME', body: '<p>Report an issue or find a city service.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  SERVICE_CATALOGUE: { content_key: 'SERVICE_CATALOGUE', body: '<p>Browse available city services.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  HELP: { content_key: 'HELP', body: '<p>Find answers and contact support.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  FOOTER: { content_key: 'FOOTER', body: '<p>City 311</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  TERMS: { content_key: 'TERMS', body: '<p>Terms of service.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
 }
 
 const publicHelp: Record<HelpKey, HelpContent> = {
-  'admin.branding.publish': { help_key: 'admin.branding.publish', language: 'EN', body: '<p>Publish approved branding.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  'admin.workflow.author': { help_key: 'admin.workflow.author', language: 'EN', body: '<p>Author an approved workflow.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  'public.request.lookup': { help_key: 'public.request.lookup', language: 'EN', body: '<p>Use your request number and email.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  'public.request.submit': { help_key: 'public.request.submit', language: 'EN', body: '<p>Describe the issue and submit it to the city.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  'staff.report.create': { help_key: 'staff.report.create', language: 'EN', body: '<p>Create reports from permitted records.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.bulk-update': { help_key: 'staff.request.bulk-update', language: 'EN', body: '<p>Update selected requests.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.reassign': { help_key: 'staff.request.reassign', language: 'EN', body: '<p>Reassign a request.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.triage': { help_key: 'staff.request.triage', language: 'EN', body: '<p>Review and classify a request.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'admin.branding.publish': { help_key: 'admin.branding.publish', language: 'EN', body: '<p>Publish approved branding.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'admin.workflow.author': { help_key: 'admin.workflow.author', language: 'EN', body: '<p>Author an approved workflow.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'public.request.lookup': { help_key: 'public.request.lookup', language: 'EN', body: '<p>Use your request number and email.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'public.request.submit': { help_key: 'public.request.submit', language: 'EN', body: '<p>Describe the issue and submit it to the city.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.report.create': { help_key: 'staff.report.create', language: 'EN', body: '<p>Create reports from permitted records.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.bulk-update': { help_key: 'staff.request.bulk-update', language: 'EN', body: '<p>Update selected requests.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.reassign': { help_key: 'staff.request.reassign', language: 'EN', body: '<p>Reassign a request.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.triage': { help_key: 'staff.request.triage', language: 'EN', body: '<p>Review and classify a request.</p>', sanitized: true, state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
 }
 
 // Mail templates are Mock-only until the contract exposes template CRUD.

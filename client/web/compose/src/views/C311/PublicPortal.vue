@@ -23,7 +23,7 @@
     <c311-data-state v-if="pageNeedsContent && contentState !== 'populated'" :state="contentState" :error="dataError" @retry="load" />
 
     <section v-if="page === 'home' && state === 'populated'" data-c311-page="home" :data-c311-content-key="contentKey" class="c311-public-page">
-      <div v-if="contentBody" v-html="contentBody" />
+      <div v-if="contentBody && contentSanitized" v-html="contentBody" />
       <p v-else>{{ t('portal.home.empty', 'Public information is not available yet.') }}</p>
       <div class="d-flex flex-wrap gap-2 mt-4">
         <router-link class="btn btn-primary" to="/c311/submit" data-c311-action="submit-request">{{ t('action.submit', 'Submit request') }}</router-link>
@@ -32,22 +32,22 @@
     </section>
 
     <section v-else-if="page === 'services' && state === 'populated'" data-c311-page="services" :data-c311-content-key="contentKey" class="c311-public-page">
-      <div v-if="contentBody" v-html="contentBody" />
+      <div v-if="contentBody && contentSanitized" v-html="contentBody" />
       <p v-else>{{ t('portal.services.empty', 'No services are currently listed.') }}</p>
     </section>
 
     <section v-else-if="page === 'help' && state === 'populated'" data-c311-page="help" :data-c311-content-key="contentKey" class="c311-public-page">
-      <div v-if="contentBody" v-html="contentBody" />
+      <div v-if="contentBody && contentSanitized" v-html="contentBody" />
       <p v-if="!contentBody">{{ t('portal.help.empty', 'Help content is not available yet.') }}</p>
       <c311-data-state v-if="helpState !== 'populated'" :state="helpState" :error="helpError" @retry="load" />
-      <p v-else-if="helpBody" v-html="helpBody" />
+      <p v-else-if="helpBody && helpSanitized" v-html="helpBody" />
     </section>
 
     <section v-else-if="page === 'sign-in'" data-c311-page="sign-in" class="c311-public-page">
       <c311-error-summary :errors="formErrors" :field-targets="fieldTargets" :title="t('error.review', 'Review your information')" />
       <form @submit.prevent="signIn">
         <div class="form-group"><label for="c311-login-identifier">{{ t('field.loginIdentifier', 'Email or username') }}</label><input id="c311-login-identifier" v-model.trim="forms.signIn.login_identifier" class="form-control" autocomplete="username" aria-describedby="c311-error-summary" aria-errormessage="c311-error-summary" :aria-invalid="hasError('login_identifier') ? 'true' : 'false'" @input="markDirty"></div>
-        <div class="form-group"><label for="c311-login-password">{{ t('field.password', 'Password') }}</label><input id="c311-login-password" v-model="forms.signIn.password" class="form-control" type="password" autocomplete="current-password" aria-describedby="c311-error-summary" aria-errormessage="c311-error-summary" :aria-invalid="hasError('password') ? 'true' : 'false'"></div>
+        <div class="form-group"><label for="c311-login-password">{{ t('field.password', 'Password') }}</label><input id="c311-login-password" v-model="forms.signIn.password" class="form-control" type="password" autocomplete="current-password" aria-required="true" aria-describedby="c311-error-summary" aria-errormessage="c311-error-summary" :aria-invalid="hasError('password') ? 'true' : 'false'" @input="markDirty"></div>
         <button class="btn btn-primary" type="submit" data-c311-action="sign-in" :disabled="busy.signIn">{{ busy.signIn ? t('action.working', 'Working…') : t('action.signIn', 'Sign in') }}</button>
       </form>
       <div class="mt-3 d-flex flex-column align-items-start gap-2">
@@ -225,6 +225,7 @@ import { components, c311, c311Identity, mixins } from '@cortezaproject/corteza-
 
 const { C311AppShell, C311DataState, C311ErrorSummary, C311HelpDrawer, C311LanguageSelector, C311MainNav, C311ResponsiveData } = components
 const stateForError = c311?.c311StateForError
+const isSanitizedMarkup = c311?.isC311SanitizedMarkup || (value => !!value && value.sanitized === true && typeof value.body === 'string')
 const validatePassword = c311Identity?.validatePassword || (() => [])
 const c311DirtyGuard = mixins?.c311DirtyGuard || {
   data: () => ({ c311Dirty: false, c311DirtyStorageKey: '' }),
@@ -285,8 +286,10 @@ export default {
     successMessage: '',
     federatedMessage: '',
     contentBody: '',
+    contentSanitized: false,
     contentKey: '',
     helpBody: '',
+    helpSanitized: false,
     branding: null,
     items: [],
     formErrors: [],
@@ -458,8 +461,10 @@ export default {
       this.successMessage = ''
       this.federatedMessage = ''
       this.contentBody = ''
+      this.contentSanitized = false
       this.contentKey = ''
       this.helpBody = ''
+      this.helpSanitized = false
       this.branding = null
       this.items = []
       this.selectedRequest = null
@@ -596,12 +601,27 @@ export default {
             this.state = this.contentState
             return
           }
-          this.contentBody = contentResult.value?.body || ''
-          this.contentKey = contentResult.value?.content_key || contentKey
+          const content = contentResult.value || {}
+          if (content.body && !isSanitizedMarkup(content)) {
+            this.dataError = displayError({ status: 422, code: 'VALIDATION_ERROR', message: this.t('error.unsafeContent', 'Content was not marked as safe by the provider.') })
+            this.contentState = 'validation-error'
+            this.state = 'validation-error'
+            return
+          }
+          this.contentBody = content.body || ''
+          this.contentSanitized = isSanitizedMarkup(content)
+          this.contentKey = content.content_key || contentKey
           this.contentState = this.contentBody ? 'populated' : 'empty'
           if (helpResult.status === 'fulfilled') {
-            this.helpBody = helpResult.value?.body || ''
-            this.helpState = this.helpBody ? 'populated' : 'empty'
+            const help = helpResult.value || {}
+            if (help.body && !isSanitizedMarkup(help)) {
+              this.helpError = displayError({ status: 422, code: 'VALIDATION_ERROR', message: this.t('error.unsafeContent', 'Content was not marked as safe by the provider.') })
+              this.helpState = 'validation-error'
+            } else {
+              this.helpBody = help.body || ''
+              this.helpSanitized = isSanitizedMarkup(help)
+              this.helpState = this.helpBody ? 'populated' : 'empty'
+            }
           } else {
             this.helpError = displayError(helpResult.reason)
             this.helpState = stateForError?.(this.helpError) || (this.helpError.retryable ? 'retryable-error' : 'terminal-error')

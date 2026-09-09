@@ -46,7 +46,7 @@ export default {
   computed: {
     allowed () {
       if (this.allowAnonymous && !this.$C311?.session?.authenticated) return true
-      return !!this.$C311?.can(this.capability) && (!this.scope || this.$C311.hasScope(this.scope))
+      return !!this.$C311 && typeof this.$C311.can === 'function' && this.$C311.can(this.capability) && (!this.scope || (typeof this.$C311.hasScope === 'function' && this.$C311.hasScope(this.scope)))
     },
   },
 }

@@ -26,7 +26,7 @@
       role="status"
       aria-live="polite"
     >
-      <strong>{{ operation.kind }}</strong> · <span data-c311-operation-status>{{ operation.status }}</span>
+      <strong>{{ operation.kind }}</strong> · <span data-c311-operation-status aria-live="polite">{{ operation.status }}</span>
       <pre
         v-if="operation.result"
         class="c311-output"
@@ -40,10 +40,18 @@
         {{ operation.error.message }}
       </p>
     </div>
+    <c311-error-summary
+      v-if="error"
+      :errors="errorEntries"
+      :title="t('error.review', 'Review the operation result')"
+      :field-targets="{ form: 'c311-extension-error' }"
+    />
     <div
       v-if="error"
+      id="c311-extension-error"
       class="alert alert-danger"
       role="alert"
+      tabindex="-1"
       data-c311-error
     >
       {{ error.message || error }}
@@ -135,6 +143,7 @@
                 v-if="workflowForm.workflow_id ? can('workflow_update') : can('workflow_create')"
                 class="btn btn-primary"
                 data-c311-action="workflow-save"
+                :disabled="busy.workflow"
                 @click="saveWorkflow"
               >
                 {{ t('action.save', 'Save') }}
@@ -183,6 +192,7 @@
               v-if="can('workflow_test')"
               class="btn btn-outline-secondary mr-2"
               data-c311-action="workflow-test"
+              :disabled="busy.workflow"
               @click="testWorkflow(workflow)"
             >
               {{ t('workflow.test', 'Test') }}
@@ -287,7 +297,7 @@
             <div class="form-group col-md-2 d-flex align-items-end">
               <button
                 v-if="can('saved_report_create')"
-                :disabled="!reportValid"
+                :disabled="!reportValid || busy.report"
                 class="btn btn-primary"
                 data-c311-action="report-save"
                 @click="saveReport"
@@ -401,6 +411,7 @@
             v-if="can('mail_send')"
             class="btn btn-primary"
             data-c311-action="mail-send"
+            :disabled="busy.mail"
             @click="sendMail"
           >
             {{ t('mail.send', 'Send') }}
@@ -421,11 +432,18 @@
             {{ t('mail.templateSave', 'Save template') }}
           </button>
           <div
-            v-if="mailPreview"
+            v-if="mailPreview && mailPreview.sanitized === true"
             class="c311-output c311-mail-preview"
             data-c311-mail-preview
             v-html="mailPreview.html"
           /><p
+            v-else-if="mailPreview"
+            class="text-danger"
+            role="alert"
+            data-c311-mail-preview-error
+          >
+            {{ t('mail.previewUnsafe', 'Preview was rejected because the provider did not mark the HTML as safe.') }}
+          </p><p
             v-if="delivery"
             data-c311-mail-delivery
           >
@@ -519,6 +537,7 @@
           <button
             data-c311-action="workflow-action-execute"
             class="btn btn-primary mr-2"
+            :disabled="busy.oauth"
             @click="executeWorkflowOAuthAction"
           >
             {{ t('oauth.execute', 'Execute with OAuth2 client credentials') }}
@@ -526,6 +545,7 @@
           <p
             data-c311-oauth-status
             role="status"
+            aria-live="polite"
           >
             {{ oauthStatus }}
           </p>
@@ -769,8 +789,8 @@ const c311StateForError = c311?.c311StateForError
 
 export default {
   name: 'C311Extensions',
-  components: { C311AppShell: components.C311AppShell, C311DataState: components.C311DataState, C311MainNav: components.C311MainNav },
-  data: () => ({ state: 'loading', error: null, conflictError: null, conflictReloaded: false, pendingWorkflowConflict: null, message: '', operation: null, workflows: [], executions: [], reports: [], reportCatalogue: [], audits: [], auditNextPageToken: null, workflowForm: { workflow_id: '', name: '', trigger: 'SERVICE_REQUEST_CREATED', conditionsText: '[]', actionsText: '[]', version: 1 }, workflowTestRequestID: 'request-fixture-001', workflowAction: { request_id: 'request-fixture-001', action: 'notify_department', payloadText: '{}' }, actionExecution: null, reportForm: { name: '', entity: 'service_requests', columnsText: 'request_number,status', grouping: '', sortText: '-created_at', filtersText: '{}' }, mail: { to: '', subject: '', text: '', html: '', template_id: '' }, mailTemplates: [], mailPreview: null, delivery: null, mailFailure: {}, calendar: '', calendarEvents: [], oauthStatus: '', csvPreview: '', auditForm: { eventType: '', actorId: '', actorType: '', entityId: '', entityType: '', requestId: '', sourceChannel: '', occurredFrom: '', occurredTo: '', pageSize: 50, pageToken: '' }, contactEmailFiltersText: '{}', dataExportForm: { entity: 'constituents', filtersText: '{}', pageSize: 50, pageToken: '', updatedSince: '' }, exportResult: null, mode: 'audit' }),
+  components: { C311AppShell: components.C311AppShell, C311DataState: components.C311DataState, C311ErrorSummary: components.C311ErrorSummary, C311MainNav: components.C311MainNav },
+  data: () => ({ state: 'loading', error: null, conflictError: null, conflictReloaded: false, pendingWorkflowConflict: null, message: '', operation: null, workflows: [], executions: [], reports: [], reportCatalogue: [], audits: [], auditNextPageToken: null, workflowForm: { workflow_id: '', name: '', trigger: 'SERVICE_REQUEST_CREATED', conditionsText: '[]', actionsText: '[]', version: 1 }, workflowTestRequestID: 'request-fixture-001', workflowAction: { request_id: 'request-fixture-001', action: 'notify_department', payloadText: '{}' }, actionExecution: null, reportForm: { name: '', entity: 'service_requests', columnsText: 'request_number,status', grouping: '', sortText: '-created_at', filtersText: '{}' }, mail: { to: '', subject: '', text: '', html: '', template_id: '' }, mailTemplates: [], mailPreview: null, delivery: null, mailFailure: {}, calendar: '', calendarEvents: [], oauthStatus: '', csvPreview: '', auditForm: { eventType: '', actorId: '', actorType: '', entityId: '', entityType: '', requestId: '', sourceChannel: '', occurredFrom: '', occurredTo: '', pageSize: 50, pageToken: '' }, contactEmailFiltersText: '{}', dataExportForm: { entity: 'constituents', filtersText: '{}', pageSize: 50, pageToken: '', updatedSince: '' }, exportResult: null, mode: 'audit', busy: { workflow: false, report: false, mail: false, calendar: false, oauth: false } }),
   computed: {
     title () { return ({ workflows: this.t('workflow.title', 'Workflows'), reports: this.t('report.title', 'Reports'), mail: this.t('mail.title', 'Mail'), calendar: this.t('calendar.title', 'Calendar'), oauth: this.t('oauth.title', 'Workflow OAuth2 action'), audit: this.t('audit.title', 'Audit and export') })[this.mode] },
     navItems () { return [{ route: '/c311/staff/workflows', label: this.t('workflow.title', 'Workflows'), capability: 'workflow_list' }, { route: '/c311/staff/reports', label: this.t('report.title', 'Reports'), capability: 'report_catalogue' }, { route: '/c311/staff/mail', label: this.t('mail.title', 'Mail'), capability: 'mail_preview' }, { route: '/c311/staff/calendar', label: this.t('calendar.title', 'Calendar'), capability: 'calendar_export' }, { route: '/c311/staff/audit', label: this.t('audit.title', 'Audit'), capability: 'audit_list' }, { route: '/c311/staff/oauth', label: this.t('oauth.title', 'Workflow OAuth2 action'), scope: 'workflow.execute' }].filter(item => (!item.capability || this.can(item.capability)) && (!item.scope || this.hasScope(item.scope))) },
@@ -779,26 +799,61 @@ export default {
     reportColumns () { return this.reportForm.columnsText.split(',').map(value => value.trim()).filter(Boolean) },
     reportSort () { return this.reportForm.sortText.split(',').map(value => value.trim()).filter(Boolean) },
     reportFilters () { try { return JSON.parse(this.reportForm.filtersText || '{}') } catch (_error) { return null } },
+    errorEntries () {
+      const value = this.error || {}
+      return [{ field: 'form', code: value.code || value.error || 'OPERATION_FAILED', message: value.message || String(value) }]
+    },
     reportValid () { return !!this.reportForm.name && this.reportColumns.length > 0 && this.reportColumns.length <= 20 && this.reportFilters && !Array.isArray(this.reportFilters) && !this.reportForm.grouping.split(',').filter(Boolean).slice(1).length && this.reportSort.length <= 3 },
     reportValidationMessage () { if (!this.reportForm.name) return this.t('report.nameRequired', 'Name is required.'); if (this.reportColumns.length > 20) return this.t('report.tooManyColumns', 'A report can contain at most 20 columns.'); if (this.reportSort.length > 3) return this.t('report.tooManySort', 'A report can contain at most 3 sort fields.'); if (!this.reportFilters || Array.isArray(this.reportFilters)) return this.t('report.invalidFilters', 'Filters must be a JSON object.'); return this.t('report.invalid', 'Report definition is invalid.') },
   },
-  watch: { '$route.path': 'load' },
-  created () { this.restoreAuditFilters(); this.load() },
+  watch: {
+    '$route.path': 'load',
+    workflowForm: { deep: true, handler () { this.persistExtensionForms() } },
+    reportForm: { deep: true, handler () { this.persistExtensionForms() } },
+  },
+  created () { this.restoreAuditFilters(); this.restoreExtensionForms(); this.load() },
   methods: {
     t (key, fallback) { const value = this.$t?.(`c311:${key}`); return value && value !== `c311:${key}` && value !== key ? value : fallback },
     can (capability) { return !!this.$C311?.can?.(capability) || !!this.$C311?.session?.actor?.capabilities?.includes(capability) },
     hasScope (scope) { return !!this.$C311?.hasScope?.(scope) || !!this.$C311?.session?.actor?.scopes?.includes(scope) },
+    persistExtensionForms () {
+      try {
+        sessionStorage.setItem('c311:fe10:extension-forms', JSON.stringify({
+          workflowForm: this.workflowForm,
+          reportForm: this.reportForm,
+        }))
+      } catch (error) {
+        // Browser storage is optional and must never block editing.
+        return undefined
+      }
+    },
+    restoreExtensionForms () {
+      try {
+        const raw = sessionStorage.getItem('c311:fe10:extension-forms')
+        if (!raw) return
+        const saved = JSON.parse(raw)
+        if (saved.workflowForm && typeof saved.workflowForm === 'object') this.workflowForm = { ...this.workflowForm, ...saved.workflowForm }
+        if (saved.reportForm && typeof saved.reportForm === 'object') this.reportForm = { ...this.reportForm, ...saved.reportForm }
+      } catch (error) {
+        return undefined
+      }
+    },
+    async withBusy (name, task) {
+      if (this.busy[name]) return
+      this.$set(this.busy, name, true)
+      try { return await task() } finally { this.$set(this.busy, name, false) }
+    },
     async load () { this.error = null; this.operation = null; this.state = 'loading'; this.mode = this.$route.path.includes('/workflows') ? 'workflows' : this.$route.path.includes('/reports') ? 'reports' : this.$route.path.includes('/mail') ? 'mail' : this.$route.path.includes('/calendar') ? 'calendar' : this.$route.path.includes('/oauth') ? 'oauth' : 'audit'; try { if (this.mode === 'workflows') { const page = await this.$C311.provider.listWorkflows(); this.workflows = page.items; this.executions = (await this.$C311.provider.listWorkflowExecutions()).items } else if (this.mode === 'reports') { this.reportCatalogue = (await this.$C311.provider.listReportCatalogue()).items; this.reports = (await this.$C311.provider.listReports()).items } else if (this.mode === 'mail') { await this.loadMailTemplates() } else if (this.mode === 'calendar') await this.refreshCalendar(); else if (this.mode === 'audit') await this.loadAudit(); this.state = this.mode === 'audit' ? 'populated' : (this.mode === 'workflows' ? this.workflows : this.mode === 'reports' ? this.reports : [1]).length ? 'populated' : 'empty' } catch (error) { this.error = error; this.state = c311StateForError?.(error) || (error.retryable ? 'retryable-error' : 'terminal-error') } },
     async resolveOperation (pending) { this.operation = pending; if (!pending?.operation_id) return pending; let result = pending; let attempts = 0; while (['PENDING', 'RUNNING'].includes(result.status) && attempts < 5) { result = await this.$C311.provider.getOperation(pending.operation_id); this.operation = result; attempts += 1 } if (result.status === 'FAILED') this.error = result.error || new Error(this.t('operation.failed', 'Operation failed.')); return result },
     newWorkflow () { this.workflowForm = { workflow_id: '', name: '', trigger: 'SERVICE_REQUEST_CREATED', conditionsText: '[]', actionsText: '[]', version: 1 } },
     editWorkflow (workflow) { this.workflowForm = { workflow_id: workflow.workflow_id, name: workflow.name, trigger: workflow.trigger, conditionsText: JSON.stringify(workflow.conditions || []), actionsText: JSON.stringify(workflow.actions || []), version: workflow.version } },
     parseJSON (value) { try { return JSON.parse(value) } catch (_error) { throw new Error(this.t('workflow.invalidJson', 'Conditions and actions must be valid JSON.')) } },
-    async saveWorkflow () { let input; try { input = { workflow_id: this.workflowForm.workflow_id || 'workflow-local-001', name: this.workflowForm.name, trigger: this.workflowForm.trigger, active: false, conditions: this.parseJSON(this.workflowForm.conditionsText), actions: this.parseJSON(this.workflowForm.actionsText), version: this.workflowForm.version, updated_at: FIXTURE_TIME }; const result = input.workflow_id === 'workflow-local-001' && !this.workflows.some(item => item.workflow_id === input.workflow_id) ? await this.$C311.provider.createWorkflow(input) : await this.$C311.provider.updateWorkflow(input.workflow_id, input, { expectedVersion: input.version }); const index = this.workflows.findIndex(item => item.workflow_id === result.workflow_id); if (index < 0) this.workflows.push(result); else this.$set(this.workflows, index, result); this.workflowForm.version = result.version; this.error = null; this.conflictError = null; this.pendingWorkflowConflict = null; this.message = this.t('workflow.saved', 'Workflow saved.') } catch (error) { this.error = error; if (error?.status === 409 && input) { this.conflictError = error; this.conflictReloaded = false; this.pendingWorkflowConflict = { ...input } } } },
+    async saveWorkflow () { return this.withBusy('workflow', async () => { let input; try { input = { workflow_id: this.workflowForm.workflow_id || 'workflow-local-001', name: this.workflowForm.name, trigger: this.workflowForm.trigger, active: false, conditions: this.parseJSON(this.workflowForm.conditionsText), actions: this.parseJSON(this.workflowForm.actionsText), version: this.workflowForm.version, updated_at: FIXTURE_TIME }; const result = input.workflow_id === 'workflow-local-001' && !this.workflows.some(item => item.workflow_id === input.workflow_id) ? await this.$C311.provider.createWorkflow(input) : await this.$C311.provider.updateWorkflow(input.workflow_id, input, { expectedVersion: input.version }); const index = this.workflows.findIndex(item => item.workflow_id === result.workflow_id); if (index < 0) this.workflows.push(result); else this.$set(this.workflows, index, result); this.workflowForm.version = result.version; this.error = null; this.conflictError = null; this.pendingWorkflowConflict = null; this.message = this.t('workflow.saved', 'Workflow saved.') } catch (error) { this.error = error; if (error?.status === 409 && input) { this.conflictError = error; this.conflictReloaded = false; this.pendingWorkflowConflict = { ...input } } } }) },
     async testWorkflow (workflow) { try { const result = await this.resolveOperation(await this.$C311.provider.testWorkflow(workflow.workflow_id, { request_id: this.workflowTestRequestID })); this.executions = (await this.$C311.provider.listWorkflowExecutions()).items; this.message = `${result.operation_id} · ${result.status}` } catch (error) { this.error = error } },
     async reloadWorkflowConflict () { const pending = this.pendingWorkflowConflict; if (!pending) return; try { const server = await this.$C311.provider.getWorkflow(pending.workflow_id); const index = this.workflows.findIndex(item => item.workflow_id === server.workflow_id); if (index >= 0) this.$set(this.workflows, index, server); this.workflowForm = { ...this.workflowForm, workflow_id: server.workflow_id, trigger: server.trigger, version: server.version }; this.conflictReloaded = true; this.error = null } catch (error) { this.error = error } },
     async reapplyWorkflowConflict () { const pending = this.pendingWorkflowConflict; if (!pending || !this.conflictReloaded) return; const current = this.workflows.find(item => item.workflow_id === pending.workflow_id); if (!current) return; try { const result = await this.$C311.provider.updateWorkflow(current.workflow_id, { ...current, name: pending.name, trigger: pending.trigger, conditions: pending.conditions, actions: pending.actions, active: current.active, version: current.version, updated_at: FIXTURE_TIME }, { expectedVersion: current.version }); const index = this.workflows.findIndex(item => item.workflow_id === result.workflow_id); if (index >= 0) this.$set(this.workflows, index, result); this.workflowForm = { ...this.workflowForm, version: result.version }; this.conflictError = null; this.pendingWorkflowConflict = null; this.conflictReloaded = false; this.error = null; this.message = this.t('workflow.saved', 'Workflow saved.') } catch (error) { this.error = error; this.conflictError = error?.status === 409 ? error : null } },
     async toggleWorkflow (workflow) { try { const fn = workflow.active ? 'deactivateWorkflow' : 'activateWorkflow'; const updated = await this.$C311.provider[fn](workflow.workflow_id, { expectedVersion: workflow.version }); Object.assign(workflow, updated) } catch (error) { this.error = error } },
-    async saveReport () { if (!this.reportValid) return; try { const input = { report_id: 'report-local-001', name: this.reportForm.name, entity: this.reportForm.entity, columns: this.reportColumns, filters: this.reportFilters, grouping: this.reportForm.grouping || null, sort: this.reportSort, version: 1, updated_at: FIXTURE_TIME }; this.reports.push(await this.$C311.provider.createReport(input)); this.message = this.t('report.saved', 'Report saved.') } catch (error) { this.error = error } },
+    async saveReport () { if (!this.reportValid) return; return this.withBusy('report', async () => { try { const input = { report_id: 'report-local-001', name: this.reportForm.name, entity: this.reportForm.entity, columns: this.reportColumns, filters: this.reportFilters, grouping: this.reportForm.grouping || null, sort: this.reportSort, version: 1, updated_at: FIXTURE_TIME }; this.reports.push(await this.$C311.provider.createReport(input)); this.message = this.t('report.saved', 'Report saved.') } catch (error) { this.error = error } }) },
     async runReport (report) { try { const result = await this.resolveOperation(await this.$C311.provider.runReport({ definition: report })); this.message = `${result.operation_id} · ${result.status}` } catch (error) { this.error = error } },
     async shareReport (report) { try { this.message = (await this.$C311.provider.shareReport(report.report_id, { roles: ['supervisor'] }, { expectedVersion: report.version })).report_id } catch (error) { this.error = error } },
     async exportReport (report) { try { const result = await this.resolveOperation(await this.$C311.provider.exportReport(report.report_id, { format: 'CSV', idempotencyKey: `report-${report.report_id}` })); const csv = String(result.result?.body || ''); if (!csv) throw new Error(this.t('report.csvInvalid', 'CSV encoding is invalid.')); if (typeof TextEncoder !== 'undefined' && typeof TextDecoder !== 'undefined') { const decoded = new TextDecoder('utf-8', { fatal: true }).decode(new TextEncoder().encode(csv)); if (decoded !== csv) throw new Error(this.t('report.csvInvalid', 'CSV encoding is invalid.')) } this.csvPreview = csv; this.message = `${result.operation_id} · ${result.status}` } catch (error) { this.error = error } },
@@ -808,7 +863,7 @@ export default {
     selectMailTemplate () { const template = this.mailTemplates.find(item => item.template_id === this.mail.template_id); if (!template) return; this.mail.subject = template.subject; this.mail.text = template.text; this.mail.html = template.html },
     async saveMailTemplate () { if (!this.mail.template_id || !this.providerSupportsMailTemplates) return; try { const template = await this.$C311.provider.updateMailTemplate(this.mail.template_id, { name: this.mailTemplates.find(item => item.template_id === this.mail.template_id)?.name || this.mail.template_id, subject: this.mail.subject, text: this.mail.text, html: this.mail.html || `<p>${this.mail.text}</p>` }); const index = this.mailTemplates.findIndex(item => item.template_id === template.template_id); if (index >= 0) this.$set(this.mailTemplates, index, template); this.message = this.t('mail.templateSaved', 'Mail template saved.') } catch (error) { this.mailFailure = error } },
     async previewMail () { try { this.mailPreview = await this.$C311.provider.previewMail(this.mailInput()); this.mailFailure = {} } catch (error) { this.mailFailure = error } },
-    async sendMail () { try { this.delivery = await this.$C311.provider.sendMail(this.mailInput(), { idempotencyKey: this.mailIdempotencyKey() }); this.mailFailure = {} } catch (error) { this.mailFailure = error } },
+    async sendMail () { return this.withBusy('mail', async () => { try { this.delivery = await this.$C311.provider.sendMail(this.mailInput(), { idempotencyKey: this.mailIdempotencyKey() }); this.mailFailure = {} } catch (error) { this.mailFailure = error } }) },
     async refreshMailDelivery () { if (!this.delivery) return; try { this.delivery = await this.$C311.provider.getMailDelivery(this.delivery.delivery_id); this.mailFailure = {} } catch (error) { this.mailFailure = error } },
     async importCalendar (event) { const file = event.target.files?.[0]; if (!file) return; try { const result = await this.resolveOperation(await this.$C311.provider.importCalendar({ ics: await file.text() })); this.message = `${result.operation_id} · ${result.status}`; await this.refreshCalendar() } catch (error) { this.error = error } },
     parseCalendar (ics) {
@@ -867,7 +922,7 @@ export default {
     async exportAudit () { try { const result = await this.resolveOperation(await this.$C311.provider.exportAuditEvents(this.auditFilters())); this.message = `${result.operation_id} · ${result.status}` } catch (error) { this.error = error } },
     async exportContactEmails () { try { const filters = this.parseJSON(this.contactEmailFiltersText || '{}'); const result = await this.resolveOperation(await this.$C311.provider.exportContactEmails({ filters })); this.message = `${result.operation_id} · ${result.status}` } catch (error) { this.error = error } },
     async exportData () { try { const filters = this.parseJSON(this.dataExportForm.filtersText || '{}'); this.exportResult = await this.$C311.provider.exportData(this.dataExportForm.entity, { filters, page_size: this.dataExportForm.pageSize, ...(this.dataExportForm.pageToken ? { page_token: this.dataExportForm.pageToken } : {}), ...(this.dataExportForm.updatedSince ? { updated_since: this.dataExportForm.updatedSince } : {}) }); this.message = this.t('audit.exportReady', 'Export page is ready.') } catch (error) { this.error = error } },
-    async executeWorkflowOAuthAction () { try { const payload = this.parseJSON(this.workflowAction.payloadText || '{}'); const accepted = await this.$C311.provider.executeWorkflowAction({ action: this.workflowAction.action, request_id: this.workflowAction.request_id, payload }, { idempotencyKey: `workflow-action-${this.workflowAction.request_id}-${this.workflowAction.action}` }); this.actionExecution = await this.$C311.provider.getWorkflowExecution(accepted.execution_id); this.oauthStatus = `${accepted.execution_id} · ${accepted.accepted_at} · ${this.actionExecution.outcome}` } catch (error) { this.error = error; this.oauthStatus = `${error.code || error.error || 'ERROR'}: ${error.message || this.t('oauth.failed', 'Workflow OAuth2 action failed.')}` } },
+    async executeWorkflowOAuthAction () { return this.withBusy('oauth', async () => { try { const payload = this.parseJSON(this.workflowAction.payloadText || '{}'); const accepted = await this.$C311.provider.executeWorkflowAction({ action: this.workflowAction.action, request_id: this.workflowAction.request_id, payload }, { idempotencyKey: `workflow-action-${this.workflowAction.request_id}-${this.workflowAction.action}` }); this.actionExecution = await this.$C311.provider.getWorkflowExecution(accepted.execution_id); this.oauthStatus = `${accepted.execution_id} · ${accepted.accepted_at} · ${this.actionExecution.outcome}` } catch (error) { this.error = error; this.oauthStatus = `${error.code || error.error || 'ERROR'}: ${error.message || this.t('oauth.failed', 'Workflow OAuth2 action failed.')}` } }) },
   },
 }
 </script>

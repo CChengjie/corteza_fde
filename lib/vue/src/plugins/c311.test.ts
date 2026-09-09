@@ -54,6 +54,7 @@ describe('C311 provider selection and runtime', () => {
     browserWindow.C311MockSession = 'expired'
     const mock = createC311Provider({ MockC311Provider: MockProvider as any, C311HttpProvider: HttpProvider as any, C311FetchTransport: FetchTransport as any })
     expect(mock).to.be.instanceOf(MockProvider)
+    expect((browserWindow as any).__C311MockProvider).to.equal(mock)
     expect(options).to.deep.equal([{ role: 'service_agent', scenario: 'empty', sessionVariant: 'expired' }])
 
     browserWindow.C311Mode = 'http'

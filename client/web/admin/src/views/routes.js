@@ -103,14 +103,38 @@ export default [
   {
     name: 'c311.staff.reports',
     path: '/c311/staff/reports',
-    component: () => import('./C311/Staff.vue'),
+    component: () => import('./C311/Extensions.vue'),
     meta: { c311: { requiresAuth: true, route: 'report_catalogue', capabilities: ['report_catalogue'] } },
   },
   {
     name: 'c311.staff.workflows',
     path: '/c311/staff/workflows',
-    component: () => import('./C311/Staff.vue'),
-    meta: { c311: { requiresAuth: true, route: 'workflow_list', capabilities: ['workflow_list'], scopes: ['workflow.execute'] } },
+    component: () => import('./C311/Extensions.vue'),
+    meta: { c311: { requiresAuth: true, route: 'workflow_list', capabilities: ['workflow_list'] } },
+  },
+  {
+    name: 'c311.staff.mail',
+    path: '/c311/staff/mail',
+    component: () => import('./C311/Extensions.vue'),
+    meta: { c311: { requiresAuth: true, route: 'mail_preview', capabilities: ['mail_preview'] } },
+  },
+  {
+    name: 'c311.staff.calendar',
+    path: '/c311/staff/calendar',
+    component: () => import('./C311/Extensions.vue'),
+    meta: { c311: { requiresAuth: true, route: 'calendar_export', capabilities: ['calendar_export'] } },
+  },
+  {
+    name: 'c311.staff.audit',
+    path: '/c311/staff/audit',
+    component: () => import('./C311/Extensions.vue'),
+    meta: { c311: { requiresAuth: true, route: 'audit_list', capabilities: ['audit_list'] } },
+  },
+  {
+    name: 'c311.staff.oauth',
+    path: '/c311/staff/oauth',
+    component: () => import('./C311/Extensions.vue'),
+    meta: { c311: { requiresAuth: true, scopes: ['workflow.execute'] } },
   },
   {
     name: 'c311.staff',

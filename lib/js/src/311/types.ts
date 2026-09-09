@@ -158,6 +158,52 @@ export interface Branding {
   portal_wallpaper_url?: string | null
 }
 
+export interface BrandingWrite {
+  organisation_name?: string
+  primary_colour?: string
+  accent_colour?: string
+  font_family?: string
+  login_header?: string
+  public_header?: string
+  public_footer?: string
+  logo_url?: string
+  favicon_url?: string
+  portal_wallpaper_url?: string
+}
+
+export interface RollbackInput { target_version: number }
+
+export interface Category {
+  code: string
+  active: boolean
+  labels: Record<string, string>
+  version: number
+  updated_at: ISODateTime
+}
+
+export interface CategoryWrite {
+  code: string
+  active: boolean
+  labels: Record<string, string>
+}
+
+export interface CustomFieldDefinition {
+  key: string
+  labels: Record<string, string>
+  entity: 'constituent' | 'service_request'
+  field_type: import('./enums').CustomFieldType
+  required: boolean
+  active: boolean
+  version: number
+  updated_at: ISODateTime
+  choice_values?: string[]
+  default?: unknown
+  validation?: Record<string, unknown>
+}
+
+export interface ContentWrite { body: string }
+export interface HelpWrite { language: Language, body: string }
+
 export interface ContentObject {
   content_key: PublicContentKey
   body: string
@@ -171,6 +217,8 @@ export interface HelpContent {
   help_key: HelpKey
   language: Language
   body: string
+  state: 'DRAFT' | 'PUBLISHED'
+  published: boolean
   version: number
   updated_at: ISODateTime
 }
@@ -757,6 +805,8 @@ export interface C311FixtureSet {
   /** Mock-only public projection sources; the provider filters portal visibility. */
   public_relationships?: Record<string, RequestRelationship[]>
   public_notes?: Record<string, RequestNote[]>
+  categories?: Category[]
+  custom_fields?: CustomFieldDefinition[]
 }
 
 export interface ValidationFailure {

@@ -1,6 +1,6 @@
 import { C311ApiError } from './errors'
-import { APPLICATION_ROLES, AUDIT_ACTOR_TYPES, CIVICWORKS_STATUSES, CONTACT_CATEGORIES, C311_SCENARIOS, DEPARTMENT_CODES, DISTRICT_CODES, LANGUAGES, ORIGIN_CLASSES, PHONE_LABELS, RELATIONSHIP_TYPES, REMINDER_CHANNELS, SERVICE_REQUEST_STATUSES, SERVICE_TYPES, SOURCE_CHANNELS, type ApplicationRole, type C311Scenario, type ContractCapability, type HelpKey, type IdentityProvider, type Language, type PublicContentKey } from './enums'
-import { cloneFixtureSet, createDefaultFixtureSet } from './fixtures'
+import { APPLICATION_ROLES, AUDIT_ACTOR_TYPES, CIVICWORKS_STATUSES, CONTACT_CATEGORIES, CUSTOM_FIELD_TYPES, C311_SCENARIOS, DEPARTMENT_CODES, DISTRICT_CODES, LANGUAGES, ORIGIN_CLASSES, PHONE_LABELS, RELATIONSHIP_TYPES, REMINDER_CHANNELS, SERVICE_REQUEST_STATUSES, SERVICE_TYPES, SOURCE_CHANNELS, type ApplicationRole, type C311Scenario, type ContractCapability, type HelpKey, type IdentityProvider, type Language, type PublicContentKey } from './enums'
+import { BENCHMARK_NOW, cloneFixtureSet, createDefaultFixtureSet } from './fixtures'
 import type {
   AccountRegistration,
   AccountRegistrationAcknowledgement,
@@ -10,13 +10,19 @@ import type {
   AnonymousStatusLookupResponse,
   BinaryAttachment,
   Branding,
+  BrandingWrite,
+  Category,
+  CategoryWrite,
   C311FixtureSet,
   ContentObject,
+  ContentWrite,
+  CustomFieldDefinition,
   DraftWrite,
   GeocodeRequest,
   GeocodeResponse,
   FederatedRedirect,
   HelpContent,
+  HelpWrite,
   LanguagePreference,
   LoginIdentifierChange,
   ListQuery,
@@ -34,6 +40,7 @@ import type {
   RequestListQuery,
   RequestQueueItem,
   RequestSummary,
+  RollbackInput,
   ReopenRequestResponse,
   ServiceRequest,
   ServiceRequestCreate,
@@ -444,6 +451,28 @@ function assertWorkflowDefinition (input: WorkflowDefinition, creating: boolean)
   if (errors.length) throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'The workflow definition is invalid.', retryable: false, errors }, 422)
 }
 
+function isSafeSanitizedHTML (value: string): boolean {
+  return !/<\s*(script|iframe|object|embed|style|svg|math)\b/i.test(value) &&
+    !/\son[a-z]+\s*=/i.test(value) &&
+    !/(?:javascript|data)\s*:/i.test(value)
+}
+
+function validCustomFieldDefinition (input: CustomFieldDefinition, currentKey?: string): boolean {
+  const choices = input.choice_values || []
+  const choiceType = input.field_type === 'SINGLE_CHOICE' || input.field_type === 'MULTI_CHOICE'
+  const validChoiceDefault = input.default === undefined || (input.field_type === 'SINGLE_CHOICE'
+    ? typeof input.default === 'string' && choices.includes(input.default)
+    : input.field_type === 'MULTI_CHOICE'
+      ? Array.isArray(input.default) && input.default.every(value => typeof value === 'string' && choices.includes(value))
+      : true)
+  return /^[a-z][a-z0-9_.-]*$/.test(input.key) &&
+    (!currentKey || input.key === currentKey) &&
+    !!input.labels?.EN?.trim() &&
+    CUSTOM_FIELD_TYPES.includes(input.field_type) &&
+    (!choiceType || (choices.length > 0 && new Set(choices).size === choices.length)) &&
+    validChoiceDefault
+}
+
 function validMockProfileInput (input: ProfileUpdate): boolean {
   const allowed = ['display_name', 'phone_numbers', 'addresses', 'preferred_language', 'primary_category']
   if (Object.keys(input).some(key => !allowed.includes(key))) return false
@@ -505,6 +534,15 @@ export class MockC311Provider implements C311Provider {
   private readonly relationshipAudits: Record<string, RequestRelationshipAudit[]> = {}
   private readonly consumedScenarioFailures = new Set<string>()
   private noteSerial = 0
+  private branding: Branding
+  private publishedBranding: Branding
+  private readonly brandingVersions: Branding[]
+  private readonly adminContent: Record<string, ContentObject>
+  private readonly adminContentVersions: Record<string, ContentObject[]>
+  private readonly adminCategories: Category[]
+  private readonly adminCustomFields: CustomFieldDefinition[]
+  private readonly adminHelp: Record<string, HelpContent>
+  private readonly adminHelpVersions: Record<string, HelpContent[]>
 
   private extensionStorage (): Storage | undefined {
     if (typeof window === 'undefined' || (window as Window & { C311Mode?: string }).C311Mode !== 'mock') return undefined
@@ -547,6 +585,20 @@ export class MockC311Provider implements C311Provider {
       ? copy(this.sessionVariant === 'expired' ? this.fixtures.role_fixtures[this.role].expired_session : this.fixtures.role_fixtures[this.role].session)
       : copy(this.fixtures.session)
     this.profile = copy(options.profile || this.fixtures.requests[0].primary_requester)
+    this.branding = copy(this.fixtures.branding || createDefaultFixtureSet().branding!)
+    this.publishedBranding = copy(this.branding)
+    this.brandingVersions = [copy(this.branding)]
+    this.adminContent = copy(this.fixtures.public_content || {})
+    this.adminContentVersions = Object.fromEntries(Object.entries(this.adminContent).map(([key, value]) => [key, [copy(value)]]))
+    this.adminCategories = copy(this.fixtures.categories || [])
+    this.adminCustomFields = copy(this.fixtures.custom_fields || [])
+    this.adminHelp = {}
+    this.adminHelpVersions = {}
+    Object.values(this.fixtures.public_help || {}).forEach(item => LANGUAGES.forEach(language => {
+      const value = { ...copy(item), language, state: 'PUBLISHED' as const, published: true }
+      this.adminHelp[`${item.help_key}:${language}`] = value
+      this.adminHelpVersions[`${item.help_key}:${language}`] = [copy(value)]
+    }))
     this.relationships = copy(this.fixtures.relationships || {})
     this.notes = copy(this.fixtures.notes || {})
     this.publicRelationships = copy(this.fixtures.public_relationships || this.relationships)
@@ -738,6 +790,11 @@ export class MockC311Provider implements C311Provider {
     if (!this.currentSession.actor?.capabilities?.includes(capability)) {
       throw new C311ApiError({ error: 'FORBIDDEN', message: 'You are not allowed to perform this operation.', retryable: false }, 403)
     }
+  }
+
+  private requireVersion (options: C311RequestOptions, current: number): void {
+    if (options.expectedVersion === undefined) throw new C311ApiError(this.fixtures.errors['expected-version-required'], 428)
+    if (options.expectedVersion !== current) throw new C311ApiError({ ...this.fixtures.errors['version-conflict'], current_version: current }, 409)
   }
 
   private page<T> (items: T[], query: ListQuery = {}): PageResponse<T> {
@@ -1213,8 +1270,37 @@ export class MockC311Provider implements C311Provider {
   async getBranding (): Promise<Branding> {
     if (this.scenario === 'branding-failure') this.failScenario('branding-failure')
     this.failIfNeeded(['terminal'])
-    return copy(this.fixtures.branding || createDefaultFixtureSet().branding!)
+    return copy(this.publishedBranding)
   }
+
+  async updateBranding (input: BrandingWrite, options: C311RequestOptions = {}): Promise<Branding> {
+    this.requireCapability('admin_branding_update'); this.requireVersion(options, this.branding.version); this.failIfNeeded(['validation', 'version-conflict'])
+    this.branding = { ...this.branding, ...input, published: false, version: this.branding.version + 1, updated_at: BENCHMARK_NOW }; this.brandingVersions.push(copy(this.branding)); return copy(this.branding)
+  }
+  async getAdminBranding (): Promise<Branding> { this.requireCapability('admin_branding_get'); return copy(this.branding) }
+  async previewBranding (input: BrandingWrite): Promise<Branding> { this.requireCapability('admin_branding_preview'); return { ...copy(this.branding), ...input, published: false } }
+  async publishBranding (options: C311RequestOptions = {}): Promise<Branding> { this.requireCapability('admin_branding_publish'); this.requireVersion(options, this.branding.version); this.branding = { ...this.branding, published: true, version: this.branding.version + 1, updated_at: BENCHMARK_NOW }; this.publishedBranding = copy(this.branding); this.brandingVersions.push(copy(this.branding)); return copy(this.branding) }
+  async listBrandingVersions (_query: ListQuery = {}): Promise<PageResponse<Branding>> { this.requireCapability('admin_branding_versions'); return { items: copy(this.brandingVersions), next_page_token: null, total_count: this.brandingVersions.length, applied_filters: {}, sort: [] } }
+  async rollbackBranding (input: RollbackInput, options: C311RequestOptions = {}): Promise<Branding> { this.requireCapability('admin_branding_rollback'); this.requireVersion(options, this.branding.version); const target = this.brandingVersions.find(item => item.version === input.target_version); if (!target) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.branding = { ...copy(target), version: this.branding.version + 1, published: true, updated_at: BENCHMARK_NOW }; this.publishedBranding = copy(this.branding); this.brandingVersions.push(copy(this.branding)); return copy(this.branding) }
+  async getAdminContent (contentKey: PublicContentKey): Promise<ContentObject> { this.requireCapability('admin_content_get'); const item = this.adminContent[contentKey]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); return copy(item) }
+  async listAdminContent (_query: ListQuery = {}): Promise<PageResponse<ContentObject>> { this.requireCapability('admin_content_list'); const items = Object.values(this.adminContent); return { items: copy(items), next_page_token: null, total_count: items.length, applied_filters: {}, sort: [] } }
+  async updateAdminContent (contentKey: PublicContentKey, input: ContentWrite, options: C311RequestOptions = {}): Promise<ContentObject> { this.requireCapability('admin_content_update'); const item = this.adminContent[contentKey]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.requireVersion(options, item.version); if (!isSafeSanitizedHTML(input.body)) throw new C311ApiError(this.fixtures.errors.validation, 422); this.adminContent[contentKey] = { ...item, ...input, state: 'DRAFT', published: false, version: item.version + 1, updated_at: BENCHMARK_NOW }; this.adminContentVersions[contentKey].push(copy(this.adminContent[contentKey])); return copy(this.adminContent[contentKey]) }
+  async previewAdminContent (contentKey: PublicContentKey, input: ContentWrite): Promise<ContentObject> { this.requireCapability('admin_content_preview'); const item = this.adminContent[contentKey]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); if (!isSafeSanitizedHTML(input.body)) throw new C311ApiError(this.fixtures.errors.validation, 422); return { ...item, ...input, state: 'DRAFT', published: false } }
+  async publishAdminContent (contentKey: PublicContentKey, options: C311RequestOptions = {}): Promise<ContentObject> { this.requireCapability('admin_content_publish'); const item = this.adminContent[contentKey]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.requireVersion(options, item.version); this.adminContent[contentKey] = { ...item, state: 'PUBLISHED', published: true, version: item.version + 1, updated_at: BENCHMARK_NOW }; this.fixtures.public_content![contentKey] = copy(this.adminContent[contentKey]); this.adminContentVersions[contentKey].push(copy(this.adminContent[contentKey])); return copy(this.adminContent[contentKey]) }
+  async listAdminContentVersions (contentKey: PublicContentKey, _query: ListQuery = {}): Promise<PageResponse<ContentObject>> { this.requireCapability('admin_content_versions'); return { items: copy(this.adminContentVersions[contentKey] || []), next_page_token: null, total_count: (this.adminContentVersions[contentKey] || []).length, applied_filters: {}, sort: [] } }
+  async rollbackAdminContent (contentKey: PublicContentKey, input: RollbackInput, options: C311RequestOptions = {}): Promise<ContentObject> { this.requireCapability('admin_content_rollback'); const item = this.adminContent[contentKey]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.requireVersion(options, item.version); const target = (this.adminContentVersions[contentKey] || []).find(value => value.version === input.target_version); if (!target) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.adminContent[contentKey] = { ...copy(target), version: item.version + 1, published: true, state: 'PUBLISHED', updated_at: BENCHMARK_NOW }; this.fixtures.public_content![contentKey] = copy(this.adminContent[contentKey]); this.adminContentVersions[contentKey].push(copy(this.adminContent[contentKey])); return copy(this.adminContent[contentKey]) }
+  async getAdminHelp (helpKey: HelpKey, language: Language = 'EN'): Promise<HelpContent> { this.requireCapability('admin_help_get'); const item = this.adminHelp[`${helpKey}:${language}`]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); return copy(item) }
+  async updateAdminHelp (helpKey: HelpKey, input: HelpWrite, options: C311RequestOptions = {}): Promise<HelpContent> { this.requireCapability('admin_help_update'); const key = `${helpKey}:${input.language}`; const item = this.adminHelp[key]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.requireVersion(options, item.version); if (!isSafeSanitizedHTML(input.body)) throw new C311ApiError(this.fixtures.errors.validation, 422); const updated = { ...item, ...input, state: 'DRAFT' as const, published: false, version: item.version + 1, updated_at: BENCHMARK_NOW }; this.adminHelp[key] = copy(updated); this.adminHelpVersions[key].push(copy(updated)); return copy(updated) }
+  async previewAdminHelp (helpKey: HelpKey, input: HelpWrite): Promise<HelpContent> { this.requireCapability('admin_help_preview'); const item = this.adminHelp[`${helpKey}:${input.language}`]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); if (!isSafeSanitizedHTML(input.body)) throw new C311ApiError(this.fixtures.errors.validation, 422); return { ...copy(item), ...input, state: 'DRAFT', published: false } }
+  async publishAdminHelp (helpKey: HelpKey, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { this.requireCapability('admin_help_publish'); const key = `${helpKey}:${language}`; const item = this.adminHelp[key]; if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.requireVersion(options, item.version); const published = { ...item, state: 'PUBLISHED' as const, published: true, version: item.version + 1, updated_at: BENCHMARK_NOW }; this.adminHelp[key] = copy(published); this.adminHelpVersions[key].push(copy(published)); this.fixtures.public_help![helpKey] = copy(published); return copy(published) }
+  async listAdminHelpVersions (helpKey: HelpKey, query: ListQuery & { language?: Language } = {}): Promise<PageResponse<HelpContent>> { this.requireCapability('admin_help_versions'); const key = `${helpKey}:${query.language || 'EN'}`; return { items: copy(this.adminHelpVersions[key] || []), next_page_token: null, total_count: (this.adminHelpVersions[key] || []).length, applied_filters: {}, sort: [] } }
+  async rollbackAdminHelp (helpKey: HelpKey, input: RollbackInput, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { this.requireCapability('admin_help_rollback'); const key = `${helpKey}:${language}`; const item = this.adminHelp[key]; const target = this.adminHelpVersions[key]?.find(version => version.version === input.target_version); if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); if (!target) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.requireVersion(options, item.version); const rolledBack = { ...copy(target), state: 'PUBLISHED' as const, published: true, version: item.version + 1, updated_at: BENCHMARK_NOW }; this.adminHelp[key] = copy(rolledBack); this.adminHelpVersions[key].push(copy(rolledBack)); this.fixtures.public_help![helpKey] = copy(rolledBack); return copy(rolledBack) }
+  async listAdminCategories (_query: ListQuery = {}): Promise<PageResponse<Category>> { this.requireCapability('admin_categories_list'); return { items: copy(this.adminCategories), next_page_token: null, total_count: this.adminCategories.length, applied_filters: {}, sort: [] } }
+  async createAdminCategory (input: CategoryWrite): Promise<Category> { this.requireCapability('admin_categories_create'); if (!input.code.trim() || !input.labels.EN?.trim() || this.adminCategories.some(item => item.code === input.code)) throw new C311ApiError(this.fixtures.errors.validation, 422); const item = { ...input, version: 1, updated_at: BENCHMARK_NOW }; this.adminCategories.push(copy(item)); return copy(item) }
+  async updateAdminCategory (categoryCode: string, input: CategoryWrite, options: C311RequestOptions = {}): Promise<Category> { this.requireCapability('admin_categories_update'); const index = this.adminCategories.findIndex(item => item.code === categoryCode); if (index < 0) throw new C311ApiError(this.fixtures.errors['not-found'], 404); const current = this.adminCategories[index]; this.requireVersion(options, current.version); const categoryInUse = this.profile.primary_category === categoryCode || this.fixtures.requests.some(request => request.primary_requester.primary_category === categoryCode); if (input.code !== categoryCode || !input.labels.EN?.trim() || (!input.active && categoryInUse)) throw new C311ApiError(this.fixtures.errors.validation, 422); const item = { ...current, ...input, version: current.version + 1, updated_at: BENCHMARK_NOW }; this.adminCategories[index] = item; return copy(item) }
+  async listAdminCustomFields (_query: ListQuery = {}): Promise<PageResponse<CustomFieldDefinition>> { this.requireCapability('admin_custom_fields_list'); return { items: copy(this.adminCustomFields), next_page_token: null, total_count: this.adminCustomFields.length, applied_filters: {}, sort: [] } }
+  async createAdminCustomField (input: CustomFieldDefinition): Promise<CustomFieldDefinition> { this.requireCapability('admin_custom_fields_create'); if (this.adminCustomFields.some(item => item.key === input.key) || !validCustomFieldDefinition(input)) throw new C311ApiError(this.fixtures.errors.validation, 422); const item = { ...input, version: 1, updated_at: BENCHMARK_NOW }; this.adminCustomFields.push(copy(item)); return copy(item) }
+  async updateAdminCustomField (fieldKey: string, input: CustomFieldDefinition, options: C311RequestOptions = {}): Promise<CustomFieldDefinition> { this.requireCapability('admin_custom_fields_update'); const index = this.adminCustomFields.findIndex(item => item.key === fieldKey); if (index < 0) throw new C311ApiError(this.fixtures.errors['not-found'], 404); this.requireVersion(options, this.adminCustomFields[index].version); if (!validCustomFieldDefinition(input, fieldKey)) throw new C311ApiError(this.fixtures.errors.validation, 422); const item = { ...this.adminCustomFields[index], ...input, version: this.adminCustomFields[index].version + 1, updated_at: BENCHMARK_NOW }; this.adminCustomFields[index] = item; return copy(item) }
 
   async getPublicContent (contentKey: PublicContentKey): Promise<ContentObject> {
     if (this.scenario === 'content-loading-failure') this.failScenario('content-loading-failure')
@@ -1228,7 +1314,12 @@ export class MockC311Provider implements C311Provider {
   async getPublicHelp (helpKey: HelpKey, language?: Language): Promise<HelpContent> {
     if (this.scenario === 'help-loading-failure') this.failScenario('help-loading-failure')
     this.failIfNeeded(['terminal'])
-    const content = this.fixtures.public_help?.[helpKey]
+    const requestedLanguage = language || 'EN'
+    // Public reads may use a language-specific published admin projection,
+    // falling back to the stable public fixture. Drafts and previews remain
+    // private until the explicit publish operation succeeds.
+    const languageProjection = this.adminHelp[`${helpKey}:${requestedLanguage}`]
+    const content = languageProjection?.published ? languageProjection : this.fixtures.public_help?.[helpKey]
     if (!content) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
     const result = copy(content)
     if (language && language !== result.language) {

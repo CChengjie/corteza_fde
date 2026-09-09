@@ -7,13 +7,19 @@ import type {
   AccountRegistrationAcknowledgement,
   BinaryAttachment,
   Branding,
+  BrandingWrite,
+  Category,
+  CategoryWrite,
   C311EndpointResponse,
   ContentObject,
+  ContentWrite,
+  CustomFieldDefinition,
   DraftWrite,
   GeocodeRequest,
   GeocodeResponse,
   FederatedRedirect,
   HelpContent,
+  HelpWrite,
   LanguagePreference,
   LoginIdentifierChange,
   ListQuery,
@@ -34,6 +40,7 @@ import type {
   RequestQueueItem,
   RequestSummary,
   ReopenRequestResponse,
+  RollbackInput,
   ConstituentLink,
   ConstituentUnlink,
   RequestNote,
@@ -242,6 +249,31 @@ export interface C311Provider {
   confirmAccountLink (): Promise<Session>
   completeFederatedSignIn (provider: IdentityProvider, query?: Record<string, string>): Promise<FederatedSignInResult>
   getBranding (): Promise<Branding>
+  getAdminBranding (): Promise<Branding>
+  updateBranding (input: BrandingWrite, options?: C311RequestOptions): Promise<Branding>
+  previewBranding (input: BrandingWrite): Promise<Branding>
+  publishBranding (options?: C311RequestOptions): Promise<Branding>
+  listBrandingVersions (query?: ListQuery): Promise<PageResponse<Branding>>
+  rollbackBranding (input: RollbackInput, options?: C311RequestOptions): Promise<Branding>
+  getAdminContent (contentKey: PublicContentKey): Promise<ContentObject>
+  listAdminContent (query?: ListQuery): Promise<PageResponse<ContentObject>>
+  updateAdminContent (contentKey: PublicContentKey, input: ContentWrite, options?: C311RequestOptions): Promise<ContentObject>
+  previewAdminContent (contentKey: PublicContentKey, input: ContentWrite): Promise<ContentObject>
+  publishAdminContent (contentKey: PublicContentKey, options?: C311RequestOptions): Promise<ContentObject>
+  listAdminContentVersions (contentKey: PublicContentKey, query?: ListQuery): Promise<PageResponse<ContentObject>>
+  rollbackAdminContent (contentKey: PublicContentKey, input: RollbackInput, options?: C311RequestOptions): Promise<ContentObject>
+  getAdminHelp (helpKey: HelpKey, language?: Language): Promise<HelpContent>
+  updateAdminHelp (helpKey: HelpKey, input: HelpWrite, options?: C311RequestOptions): Promise<HelpContent>
+  previewAdminHelp (helpKey: HelpKey, input: HelpWrite): Promise<HelpContent>
+  publishAdminHelp (helpKey: HelpKey, language?: Language, options?: C311RequestOptions): Promise<HelpContent>
+  listAdminHelpVersions (helpKey: HelpKey, query?: ListQuery & { language?: Language }): Promise<PageResponse<HelpContent>>
+  rollbackAdminHelp (helpKey: HelpKey, input: RollbackInput, language?: Language, options?: C311RequestOptions): Promise<HelpContent>
+  listAdminCategories (query?: ListQuery): Promise<PageResponse<Category>>
+  createAdminCategory (input: CategoryWrite): Promise<Category>
+  updateAdminCategory (categoryCode: string, input: CategoryWrite, options?: C311RequestOptions): Promise<Category>
+  listAdminCustomFields (query?: ListQuery): Promise<PageResponse<CustomFieldDefinition>>
+  createAdminCustomField (input: CustomFieldDefinition): Promise<CustomFieldDefinition>
+  updateAdminCustomField (fieldKey: string, input: CustomFieldDefinition, options?: C311RequestOptions): Promise<CustomFieldDefinition>
   getPublicContent (contentKey: PublicContentKey): Promise<ContentObject>
   getPublicHelp (helpKey: HelpKey, language?: Language): Promise<HelpContent>
   getProfile (): Promise<Constituent>
@@ -417,6 +449,32 @@ export class C311HttpProvider implements C311Provider {
   getBranding (): Promise<Branding> {
     return this.request({ method: 'GET', path: '/api/v1/public/branding' })
   }
+
+  updateBranding (input: BrandingWrite, options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'PATCH', path: '/api/v1/admin/branding', body: input, ...this.requestOptions(options) }) }
+  getAdminBranding (): Promise<Branding> { return this.request({ method: 'GET', path: '/api/v1/admin/branding' }) }
+  previewBranding (input: BrandingWrite): Promise<Branding> { return this.request({ method: 'POST', path: '/api/v1/admin/branding/preview', body: input }) }
+  publishBranding (options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'POST', path: '/api/v1/admin/branding/publish', body: {}, ...this.requestOptions(options) }) }
+  listBrandingVersions (query: ListQuery = {}): Promise<PageResponse<Branding>> { return this.request({ method: 'GET', path: '/api/v1/admin/branding/versions', query: this.listQuery(query) }) }
+  rollbackBranding (input: RollbackInput, options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'POST', path: '/api/v1/admin/branding/rollback', body: input, ...this.requestOptions(options) }) }
+  getAdminContent (contentKey: PublicContentKey): Promise<ContentObject> { return this.request({ method: 'GET', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}` }) }
+  listAdminContent (query: ListQuery = {}): Promise<PageResponse<ContentObject>> { return this.request({ method: 'GET', path: '/api/v1/admin/content', query: this.listQuery(query) }) }
+  updateAdminContent (contentKey: PublicContentKey, input: ContentWrite, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request({ method: 'PATCH', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}`, body: input, ...this.requestOptions(options) }) }
+  previewAdminContent (contentKey: PublicContentKey, input: ContentWrite): Promise<ContentObject> { return this.request({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/preview`, body: input }) }
+  publishAdminContent (contentKey: PublicContentKey, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/publish`, body: {}, ...this.requestOptions(options) }) }
+  listAdminContentVersions (contentKey: PublicContentKey, query: ListQuery = {}): Promise<PageResponse<ContentObject>> { return this.request({ method: 'GET', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/versions`, query: this.listQuery(query) }) }
+  rollbackAdminContent (contentKey: PublicContentKey, input: RollbackInput, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/rollback`, body: input, ...this.requestOptions(options) }) }
+  getAdminHelp (helpKey: HelpKey, language: Language = 'EN'): Promise<HelpContent> { return this.request({ method: 'GET', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}`, query: { language } }) }
+  updateAdminHelp (helpKey: HelpKey, input: HelpWrite, options: C311RequestOptions = {}): Promise<HelpContent> { return this.request({ method: 'PATCH', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}`, body: input, ...this.requestOptions(options) }) }
+  previewAdminHelp (helpKey: HelpKey, input: HelpWrite): Promise<HelpContent> { return this.request({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/preview`, body: input }) }
+  publishAdminHelp (helpKey: HelpKey, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { return this.request({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/publish`, query: { language }, body: {}, ...this.requestOptions(options) }) }
+  listAdminHelpVersions (helpKey: HelpKey, query: ListQuery & { language?: Language } = {}): Promise<PageResponse<HelpContent>> { return this.request({ method: 'GET', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/versions`, query: this.listQuery(query) }) }
+  rollbackAdminHelp (helpKey: HelpKey, input: RollbackInput, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { return this.request({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/rollback`, query: { language }, body: input, ...this.requestOptions(options) }) }
+  listAdminCategories (query: ListQuery = {}): Promise<PageResponse<Category>> { return this.request({ method: 'GET', path: '/api/v1/admin/contact-categories', query: this.listQuery(query) }) }
+  createAdminCategory (input: CategoryWrite): Promise<Category> { return this.request({ method: 'POST', path: '/api/v1/admin/contact-categories', body: input }) }
+  updateAdminCategory (categoryCode: string, input: CategoryWrite, options: C311RequestOptions = {}): Promise<Category> { return this.request({ method: 'PATCH', path: `/api/v1/admin/contact-categories/${encodeURIComponent(categoryCode)}`, body: input, ...this.requestOptions(options) }) }
+  listAdminCustomFields (query: ListQuery = {}): Promise<PageResponse<CustomFieldDefinition>> { return this.request({ method: 'GET', path: '/api/v1/admin/custom-fields', query: this.listQuery(query) }) }
+  createAdminCustomField (input: CustomFieldDefinition): Promise<CustomFieldDefinition> { return this.request({ method: 'POST', path: '/api/v1/admin/custom-fields', body: input }) }
+  updateAdminCustomField (fieldKey: string, input: CustomFieldDefinition, options: C311RequestOptions = {}): Promise<CustomFieldDefinition> { return this.request({ method: 'PATCH', path: `/api/v1/admin/custom-fields/${encodeURIComponent(fieldKey)}`, body: input, ...this.requestOptions(options) }) }
 
   getPublicContent (contentKey: PublicContentKey): Promise<ContentObject> {
     return this.request({ method: 'GET', path: `/api/v1/public/content/${encodeURIComponent(contentKey)}` })

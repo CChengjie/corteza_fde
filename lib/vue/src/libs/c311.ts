@@ -48,6 +48,20 @@ export interface C311ErrorLike {
   errors?: Array<{ field: string; code: string }>
 }
 
+/** Normalize a contract field name or RFC 6901 JSON pointer to a slash path. */
+export function normalizeC311FieldPath (field: unknown): string {
+  const raw = String(field ?? '').replace(/^#/, '')
+  if (!raw) return ''
+  if (!raw.startsWith('/')) return raw.replace(/\./g, '/')
+  return raw.slice(1).split('/').map(segment => segment.replace(/~1/g, '/').replace(/~0/g, '~')).join('/')
+}
+
+export function c311FieldPathAliases (field: unknown): string[] {
+  const raw = String(field ?? '').replace(/^#/, '')
+  const path = normalizeC311FieldPath(raw)
+  return [...new Set([raw.replace(/^\//, ''), path, path.replace(/\//g, '.')].filter(Boolean))]
+}
+
 export function hasC311Capability (session: C311Session | null | undefined, capability: string): boolean {
   return !!session?.actor?.capabilities?.includes(capability)
 }
@@ -85,9 +99,9 @@ export function c311StateForError (error: C311ErrorLike, hasData = false): C311D
  * The provider is the trust boundary for HTML. A string without an explicit
  * sanitized marker must stay text-only in the UI.
  */
-export function isC311SanitizedMarkup (value: unknown): value is { body: string, sanitized: true } {
-  const candidate = value as { body?: unknown, sanitized?: unknown }
-  return !!value && typeof value === 'object' && candidate.sanitized === true && typeof candidate.body === 'string'
+export function isC311SanitizedMarkup (value: unknown): value is { body: string, sanitized?: true, sanitized_html?: true } {
+  const candidate = value as { body?: unknown, sanitized?: unknown, sanitized_html?: unknown }
+  return !!value && typeof value === 'object' && (candidate.sanitized === true || candidate.sanitized_html === true) && typeof candidate.body === 'string'
 }
 
 export function c311DataState (options: { loading?: boolean; items?: unknown[] | null; error?: C311ErrorLike | null }): C311DataState {

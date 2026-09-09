@@ -668,6 +668,21 @@ describe('City 311 frontend contract', () => {
     expect(requests[0].body).to.deep.equal({ organisation_name: 'Fixture City' })
   })
 
+  it('marks sanitized_html contract responses as safe for rendering', async () => {
+    const provider = new C311HttpProvider({
+      request: async <T> (request: C311TransportRequest): Promise<T> => {
+        if (request.path.includes('/help/')) return { help_key: 'public.request.submit', language: 'EN', body: '<p>safe</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: '2026-01-15T15:00:00.000Z' } as T
+        return { content_key: 'HOME', body: '<p>safe</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: '2026-01-15T15:00:00.000Z' } as T
+      },
+    })
+    const content = await provider.getPublicContent('HOME')
+    const help = await provider.getPublicHelp('public.request.submit', 'EN')
+    expect(content.sanitized).to.equal(true)
+    expect(content.sanitized_html).to.equal(true)
+    expect(help.sanitized).to.equal(true)
+    expect(help.sanitized_html).to.equal(true)
+  })
+
   it('enforces FE-08 administration capabilities in Mock mode', async () => {
     expect((await new MockC311Provider({ role: 'public_visitor' }).getBranding()).organisation_name).to.equal('City 311')
     expect((await new MockC311Provider({ role: 'constituent' }).getBranding()).organisation_name).to.equal('City 311')

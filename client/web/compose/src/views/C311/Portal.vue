@@ -187,6 +187,10 @@ const c311DirtyGuard = mixins?.c311DirtyGuard || {
     c311ClearDirtyDraft () { this.c311Dirty = false },
   },
 }
+const normalizeFieldPath = c311?.normalizeC311FieldPath || (field => {
+  const raw = String(field || '').replace(/^#/, '')
+  return raw.startsWith('/') ? raw.slice(1).split('/').map(segment => segment.replace(/~1/g, '/').replace(/~0/g, '~')).join('/') : raw.replace(/\./g, '/')
+})
 
 function formatDate (value) {
   try { return typeof C311JS.formatC311DateTime === 'function' ? C311JS.formatC311DateTime(value) : value || '' } catch (_error) { return value || '' }
@@ -368,7 +372,13 @@ export default {
       const value = translated && translated !== `c311:${key}` && translated !== key ? translated : fallback
       return Object.entries(params).reduce((message, [name, replacement]) => message.replace(`{{${name}}}`, String(replacement)), value)
     },
-    hasError (field) { return this.formErrors.some(error => error.field === field || error.field === `/${field}` || error.field?.replace(/^\//, '').replace(/\//g, '.') === field) },
+    hasError (field) {
+      const target = normalizeFieldPath(field)
+      return this.formErrors.some(error => {
+        const path = normalizeFieldPath(error.field)
+        return path === target || path.startsWith(`${target}/`)
+      })
+    },
     routeKey (route) {
       if (!route) return ''
       return `${route.name || ''}|${route.path || ''}|${JSON.stringify(route.query || {})}`
@@ -481,7 +491,10 @@ export default {
       }
       if (this.isCurrentLoad(generation)) this.state = 'populated'
     },
-    hasStatusError (field) { return this.statusErrors.some(error => error.field === field || error.field === `/${field}`) },
+    hasStatusError (field) {
+      const target = normalizeFieldPath(field)
+      return this.statusErrors.some(error => normalizeFieldPath(error.field) === target)
+    },
     readStatusLookup () {
       if (typeof window === 'undefined' || !window.sessionStorage) return { request_number: '', email: '' }
       try {
@@ -997,9 +1010,8 @@ export default {
         if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Custom fields must be an object.')
         this.form.custom_fields = value
         this.formErrors = this.formErrors.filter(error => error.field !== 'custom_fields')
-      } catch (error) {
+      } catch (_error) {
         this.formErrors = [{ field: 'custom_fields', code: 'INVALID_FORMAT', message: this.t('error.customFields', 'Custom fields must be valid JSON.') }]
-        void error
       }
       this.markDirty()
     },

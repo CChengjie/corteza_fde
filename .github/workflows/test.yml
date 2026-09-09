@@ -36,7 +36,7 @@ jobs:
       - name: "Install Python browser test dependencies"
         run: |
           python3 -m pip install --require-hashes --only-binary=:all: -r tools/c311-browser/requirements.txt
-          python3 -m playwright install --with-deps chromium
+          python3 -m playwright install --with-deps chromium firefox webkit
       - name: "Build and install current C311 packages"
         run: tools/ci/install-local-c311-packages.sh
       - name: "lib/js unit, types and build"
@@ -91,6 +91,11 @@ jobs:
         run: tools/c311-browser/run-fe07.sh
         env:
           C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe07-gate
+      - name: "FE-10 frontend quality browser matrix"
+        run: tools/c311-browser/run-fe10.sh
+        env:
+          C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe10-gate
+          C311_BROWSER: all
       - name: "Upload C311 gate evidence"
         if: always()
         uses: actions/upload-artifact@v4
@@ -138,6 +143,13 @@ jobs:
         with:
           name: c311-fe07-gate
           path: ${{ runner.temp }}/c311-fe07-gate
+          if-no-files-found: ignore
+      - name: "Upload FE-10 quality evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c311-fe10-gate
+          path: ${{ runner.temp }}/c311-fe10-gate
           if-no-files-found: ignore
 
   lib-test:

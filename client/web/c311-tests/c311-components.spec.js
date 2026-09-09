@@ -181,6 +181,20 @@ describe('C311 shared components', () => {
     expect(document.activeElement.id).toBe('c311-summary')
   })
 
+  it('decodes RFC 6901 nested and custom-field error paths', async () => {
+    const wrapper = mount({
+      components: { C311ErrorSummary },
+      template: '<div><c311-error-summary :errors="errors" :field-targets="targets" /><input id="nested-name" /><textarea id="custom-fields" /></div>',
+      data: () => ({ errors: [], targets: { 'requester.display_name': 'nested-name', custom_fields: 'custom-fields' } }),
+    }, { mocks, attachTo: document.body })
+    await wrapper.setData({ errors: [{ field: '/requester/display_name', code: 'REQUIRED', message: 'Name required' }] })
+    await wrapper.find('[data-c311-error-summary] a').trigger('click')
+    expect(document.activeElement.id).toBe('nested-name')
+    await wrapper.setData({ errors: [{ field: '/custom_fields/contact~1preference', code: 'INVALID_VALUE', message: 'Invalid preference' }] })
+    await wrapper.find('[data-c311-error-summary] a').trigger('click')
+    expect(document.activeElement.id).toBe('custom-fields')
+  })
+
   it('announces status changes through aria-live', () => {
     const wrapper = mount(C311StatusAnnouncer, { propsData: { message: 'Loaded', assertive: true } })
     expect(wrapper.attributes('aria-live')).toBe('assertive')

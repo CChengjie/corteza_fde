@@ -225,7 +225,11 @@ import { components, c311, c311Identity, mixins } from '@cortezaproject/corteza-
 
 const { C311AppShell, C311DataState, C311ErrorSummary, C311HelpDrawer, C311LanguageSelector, C311MainNav, C311ResponsiveData } = components
 const stateForError = c311?.c311StateForError
-const isSanitizedMarkup = c311?.isC311SanitizedMarkup || (value => !!value && value.sanitized === true && typeof value.body === 'string')
+const isSanitizedMarkup = c311?.isC311SanitizedMarkup || (value => !!value && (value.sanitized === true || value.sanitized_html === true) && typeof value.body === 'string')
+const normalizeFieldPath = c311?.normalizeC311FieldPath || (field => {
+  const raw = String(field || '').replace(/^#/, '')
+  return raw.startsWith('/') ? raw.slice(1).split('/').map(segment => segment.replace(/~1/g, '/').replace(/~0/g, '~')).join('/') : raw.replace(/\./g, '/')
+})
 const validatePassword = c311Identity?.validatePassword || (() => [])
 const c311DirtyGuard = mixins?.c311DirtyGuard || {
   data: () => ({ c311Dirty: false, c311DirtyStorageKey: '' }),
@@ -484,7 +488,7 @@ export default {
       this.accountDispositionResult = null
       this.accountDispositionConfirmation = ''
     },
-    normalizeField (field) { return String(field || '').replace(/^#/, '').replace(/^\//, '').replace(/\//g, '/') },
+    normalizeField (field) { return normalizeFieldPath(field) },
     hasError (field) {
       const target = this.normalizeField(field)
       return this.formErrors.some(error => this.normalizeField(error.field) === target || this.normalizeField(error.field).startsWith(`${target}/`))

@@ -645,6 +645,36 @@ type IdentityConfigurationWrite struct {
 	SAMLEnabled *bool `json:"saml_enabled,omitempty"`
 }
 
+// IntegrationConnection is the non-secret administrator projection of one
+// configured external-system connection. Secret material is write-only and is
+// represented to readers solely by SecretConfigured.
+type IntegrationConnection struct {
+	IntegrationID    string          `json:"integration_id"`
+	Kind             IntegrationKind `json:"kind"`
+	Active           bool            `json:"active"`
+	SecretConfigured bool            `json:"secret_configured"`
+	Version          uint64          `json:"version"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+}
+
+type IntegrationConnectionWrite struct {
+	Active        *bool          `json:"active"`
+	Configuration map[string]any `json:"configuration,omitempty"`
+	Secret        *string        `json:"secret,omitempty"`
+}
+
+type SecretRotation struct {
+	NewSecret string `json:"new_secret"`
+}
+
+type IntegrationConnectionList struct {
+	Items          []IntegrationConnection `json:"items"`
+	NextPageToken  *string                 `json:"next_page_token"`
+	TotalCount     int                     `json:"total_count"`
+	AppliedFilters map[string]any          `json:"applied_filters"`
+	Sort           []string                `json:"sort"`
+}
+
 // Actor carries server-resolved roles and record scope.
 type Actor struct {
 	ID         uint64

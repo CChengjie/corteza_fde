@@ -10,7 +10,9 @@ COPY server/go.mod server/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
+COPY locale/en /src/locale/en
 COPY server/ ./
+RUN make -C pkg/locale src/en
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=1 go build -trimpath \

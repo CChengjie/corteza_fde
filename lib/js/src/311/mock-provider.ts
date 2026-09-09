@@ -194,24 +194,114 @@ function unescapeCalendarText (value: string): string {
 }
 
 const MAIL_ALLOWED_TAGS = new Set(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td'])
+const MAIL_BLOCKED_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed', 'form', 'svg', 'link', 'meta'])
+
+function isHTMLWhitespace (value: string | undefined): boolean {
+  return value === ' ' || value === '\t' || value === '\n' || value === '\r' || value === '\f'
+}
+
+function readMailHref (content: string, nameEnd: number): string {
+  let cursor = nameEnd
+  while (cursor < content.length) {
+    while (cursor < content.length && (isHTMLWhitespace(content[cursor]) || content[cursor] === '/')) cursor += 1
+    if (cursor >= content.length) break
+
+    const attributeStart = cursor
+    while (cursor < content.length && !isHTMLWhitespace(content[cursor]) && content[cursor] !== '=' && content[cursor] !== '/') cursor += 1
+    const attributeName = content.slice(attributeStart, cursor).toLowerCase()
+    while (cursor < content.length && isHTMLWhitespace(content[cursor])) cursor += 1
+    if (content[cursor] !== '=') {
+      while (cursor < content.length && !isHTMLWhitespace(content[cursor])) cursor += 1
+      continue
+    }
+
+    cursor += 1
+    while (cursor < content.length && isHTMLWhitespace(content[cursor])) cursor += 1
+    const quote = content[cursor] === '"' || content[cursor] === "'" ? content[cursor] : ''
+    if (quote) cursor += 1
+    const valueStart = cursor
+    if (quote) {
+      const valueEnd = content.indexOf(quote, cursor)
+      cursor = valueEnd < 0 ? content.length : valueEnd + 1
+      if (attributeName === 'href') return content.slice(valueStart, valueEnd < 0 ? content.length : valueEnd)
+    } else {
+      while (cursor < content.length && !isHTMLWhitespace(content[cursor])) cursor += 1
+      if (attributeName === 'href') return content.slice(valueStart, cursor)
+    }
+  }
+  return ''
+}
 
 function sanitizeMailHtml (value: string): string {
-  let html = String(value || '').replace(/<!--[\s\S]*?-->/g, '')
-  html = html.replace(/<(script|style|iframe|object|embed|form|svg|link|meta)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
-  html = html.replace(/<(script|style|iframe|object|embed|form|svg|link|meta)\b[^>]*\/?>/gi, '')
-  return html.replace(/<\/?([a-z0-9]+)([^>]*)>/gi, (tag, rawName: string, rawAttributes: string) => {
-    const name = rawName.toLowerCase()
-    if (!MAIL_ALLOWED_TAGS.has(name)) return ''
-    if (tag.startsWith('</')) return `</${name}>`
-    if (name === 'br') return '<br>'
-    if (name !== 'a') return `<${name}>`
-    const href = rawAttributes.match(/\bhref\s*=\s*(["'])(.*?)\1/i)?.[2] || ''
-    if (!/^(?:https?:|mailto:)/i.test(href.trim())) return '<a>'
-    return `<a href="${href.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">`
-  })
+  const html = String(value || '')
+  const lowerHTML = html.toLowerCase()
+  let sanitized = ''
+  let cursor = 0
+  while (cursor < html.length) {
+    if (html.startsWith('<!--', cursor)) {
+      const commentEnd = html.indexOf('-->', cursor + 4)
+      cursor = commentEnd < 0 ? html.length : commentEnd + 3
+      continue
+    }
+    const start = html.indexOf('<', cursor)
+    if (start < 0) {
+      sanitized += html.slice(cursor)
+      break
+    }
+    sanitized += html.slice(cursor, start)
+    const end = html.indexOf('>', start + 1)
+    if (end < 0) break
+    const tag = html.slice(start, end + 1)
+    const closing = tag.startsWith('</')
+    const content = tag.slice(closing ? 2 : 1, -1).trim()
+    let nameEnd = 0
+    while (nameEnd < content.length && !isHTMLWhitespace(content[nameEnd]) && content[nameEnd] !== '/') nameEnd += 1
+    const name = content.slice(0, nameEnd).toLowerCase()
+    if (MAIL_BLOCKED_TAGS.has(name)) {
+      if (!closing) {
+        const marker = `</${name}`
+        let closingStart = lowerHTML.indexOf(marker, end + 1)
+        while (closingStart >= 0) {
+          const boundary = lowerHTML[closingStart + marker.length]
+          if (boundary === '>' || boundary === '/' || isHTMLWhitespace(boundary)) {
+            const closingEnd = html.indexOf('>', closingStart + marker.length)
+            cursor = closingEnd < 0 ? html.length : closingEnd + 1
+            break
+          }
+          closingStart = lowerHTML.indexOf(marker, closingStart + marker.length)
+        }
+        if (closingStart < 0) cursor = html.length
+      } else cursor = end + 1
+      continue
+    }
+    if (MAIL_ALLOWED_TAGS.has(name)) {
+      if (closing) sanitized += `</${name}>`
+      else if (name === 'br') sanitized += '<br>'
+      else if (name !== 'a') sanitized += `<${name}>`
+      else {
+        const href = readMailHref(content, nameEnd)
+        const normalizedHref = href.trim().toLowerCase()
+        sanitized += (normalizedHref.startsWith('http:') || normalizedHref.startsWith('https:') || normalizedHref.startsWith('mailto:'))
+          ? `<a href="${href.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">`
+          : '<a>'
+      }
+    }
+    cursor = end + 1
+  }
+  return sanitized
 }
 
 const MAIL_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
+
+function validMailAddress (value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  const address = value.trim()
+  const at = address.indexOf('@')
+  if (at <= 0 || at === address.length - 1 || address.slice(at + 1).includes('@') || /\s/.test(address)) return false
+  const domain = address.slice(at + 1)
+  const dot = domain.indexOf('.')
+  return dot > 0 && dot < domain.length - 1
+}
 
 function parseCalendarDate (value: string, timezone?: string, requireUTC = false): string {
   const raw = value.trim()
@@ -234,49 +324,60 @@ function parseCalendarEvents (ics: string): Array<MockCalendarEvent> {
   const lines = unfoldCalendarLines(ics)
   if (lines[0] !== 'BEGIN:VCALENDAR' || !lines.includes('END:VCALENDAR')) throw new Error('Calendar envelope is invalid.')
   const events: Array<MockCalendarEvent> = []
-  for (let index = 0; index < lines.length; index += 1) {
-    if (lines[index] !== 'BEGIN:VEVENT') continue
-    const properties: Record<string, { value: string, params: Record<string, string> }> = {}
-    for (index += 1; index < lines.length && lines[index] !== 'END:VEVENT'; index += 1) {
-      const separator = lines[index].indexOf(':')
-      if (separator < 1) continue
-      const nameAndParams = lines[index].slice(0, separator).split(';')
-      const name = nameAndParams.shift()!.toUpperCase()
-      const params: Record<string, string> = {}
-      nameAndParams.forEach(part => {
-        const equal = part.indexOf('=')
-        if (equal > 0) params[part.slice(0, equal).toUpperCase()] = part.slice(equal + 1)
-      })
-      properties[name] = { value: lines[index].slice(separator + 1), params }
-    }
+  let properties: Record<string, { value: string, params: Record<string, string> }> | null = null
+  const parseEvent = (eventProperties: Record<string, { value: string, params: Record<string, string> }>): void => {
     const required = ['UID', 'SUMMARY', 'DTSTART', 'DTEND', 'DESCRIPTION', 'STATUS', 'LAST-MODIFIED']
-    if (required.some(name => !properties[name])) throw new Error('Calendar event is missing a required property.')
-    const uid = properties.UID?.value.trim() || ''
-    const status = properties.STATUS?.value.trim().toUpperCase() || ''
-    const startTimezone = properties.DTSTART?.params.TZID
-    const endTimezone = properties.DTEND?.params.TZID
+    if (required.some(name => !eventProperties[name])) throw new Error('Calendar event is missing a required property.')
+    const uid = eventProperties.UID?.value.trim() || ''
+    const status = eventProperties.STATUS?.value.trim().toUpperCase() || ''
+    const startTimezone = eventProperties.DTSTART?.params.TZID
+    const endTimezone = eventProperties.DTEND?.params.TZID
     if (!!startTimezone !== !!endTimezone || (startTimezone && endTimezone && startTimezone !== endTimezone)) throw new Error('Calendar event timezones must match.')
     const timezone = startTimezone || endTimezone
-    if (!uid || !properties.SUMMARY?.value.trim() || !['CONFIRMED', 'TENTATIVE', 'CANCELLED'].includes(status)) throw new Error('Calendar event identity or status is invalid.')
-    if (properties.RRULE && (properties.RRULE.value.length > 1024 || /[\r\n]/.test(properties.RRULE.value))) throw new Error('Calendar recurrence rule is invalid.')
-    const dtstart = parseCalendarDate(properties.DTSTART.value, properties.DTSTART.params.TZID)
-    const dtend = parseCalendarDate(properties.DTEND.value, properties.DTEND.params.TZID)
+    if (!uid || !eventProperties.SUMMARY?.value.trim() || !['CONFIRMED', 'TENTATIVE', 'CANCELLED'].includes(status)) throw new Error('Calendar event identity or status is invalid.')
+    if (eventProperties.RRULE && (eventProperties.RRULE.value.length > 1024 || /[\r\n]/.test(eventProperties.RRULE.value))) throw new Error('Calendar recurrence rule is invalid.')
+    const dtstart = parseCalendarDate(eventProperties.DTSTART.value, eventProperties.DTSTART.params.TZID)
+    const dtend = parseCalendarDate(eventProperties.DTEND.value, eventProperties.DTEND.params.TZID)
     const comparable = (value: string): number => Number(value.replace('T', '').replace('Z', ''))
     if (comparable(dtend) <= comparable(dtstart)) throw new Error('Calendar event end must be after start.')
-    const parsed: MockCalendarEvent = {
+    events.push({
       uid,
-      summary: unescapeCalendarText(properties.SUMMARY?.value.trim() || ''),
+      summary: unescapeCalendarText(eventProperties.SUMMARY?.value.trim() || ''),
       cancelled: status === 'CANCELLED',
       updated_at: '2026-01-15T15:00:00.000Z',
-      description: unescapeCalendarText(properties.DESCRIPTION.value),
+      description: unescapeCalendarText(eventProperties.DESCRIPTION.value),
       dtstart,
       dtend,
-      ...(properties.RRULE ? { rrule: properties.RRULE.value.trim() } : {}),
-      last_modified: parseCalendarDate(properties['LAST-MODIFIED'].value, undefined, true),
+      ...(eventProperties.RRULE ? { rrule: eventProperties.RRULE.value.trim() } : {}),
+      last_modified: parseCalendarDate(eventProperties['LAST-MODIFIED'].value, undefined, true),
       ...(timezone ? { timezone } : {}),
-    }
-    events.push(parsed)
+    })
   }
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') {
+      if (properties) throw new Error('Calendar event envelope is invalid.')
+      properties = {}
+      continue
+    }
+    if (line === 'END:VEVENT') {
+      if (!properties) throw new Error('Calendar event envelope is invalid.')
+      parseEvent(properties)
+      properties = null
+      continue
+    }
+    if (!properties) continue
+    const separator = line.indexOf(':')
+    if (separator < 1) continue
+    const nameAndParams = line.slice(0, separator).split(';')
+    const name = nameAndParams.shift()!.toUpperCase()
+    const params: Record<string, string> = {}
+    nameAndParams.forEach(part => {
+      const equal = part.indexOf('=')
+      if (equal > 0) params[part.slice(0, equal).toUpperCase()] = part.slice(equal + 1)
+    })
+    properties[name] = { value: line.slice(separator + 1), params }
+  }
+  if (properties) throw new Error('Calendar event envelope is invalid.')
   return events
 }
 
@@ -419,6 +520,7 @@ export class MockC311Provider implements C311Provider {
       if (state.mailDeliveries && typeof state.mailDeliveries === 'object') Object.assign(this.mailDeliveries, copy(state.mailDeliveries))
       if (state.mailTemplates && typeof state.mailTemplates === 'object') Object.assign(this.mailTemplates, copy(state.mailTemplates))
     } catch (_error) {
+      // Ignore malformed optional browser state and use fixture defaults.
       return
     }
   }
@@ -2278,7 +2380,7 @@ export class MockC311Provider implements C311Provider {
   private validateMailInput (input: MailCompose): void {
     const errors: Array<{ field: string, code: 'REQUIRED' | 'INVALID_FORMAT' | 'TOO_MANY_ITEMS' }> = []
     if (!input || !Array.isArray(input.to) || input.to.length < 1) errors.push({ field: '/to', code: 'REQUIRED' })
-    else input.to.forEach((recipient, index) => { if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(recipient).trim())) errors.push({ field: `/to/${index}`, code: 'INVALID_FORMAT' }) })
+    else input.to.forEach((recipient, index) => { if (!validMailAddress(recipient)) errors.push({ field: `/to/${index}`, code: 'INVALID_FORMAT' }) })
     if (!String(input?.subject || '').trim() || /[\r\n]/.test(String(input?.subject || ''))) errors.push({ field: '/subject', code: 'INVALID_FORMAT' })
     if (!String(input?.text || '').trim()) errors.push({ field: '/text', code: 'REQUIRED' })
     if (input?.html !== undefined && typeof input.html !== 'string') errors.push({ field: '/html', code: 'INVALID_FORMAT' })

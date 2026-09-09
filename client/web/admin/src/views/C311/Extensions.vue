@@ -443,7 +443,11 @@
           v-else-if="mode === 'calendar'"
           data-c311-calendar
         >
-          <h2>{{ t('calendar.title', 'Calendar') }}</h2><input
+          <h2>{{ t('calendar.title', 'Calendar') }}</h2><label
+            for="c311-calendar-import"
+            class="sr-only"
+          >{{ t('calendar.import', 'Import ICS') }}</label><input
+            id="c311-calendar-import"
             type="file"
             accept="text/calendar,.ics"
             data-c311-action="calendar-import"
@@ -807,7 +811,48 @@ export default {
     async sendMail () { try { this.delivery = await this.$C311.provider.sendMail(this.mailInput(), { idempotencyKey: this.mailIdempotencyKey() }); this.mailFailure = {} } catch (error) { this.mailFailure = error } },
     async refreshMailDelivery () { if (!this.delivery) return; try { this.delivery = await this.$C311.provider.getMailDelivery(this.delivery.delivery_id); this.mailFailure = {} } catch (error) { this.mailFailure = error } },
     async importCalendar (event) { const file = event.target.files?.[0]; if (!file) return; try { const result = await this.resolveOperation(await this.$C311.provider.importCalendar({ ics: await file.text() })); this.message = `${result.operation_id} · ${result.status}`; await this.refreshCalendar() } catch (error) { this.error = error } },
-    parseCalendar (ics) { return [...ics.matchAll(/BEGIN:VEVENT\s*([\s\S]*?)END:VEVENT/g)].map(match => { const body = match[1]; const field = name => (body.match(new RegExp(`^${name}(?:;[^:]*)?:(.+)$`, 'm')) || [])[1]?.trim() || ''; const property = name => (body.match(new RegExp(`^${name};TZID=([^:]+):(.+)$`, 'm')) || []); const start = property('DTSTART'); const end = property('DTEND'); const timezone = start[1] || end[1] || ''; return { uid: field('UID'), summary: field('SUMMARY'), description: field('DESCRIPTION'), dtstart: start[2] || field('DTSTART'), dtend: end[2] || field('DTEND'), rrule: field('RRULE'), last_modified: field('LAST-MODIFIED'), timezone, cancelled: field('STATUS') === 'CANCELLED' } }).filter(event => event.uid) },
+    parseCalendar (ics) {
+      const events = []
+      let properties = null
+      String(ics || '').split(/\r?\n/).forEach(line => {
+        if (line === 'BEGIN:VEVENT') {
+          properties = []
+          return
+        }
+        if (line === 'END:VEVENT') {
+          if (!properties) return
+          const field = name => {
+            const property = properties.find(item => item.name === name)
+            return property?.value || ''
+          }
+          const property = name => properties.find(item => item.name === name) || { value: '', timezone: '' }
+          const start = property('DTSTART')
+          const end = property('DTEND')
+          const event = {
+            uid: field('UID'),
+            summary: field('SUMMARY'),
+            description: field('DESCRIPTION'),
+            dtstart: start.value,
+            dtend: end.value,
+            rrule: field('RRULE'),
+            last_modified: field('LAST-MODIFIED'),
+            timezone: start.timezone || end.timezone || '',
+            cancelled: field('STATUS') === 'CANCELLED',
+          }
+          if (event.uid) events.push(event)
+          properties = null
+          return
+        }
+        if (!properties) return
+        const separator = line.indexOf(':')
+        if (separator < 1) return
+        const nameAndParams = line.slice(0, separator).split(';')
+        const name = nameAndParams.shift().toUpperCase()
+        const timezone = nameAndParams.find(param => param.startsWith('TZID='))?.slice(5) || ''
+        properties.push({ name, timezone, value: line.slice(separator + 1).trim() })
+      })
+      return events
+    },
     async refreshCalendar () { this.calendar = (await this.$C311.provider.exportCalendar()).body; this.calendarEvents = this.parseCalendar(this.calendar) },
     calendarImportBody (event, cancelled = false) { const timezone = event.timezone || 'America/New_York'; const start = event.dtstart || '20260115T100000'; const end = event.dtend || '20260115T110000'; const modified = event.last_modified || '20260115T090000Z'; const dateLine = (name, value) => `${name}${String(value).endsWith('Z') ? '' : `;TZID=${timezone}`}:${value}`; return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', `UID:${event.uid}`, `SUMMARY:${cancelled ? event.summary : `${event.summary} (updated)`}`, `DESCRIPTION:${event.description || 'Fixture calendar event.'}`, dateLine('DTSTART', start), dateLine('DTEND', end), ...(event.rrule ? [`RRULE:${event.rrule}`] : []), `STATUS:${cancelled ? 'CANCELLED' : 'CONFIRMED'}`, `LAST-MODIFIED:${modified}`, 'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n') },
     async updateCalendarEvent (event) { try { const result = await this.resolveOperation(await this.$C311.provider.importCalendar({ ics: this.calendarImportBody(event) })); await this.refreshCalendar(); this.message = `${this.t('calendar.updated', 'Calendar event updated.')} ${result.status}` } catch (error) { this.error = error } },

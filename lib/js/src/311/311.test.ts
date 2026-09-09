@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { C311ApiError } from './errors'
 import { cloneFixtureSet, createDefaultFixtureSet } from './fixtures'
 import { MockC311Provider } from './mock-provider'
-import { C311FetchTransport, C311HttpProvider, type C311Provider, type C311TransportRequest } from './provider'
+import { C311FetchTransport, C311HttpProvider, type C311Provider, type C311TransportRequest, type ReportExportOptions } from './provider'
 import { C311_TIMEZONE, formatC311DateTime } from './time'
 import type { PortalServiceRequestCreate, ReportDefinition, ServiceRequestCreate, StaffServiceRequestCreate } from './types'
 import { APPLICATION_ROLES, PORTAL_ATTACHMENT_MAX_BYTES, PORTAL_ATTACHMENT_MAX_COUNT, PORTAL_ATTACHMENT_MEDIA_TYPES } from './enums'
@@ -152,6 +152,8 @@ describe('City 311 frontend contract', () => {
     }
     expect(fixtures.role_fixtures.supervisor.session.actor?.capabilities).to.not.include('audit_list')
     expect(fixtures.role_fixtures.supervisor.session.actor?.available_routes).to.not.include('audit_list')
+    expect(fixtures.role_fixtures.department_manager.session.actor?.capabilities).to.include('admin_categories_update')
+    expect(fixtures.role_fixtures.department_manager.session.actor?.available_routes).to.include('data_export')
     expect(fixtures.role_fixtures.platform_administrator.session.actor?.capabilities).to.not.include('staff_request_reassign')
     expect(fixtures.role_fixtures.platform_administrator.session.actor?.available_routes).to.not.include('staff_request_reassign')
   })
@@ -273,7 +275,7 @@ describe('City 311 frontend contract', () => {
     }
 
     expect((await new MockC311Provider({ scenario: 'version-conflict' }).getSession()).authenticated).to.equal(true)
-    const terminal = await new MockC311Provider({ scenario: 'terminal' }).getOperation('operation-fixture-terminal')
+    const terminal = await new MockC311Provider({ scenario: 'terminal', role: 'department_manager' }).getOperation('operation-fixture-terminal')
     expect(terminal.status).to.equal('FAILED')
     expect(terminal.error?.error).to.equal('OPERATION_FAILED')
   })
@@ -1478,5 +1480,365 @@ describe('FE-06 staff queue and detail contract', () => {
     expect(requests[0].headers).to.deep.equal({ 'Idempotency-Key': 'bulk-key' })
     expect(requests[1].path).to.equal('/integrations/civicworks/events')
     expect(requests[1].headers).to.deep.equal({ 'Content-Type': 'application/json', 'X-CivicWorks-Event-Id': 'e1', 'X-CivicWorks-Signature': 'sig' })
+  })
+})
+
+describe('FE-09 workflow and extension provider', () => {
+  it('maps FE-09 workflow action, operation, calendar, mail, report, audit and export contracts', async () => {
+    const requests: C311TransportRequest[] = []
+    const transport = { request: async <T> (request: C311TransportRequest): Promise<T> => { requests.push(request); return {} as T } }
+    const provider = new C311HttpProvider(transport)
+    await provider.executeWorkflowAction({ action: 'notify_department', request_id: 'request-fixture-001', payload: { channel: 'EMAIL' } }, { idempotencyKey: 'action-key' })
+    await provider.getOperation('operation/1')
+    await provider.importCalendar({ ics: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR' })
+    await provider.exportCalendar()
+    await provider.previewMail({ to: ['fixture@example.test'], subject: 'Fixture', text: 'Hello', html: '<p>Hello</p>' })
+    await provider.sendMail({ to: ['fixture@example.test'], subject: 'Fixture', text: 'Hello', html: '<p>Hello</p>' }, { idempotencyKey: 'mail-key' })
+    await provider.getMailDelivery('delivery/1')
+    await provider.listReportCatalogue({ page_size: 25, page_token: 'opaque' })
+    await provider.shareReport('report/1', { roles: ['supervisor'] }, { expectedVersion: 3 })
+    await provider.exportReport('report/1', { format: 'CSV' })
+    await provider.listAuditEvents({ page_size: 10, filters: { event_type: ['REQUEST_CREATED'] } })
+    await provider.exportAuditEvents({ event_type: ['REQUEST_CREATED'] })
+    await provider.exportContactEmails({ filters: { primary_category: 'RESIDENT' } })
+    await provider.exportData('constituents', { page_size: 5, filters: { email: 'fixture@example.test' }, updated_since: '2026-01-01T00:00:00.000Z' })
+    expect(requests.map(request => `${request.method} ${request.path}`)).to.deep.equal([
+      'POST /api/v1/actions',
+      'GET /api/v1/operations/operation%2F1',
+      'POST /api/v1/staff/calendar/import',
+      'GET /api/v1/staff/calendar/export',
+      'POST /api/v1/staff/mail/preview',
+      'POST /api/v1/staff/mail',
+      'GET /api/v1/staff/mail/delivery%2F1',
+      'GET /api/v1/staff/reports/catalogue',
+      'POST /api/v1/staff/reports/report%2F1/share',
+      'POST /api/v1/staff/reports/report%2F1/export',
+      'GET /api/v1/staff/audit-events',
+      'POST /api/v1/staff/audit-events/export',
+      'POST /api/v1/staff/contact-email-export',
+      'GET /api/v1/export/constituents',
+    ])
+    expect(requests[0]).to.deep.include({ body: { action: 'notify_department', request_id: 'request-fixture-001', payload: { channel: 'EMAIL' } } })
+    expect(requests[0].headers).to.deep.equal({ 'Idempotency-Key': 'action-key' })
+    expect(requests[5].headers).to.deep.equal({ 'Idempotency-Key': 'mail-key' })
+    expect(requests[8].body).to.deep.equal({ roles: ['supervisor'] })
+    expect(requests[8].headers).to.deep.equal({ 'If-Match': '"3"' })
+    expect(requests[10].query).to.deep.include({ page_size: 10, filters: { event_type: ['REQUEST_CREATED'] } })
+    expect(requests[11].body).to.deep.equal({ filters: { event_type: ['REQUEST_CREATED'] } })
+    expect(requests[12].body).to.deep.equal({ filters: { primary_category: 'RESIDENT' } })
+    expect(requests[13].query).to.deep.include({ page_size: 5, filters: { email: 'fixture@example.test' }, updated_since: '2026-01-01T00:00:00.000Z' })
+  })
+
+  it('executes a workflow OAuth2 action and exposes its execution result without credentials', async () => {
+    const provider = new MockC311Provider({ role: 'workflow_designer' })
+    const input = { action: 'notify_department', request_id: 'request-fixture-001', payload: { channel: 'EMAIL' } }
+    const accepted = await provider.executeWorkflowAction(input, { idempotencyKey: 'workflow-action-1' })
+    expect(accepted).to.deep.equal({ execution_id: 'execution-fixture-action', accepted_at: '2026-01-15T15:00:00.000Z' })
+    expect((await provider.getWorkflowExecution(accepted.execution_id))).to.include({ outcome: 'SUCCEEDED', succeeded: true })
+    expect(provider.getWriteCount('workflow_action_execute')).to.equal(1)
+    expect(await provider.executeWorkflowAction(input, { idempotencyKey: 'workflow-action-1' })).to.deep.equal(accepted)
+    expect(provider.getWriteCount('workflow_action_execute')).to.equal(1)
+  })
+
+  it('uses repeated ICS imports for updates and cancellation and resolves the import operation', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    const update = await provider.importCalendar({ ics: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:fixture-calendar-001\r\nSUMMARY:Updated fixture event\r\nDESCRIPTION:Fixture description\r\nDTSTART;TZID=America/New_York:20260115T100000\r\nDTEND;TZID=America/New_York:20260115T110000\r\nSTATUS:CONFIRMED\r\nLAST-MODIFIED:20260115T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' })
+    expect(update.status).to.equal('PENDING')
+    expect(await provider.getOperation(update.operation_id)).to.deep.include({ status: 'SUCCEEDED', result: { summary: { imported: 0, updated: 1, cancelled: 0, ignored: 0 } } })
+    const cancel = await provider.importCalendar({ ics: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:fixture-calendar-001\r\nSUMMARY:Updated fixture event\r\nDESCRIPTION:Fixture description\r\nDTSTART;TZID=America/New_York:20260115T100000\r\nDTEND;TZID=America/New_York:20260115T110000\r\nSTATUS:CANCELLED\r\nLAST-MODIFIED:20260115T090000Z\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:unknown-event\r\nSUMMARY:Unknown\r\nDESCRIPTION:Unknown event\r\nDTSTART;TZID=America/New_York:20260115T100000\r\nDTEND;TZID=America/New_York:20260115T110000\r\nSTATUS:CANCELLED\r\nLAST-MODIFIED:20260115T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' })
+    expect((await provider.getOperation(cancel.operation_id)).result).to.deep.equal({ summary: { imported: 0, updated: 0, cancelled: 1, ignored: 1 } })
+    expect((await provider.exportCalendar()).body).to.contain('STATUS:CANCELLED')
+    expect(provider.getWriteCount('calendar_import')).to.equal(2)
+  })
+
+  it('observes mail delivery through the contract query without creating a retry write', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    const input = { to: ['fixture@example.test'], subject: 'Lifecycle', text: 'Hello', html: '<p>Hello</p>' }
+    const pending = await provider.sendMail(input, { idempotencyKey: 'fe09-mail-lifecycle' })
+    expect(pending).to.include({ status: 'PENDING', attempts: 1 })
+    expect(await provider.getMailDelivery(pending.delivery_id)).to.include({ status: 'DELIVERED', attempts: 2 })
+    expect(provider.getWriteCount('mail_send')).to.equal(1)
+
+    const terminalProvider = new MockC311Provider({ role: 'department_manager', scenario: 'terminal' })
+    const terminalPending = await terminalProvider.sendMail(input, { idempotencyKey: 'fe09-mail-terminal' })
+    expect(await terminalProvider.getMailDelivery(terminalPending.delivery_id)).to.include({ status: 'TERMINAL_FAILURE', attempts: 2 })
+  })
+
+  it('returns contract report catalogue/share fields and provider-produced UTF-8 CSV', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    const catalogueItems = (await provider.listReportCatalogue()).items
+    expect(catalogueItems).to.have.length(5)
+    expect(catalogueItems.map(item => item.name)).to.deep.equal(['Request volume', 'Request status and age', 'Assignment workload', 'Resolution performance', 'Follow-up activity'])
+    const catalogue = catalogueItems[0]
+    expect(catalogue).to.have.keys('report_key', 'name', 'supported_filters', 'supported_grouping', 'supported_sort')
+    const report = await provider.getReport('report-fixture-001')
+    expect((await provider.shareReport(report.report_id, { roles: ['supervisor'] }, { expectedVersion: report.version })).report_id).to.equal(report.report_id)
+    const pending = await provider.exportReport(report.report_id, { format: 'CSV' })
+    const complete = await provider.getOperation(pending.operation_id)
+    expect(complete.status).to.equal('SUCCEEDED')
+    expect(String(complete.result?.body)).to.contain('Pothole on Example Street').and.contain('request_number')
+  })
+
+  it('filters audit data and validates scoped paginated exports', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    expect((await provider.listAuditEvents({ filters: { event_type: ['REQUEST_CREATED'] } })).items).to.have.length(1)
+    expect((await provider.listAuditEvents({ filters: { event_type: ['OTHER'] } })).items).to.have.length(0)
+    const auditOperation = await provider.exportAuditEvents({ actor_id: ['actor-fixture-manager'] })
+    expect(await provider.getOperation(auditOperation.operation_id)).to.deep.include({ status: 'SUCCEEDED' })
+    expect((await provider.exportData('constituents', { filters: { constituent_id: 'constituent-fixture-001' }, page_size: 50 })).items[0]).to.include({ constituent_id: 'constituent-fixture-001' })
+    expect((await provider.exportData('constituents', { filters: { email: 'alex@example.test' } })).items[0]).to.include({ constituent_id: 'constituent-fixture-001' })
+    await expectError(() => provider.exportData('constituents', { page_token: 'invalid' }), 'INVALID_PAGE_TOKEN')
+    await expectError(() => provider.exportData('constituents', { page_size: 101 }), 'INVALID_FILTER')
+    await expectError(() => provider.exportData('constituents', { filters: { secret_filter: true } }), 'INVALID_FILTER')
+    await expectError(() => new MockC311Provider({ role: 'service_agent' }).exportData('constituents'), 'FORBIDDEN')
+    await expectError(() => new MockC311Provider({ role: 'department_manager', scenario: 'rate-limited' }).exportData('constituents'), 'RATE_LIMITED')
+    expect((await new MockC311Provider({ role: 'department_manager', scenario: 'retryable' }).exportData('constituents')).items).to.be.an('array')
+    expect((await new MockC311Provider({ role: 'department_manager', scenario: 'terminal' }).exportData('constituents')).items).to.be.an('array')
+  })
+
+  it('rejects invalid report definitions before any write', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    const invalid = { report_id: 'invalid', name: 'Too many', entity: 'service_requests' as const, columns: Array.from({ length: 21 }, (_, index) => `column_${index}`), filters: {}, grouping: null, sort: ['a', 'b', 'c', 'd'], version: 1, updated_at: '2026-01-15T15:00:00.000Z' }
+    await expectError(() => provider.createReport(invalid), 'VALIDATION_ERROR')
+    expect(provider.getWriteCount('saved_report_create')).to.equal(0)
+  })
+
+  it('allows FE-09 version conflicts to recover after reloading the server version', async () => {
+    const workflowProvider = new MockC311Provider({ role: 'workflow_designer', scenario: 'version-conflict' })
+    const workflow = await workflowProvider.getWorkflow('workflow-fixture-001')
+    const workflowError = await expectError(() => workflowProvider.updateWorkflow(workflow.workflow_id, { ...workflow, name: 'Reapplied workflow' }, { expectedVersion: workflow.version }), 'VERSION_CONFLICT')
+    expect(workflowError.currentVersion).to.equal(workflow.version)
+    const workflowReloaded = await workflowProvider.getWorkflow(workflow.workflow_id)
+    const workflowUpdated = await workflowProvider.updateWorkflow(workflowReloaded.workflow_id, { ...workflowReloaded, name: 'Reapplied workflow' }, { expectedVersion: workflowReloaded.version })
+    expect(workflowUpdated.name).to.equal('Reapplied workflow')
+
+    const reportProvider = new MockC311Provider({ role: 'department_manager', scenario: 'version-conflict' })
+    const report = await reportProvider.getReport('report-fixture-001')
+    await expectError(() => reportProvider.shareReport(report.report_id, { roles: ['supervisor'] }, { expectedVersion: report.version }), 'VERSION_CONFLICT')
+    const reportReloaded = await reportProvider.getReport(report.report_id)
+    const shared = await reportProvider.shareReport(reportReloaded.report_id, { roles: ['supervisor'] }, { expectedVersion: reportReloaded.version })
+    expect(shared.version).to.equal(report.version + 1)
+  })
+
+  it('enforces workflow OAuth error codes and role scopes', async () => {
+    await expectError(() => new MockC311Provider({ role: 'workflow_designer', scenario: 'invalid-client' }).executeWorkflowAction({ action: 'notify', request_id: 'request-fixture-001', payload: {} }), 'INVALID_CLIENT')
+    await expectError(() => new MockC311Provider({ role: 'workflow_designer', scenario: 'invalid-token' }).executeWorkflowAction({ action: 'notify', request_id: 'request-fixture-001', payload: {} }), 'INVALID_TOKEN')
+    await expectError(() => new MockC311Provider({ role: 'workflow_designer', scenario: 'insufficient-scope' }).executeWorkflowAction({ action: 'notify', request_id: 'request-fixture-001', payload: {} }), 'INSUFFICIENT_SCOPE')
+    await expectError(() => new MockC311Provider({ role: 'constituent' }).executeWorkflowAction({ action: 'notify', request_id: 'request-fixture-001', payload: {} }), 'INSUFFICIENT_SCOPE')
+  })
+
+  it('round-trips ICS metadata and rejects duplicate UIDs', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    const ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:metadata-001\r\nSUMMARY:Fixture\r\nDESCRIPTION:Line one\\nLine two\r\nDTSTART;TZID=America/New_York:20260115T100000\r\nDTEND;TZID=America/New_York:20260115T110000\r\nRRULE:FREQ=DAILY;COUNT=2\r\nSTATUS:CONFIRMED\r\nLAST-MODIFIED:20260115T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n'
+    await provider.importCalendar({ ics })
+    const exported = (await provider.exportCalendar()).body
+    expect(exported).to.contain('DTSTART;TZID=America/New_York:20260115T100000')
+    expect(exported).to.contain('DTEND;TZID=America/New_York:20260115T110000')
+    expect(exported).to.contain('DESCRIPTION:Line one\\nLine two')
+    expect(exported).to.contain('RRULE:FREQ=DAILY;COUNT=2')
+    expect(exported).to.contain('LAST-MODIFIED:20260115T090000Z')
+    await expectError(() => provider.importCalendar({ ics: 'BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:duplicate\r\nSUMMARY:One\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:duplicate\r\nSUMMARY:Two\r\nEND:VEVENT\r\nEND:VCALENDAR' }), 'VALIDATION_ERROR')
+    await expectError(() => provider.importCalendar({ ics: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:mixed-timezone\r\nSUMMARY:Mixed timezone\r\nDESCRIPTION:Fixture\r\nDTSTART;TZID=America/New_York:20260115T100000\r\nDTEND:20260115T160000Z\r\nSTATUS:CONFIRMED\r\nLAST-MODIFIED:20260115T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR' }), 'VALIDATION_ERROR')
+    await expectError(() => provider.importCalendar({ ics: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:invalid-status\r\nSUMMARY:Invalid status\r\nDESCRIPTION:Fixture\r\nDTSTART;TZID=America/New_York:20260115T100000\r\nDTEND;TZID=America/New_York:20260115T110000\r\nSTATUS:COMPLETED\r\nLAST-MODIFIED:20260115T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR' }), 'VALIDATION_ERROR')
+  })
+
+  it('loads and edits Mock-only mail templates without changing HTTP contract', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    const templates = await provider.listMailTemplates!()
+    expect(templates).to.have.length(2)
+    const updated = await provider.updateMailTemplate!('service-update', { name: templates[0].name, subject: 'Updated subject', text: 'Updated body', html: '<p>Updated body</p>' })
+    expect(updated).to.include({ subject: 'Updated subject', version: 2 })
+    expect((await provider.listMailTemplates!()).find(item => item.template_id === 'service-update')?.subject).to.equal('Updated subject')
+  })
+
+  it('exports contact emails only for authorized roles and resolves filtered operations', async () => {
+    const provider = new MockC311Provider({ role: 'platform_administrator' })
+    const pending = await provider.exportContactEmails({ filters: { primary_category: 'RESIDENT' } })
+    expect((await provider.getOperation(pending.operation_id)).result).to.deep.include({ exported_count: 1, filters: { primary_category: 'RESIDENT' } })
+    expect(provider.getWriteCount('contact_email_export')).to.equal(1)
+    await expectError(() => new MockC311Provider({ role: 'service_agent' }).exportContactEmails({ filters: {} }), 'FORBIDDEN')
+  })
+
+  it('keeps every export entity inside the actor scope and preserves contract projections', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    const foreign = JSON.parse(JSON.stringify(fixtures.requests[0])) as typeof fixtures.requests[number]
+    foreign.request_id = 'request-fixture-foreign'
+    foreign.request_number = 'SR-2026-00099'
+    foreign.owning_department = 'GENERAL_SERVICES'
+    foreign.council_district = 'SOUTH'
+    foreign.primary_requester = { ...foreign.primary_requester, constituent_id: 'constituent-fixture-foreign', emails: ['foreign@example.test'] }
+    fixtures.requests.push(foreign)
+    fixtures.verified_emails = { ...(fixtures.verified_emails || {}), 'constituent-fixture-foreign': ['foreign@example.test'] }
+    const optedOut = { ...foreign, request_id: 'request-fixture-opted-out', request_number: 'SR-2026-00098', owning_department: 'STREETS' as const, council_district: 'NORTH' as const, primary_requester: { ...foreign.primary_requester, constituent_id: 'constituent-fixture-opted-out', emails: ['opted-out@example.test'], email_opt_out: true } }
+    const unverified = { ...foreign, request_id: 'request-fixture-unverified', request_number: 'SR-2026-00097', owning_department: 'STREETS' as const, council_district: 'NORTH' as const, primary_requester: { ...foreign.primary_requester, constituent_id: 'constituent-fixture-unverified', emails: ['unverified@example.test'] } }
+    fixtures.requests.push(optedOut, unverified)
+    fixtures.verified_emails = { ...fixtures.verified_emails, 'constituent-fixture-opted-out': ['opted-out@example.test'] }
+    fixtures.audit_events = [...(fixtures.audit_events || []), { audit_id: 'audit-fixture-foreign', actor_id: 'actor-fixture-agent', actor_type: 'staff', entity_type: 'service_request', entity_id: foreign.request_id, event_type: 'REQUEST_CREATED', occurred_at: '2026-01-15T15:00:00.000Z', source_channel: 'STAFF_IN_PERSON', before: {}, after: { request_id: foreign.request_id } }]
+    fixtures.follow_up_actions = [...(fixtures.follow_up_actions || []), { action_type: 'CALL_REQUESTER', actor: 'actor-fixture-agent', occurred_at: '2026-01-15T15:00:00.000Z', local_display_time: '2026-01-15 10:00 America/New_York', request_id: foreign.request_id, visibility: 'STAFF', payload: {} }]
+    const manager = new MockC311Provider({ role: 'department_manager', fixtures })
+    expect((await manager.exportData('service-requests')).items.map(item => item.request_id)).to.deep.equal([
+      'request-fixture-001',
+      'request-fixture-opted-out',
+      'request-fixture-unverified',
+    ])
+    expect((await manager.exportData('follow-up-actions')).items).to.have.length(1)
+    expect((await manager.listAuditEvents()).items).to.have.length(1)
+    const audit = await manager.exportAuditEvents({})
+    const auditResult = await manager.getOperation(audit.operation_id)
+    expect(String(auditResult.result?.body)).to.contain('actor_type').and.contain('occurred_at').and.contain('before').and.contain('after')
+    const contact = await manager.exportContactEmails({ filters: { email: 'alex@example.test', department: 'STREETS', district: 'NORTH' } })
+    const contactResult = await manager.getOperation(contact.operation_id)
+    expect(String(contactResult.result?.body).split('\r\n')[0]).to.equal('"email","display_name","primary_category","preferred_language","opt_out"')
+    expect(String(contactResult.result?.body)).to.not.contain('foreign@example.test')
+    expect(String(contactResult.result?.body)).to.not.contain('opted-out@example.test').and.not.contain('unverified@example.test')
+    const administrator = new MockC311Provider({ role: 'platform_administrator', fixtures })
+    expect((await administrator.exportData('service-requests')).items).to.have.length(4)
+    expect((await administrator.exportData('follow-up-actions')).items).to.have.length(2)
+  })
+
+  it('validates workflow definitions, preserves active state and records test executions', async () => {
+    const provider = new MockC311Provider({ role: 'workflow_designer' })
+    await expectError(() => provider.createWorkflow({ workflow_id: 'workflow-invalid', name: 'Invalid', trigger: 'SERVICE_REQUEST_CREATED', active: false, conditions: [], actions: [], version: 1, updated_at: '2026-01-15T15:00:00.000Z' }), 'VALIDATION_ERROR')
+    const current = await provider.getWorkflow('workflow-fixture-001')
+    const updated = await provider.updateWorkflow(current.workflow_id, { ...current, active: false }, { expectedVersion: current.version })
+    expect(updated.active).to.equal(true)
+    const operation = await provider.testWorkflow(updated.workflow_id, { request_id: 'request-fixture-001' })
+    const complete = await provider.getOperation(operation.operation_id)
+    expect(complete.result).to.have.property('execution_id')
+    expect((await provider.listWorkflowExecutions()).items.some(item => item.execution_id === complete.result?.execution_id)).to.equal(true)
+    await expectError(() => provider.executeWorkflowAction({ action: 'notify', request_id: 'request-fixture-001', payload: {} }), 'VALIDATION_ERROR')
+  })
+
+  it('rejects incomplete or unsafe extension payloads without undeclared HTTP failures', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    await expectError(() => provider.importCalendar({ ics: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:missing\r\nSUMMARY:Missing fields\r\nEND:VEVENT\r\nEND:VCALENDAR' }), 'VALIDATION_ERROR')
+    await expectError(() => provider.importCalendar({ ics: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:bad-tz\r\nSUMMARY:Bad timezone\r\nDESCRIPTION:Fixture\r\nDTSTART;TZID=Europe/London:20260115T100000\r\nDTEND;TZID=Europe/London:20260115T110000\r\nSTATUS:CONFIRMED\r\nLAST-MODIFIED:20260115T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR' }), 'VALIDATION_ERROR')
+    const preview = await provider.previewMail({ to: ['alex@example.test'], subject: 'Unsafe', text: 'Body', html: '<script>alert(1)</script><p>Safe</p>' })
+    expect(preview.html).to.equal('<p>Safe</p>')
+    expect((await new MockC311Provider({ role: 'department_manager', scenario: 'retryable' }).importCalendar({ ics: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:retryable\r\nSUMMARY:Retryable\r\nDESCRIPTION:Fixture\r\nDTSTART;TZID=America/New_York:20260115T100000\r\nDTEND;TZID=America/New_York:20260115T110000\r\nSTATUS:CONFIRMED\r\nLAST-MODIFIED:20260115T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR' })).status).to.equal('PENDING')
+  })
+
+  it('binds CRM export page tokens to the complete query context', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    const second = JSON.parse(JSON.stringify(fixtures.requests[0])) as typeof fixtures.requests[number]
+    second.request_id = 'request-fixture-002'
+    second.request_number = 'SR-2026-00002'
+    fixtures.requests.push(second)
+    const provider = new MockC311Provider({ role: 'department_manager', fixtures })
+    const first = await provider.exportData('service-requests', { page_size: 1 })
+    expect(first.items).to.have.length(1)
+    expect(first.next_page_token).to.be.a('string')
+    const token = first.next_page_token!
+    await expectError(() => provider.exportData('service-requests', { page_size: 2, page_token: token }), 'INVALID_PAGE_TOKEN')
+    await expectError(() => provider.exportData('service-requests', { page_size: 1, page_token: token, filters: { status: 'SUBMITTED' } }), 'INVALID_PAGE_TOKEN')
+    const secondPage = await provider.exportData('service-requests', { page_size: 1, page_token: token })
+    expect(secondPage.items.map(item => item.request_id)).to.deep.equal(['request-fixture-002'])
+  })
+
+  it('rejects non-CSV report exports and enforces report ownership', async () => {
+    const owner = new MockC311Provider({ role: 'department_manager' })
+    await expectError(() => owner.exportReport('report-fixture-001', { format: 'JSON' } as unknown as ReportExportOptions), 'VALIDATION_ERROR')
+    const report = await owner.getReport('report-fixture-001')
+    const nonOwner = new MockC311Provider({ role: 'supervisor' })
+    await expectError(() => nonOwner.updateReport(report.report_id, report, { expectedVersion: report.version }), 'FORBIDDEN')
+    await expectError(() => nonOwner.shareReport(report.report_id, { roles: ['supervisor'] }, { expectedVersion: report.version }), 'FORBIDDEN')
+  })
+
+  it('binds audit page tokens to filters, sort and page size', async () => {
+    const fixtures = cloneFixtureSet(createDefaultFixtureSet())
+    fixtures.audit_events = [...(fixtures.audit_events || []), { ...(fixtures.audit_events || [])[0], audit_id: 'audit-fixture-002', entity_id: 'request-fixture-001' }]
+    const provider = new MockC311Provider({ role: 'department_manager', fixtures })
+    const query = { page_size: 1, sort: '-occurred_at', filters: { actor_id: ['actor-fixture-manager'] } }
+    const first = await provider.listAuditEvents(query)
+    expect(first.next_page_token).to.be.a('string')
+    const token = first.next_page_token!
+    await expectError(() => provider.listAuditEvents({ ...query, page_size: 2, page_token: token }), 'INVALID_PAGE_TOKEN')
+    await expectError(() => provider.listAuditEvents({ ...query, page_token: token, filters: { event_type: ['OTHER'] } }), 'INVALID_PAGE_TOKEN')
+    const second = await provider.listAuditEvents({ ...query, page_token: token })
+    expect(second.items).to.have.length(1)
+  })
+
+  it('uses the contract retry delay for CRM export rate limits', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager', scenario: 'rate-limited' })
+    const error = await expectError(() => provider.exportData('constituents'), 'RATE_LIMITED')
+    expect(error.retryAfter).to.equal('60')
+  })
+
+  it('projects the five report catalogue views and applies created date filters', async () => {
+    const provider = new MockC311Provider({ role: 'platform_administrator' })
+    const catalogue = (await provider.listReportCatalogue()).items
+    expect(catalogue).to.have.length(5)
+    const definitions: ReportDefinition[] = [
+      { report_id: 'report-service', name: 'Requests', entity: 'service_requests', columns: ['request_number', 'status', 'created_at'], filters: { created_from: '2026-01-01T00:00:00.000Z', created_to: '2026-01-31T23:59:59.000Z' }, grouping: null, sort: ['-created_at'], version: 1, updated_at: '2026-01-15T15:00:00.000Z' },
+      { report_id: 'report-age', name: 'Status age', entity: 'service_requests', columns: ['status', 'age_days', 'created_at', 'updated_at'], filters: {}, grouping: 'status', sort: ['status'], version: 1, updated_at: '2026-01-15T15:00:00.000Z' },
+      { report_id: 'report-assignment', name: 'Assignment workload', entity: 'service_requests', columns: ['primary_assignee_id', 'owning_department', 'collaborator_count', 'assignment_count'], filters: {}, grouping: null, sort: ['primary_assignee_id'], version: 1, updated_at: '2026-01-15T15:00:00.000Z' },
+      { report_id: 'report-resolution', name: 'Resolution', entity: 'service_requests', columns: ['resolved_at', 'resolution_days', 'reopened', 'owning_department'], filters: {}, grouping: null, sort: ['-updated_at'], version: 1, updated_at: '2026-01-15T15:00:00.000Z' },
+      { report_id: 'report-constituents', name: 'Constituents', entity: 'constituents', columns: ['constituent_id', 'email', 'department', 'district'], filters: { created_from: '2026-01-01T00:00:00.000Z', created_to: '2026-01-31T23:59:59.000Z' }, grouping: null, sort: ['constituent_id'], version: 1, updated_at: '2026-01-15T15:00:00.000Z' },
+      { report_id: 'report-actions', name: 'Actions', entity: 'follow_up_actions', columns: ['request_id', 'request_number', 'action_type', 'occurred_at', 'owning_department'], filters: { created_from: '2026-01-01T00:00:00.000Z', created_to: '2026-01-31T23:59:59.000Z' }, grouping: null, sort: ['occurred_at'], version: 1, updated_at: '2026-01-15T15:00:00.000Z' },
+    ]
+    for (const definition of definitions) {
+      const operation = await provider.runReport({ definition })
+      const result = await provider.getOperation(operation.operation_id)
+      expect(result.result?.row_count).to.be.greaterThan(0)
+      expect(result.result?.rows?.[0]).to.include.keys(definition.columns)
+    }
+  })
+
+  it('accepts date-only report bounds and includes the entire end date', async () => {
+    const provider = new MockC311Provider({ role: 'platform_administrator' })
+    const definition: ReportDefinition = {
+      report_id: 'report-date-only',
+      name: 'Date-only filter',
+      entity: 'service_requests',
+      columns: ['request_id', 'created_at'],
+      filters: { created_from: '2026-01-15', created_to: '2026-01-15' },
+      grouping: null,
+      sort: ['created_at'],
+      version: 1,
+      updated_at: '2026-01-15T15:00:00.000Z',
+    }
+    const operation = await provider.runReport({ definition })
+    const result = await provider.getOperation(operation.operation_id)
+    expect(result.result?.row_count).to.equal(1)
+  })
+
+  it('sanitizes mail HTML, enforces the 5 MiB attachment limit and returns unknown operations as 404', async () => {
+    const provider = new MockC311Provider({ role: 'department_manager' })
+    const preview = await provider.previewMail({ to: ['alex@example.test'], subject: 'Fixture', text: 'Body', html: '<p>Safe</p><script>alert(1)</script><a href="javascript:bad">bad</a>' })
+    expect(preview.html).to.contain('<p>Safe</p>')
+    expect(preview.html).to.not.contain('<script>')
+    expect(preview.html).to.not.contain('javascript:')
+    await expectError(() => provider.previewMail({ to: ['alex@example.test'], subject: 'Fixture', text: 'Body', attachments: [{ attachment_token: 'large', filename: 'large.txt', media_type: 'text/plain', size: 6 * 1024 * 1024, expires_at: '2026-01-16T15:00:00.000Z' }] }), 'VALIDATION_ERROR')
+    await expectError(() => provider.getOperation('operation-unknown'), 'NOT_FOUND')
+  })
+
+  it('keeps terminal workflow executions consistent with their operation result', async () => {
+    const provider = new MockC311Provider({ role: 'workflow_designer', scenario: 'terminal' })
+    const operation = await provider.testWorkflow('workflow-fixture-001', { request_id: 'request-fixture-001' })
+    const result = await provider.getOperation(operation.operation_id)
+    expect(result.status).to.equal('FAILED')
+    const execution = (await provider.listWorkflowExecutions()).items.find(item => item.execution_id === result.result?.execution_id)
+    expect(execution?.outcome).to.equal('FAILED')
+    expect(execution?.succeeded).to.equal(false)
+  })
+
+  it('models SMTP retry and terminal delivery lifecycles with bounded attempts', async () => {
+    for (const scenario of ['smtp-421', 'smtp-451'] as const) {
+      const provider = new MockC311Provider({ role: 'department_manager', scenario })
+      const delivery = await provider.sendMail({ to: ['alex@example.test'], subject: 'Fixture', text: 'Body' }, { idempotencyKey: scenario })
+      const first = await provider.getMailDelivery(delivery.delivery_id)
+      const second = await provider.getMailDelivery(delivery.delivery_id)
+      expect(first.status).to.equal('PENDING')
+      expect(second.status).to.equal('DELIVERED')
+      expect(second.attempts).to.equal(3)
+    }
+    for (const scenario of ['smtp-550', 'smtp-553'] as const) {
+      const provider = new MockC311Provider({ role: 'department_manager', scenario })
+      const delivery = await provider.sendMail({ to: ['alex@example.test'], subject: 'Fixture', text: 'Body' }, { idempotencyKey: scenario })
+      const result = await provider.getMailDelivery(delivery.delivery_id)
+      expect(result.status).to.equal('TERMINAL_FAILURE')
+      expect(result.error?.message).to.contain(scenario.replace('-', ' ').toUpperCase())
+    }
+    await expectError(() => new MockC311Provider({ role: 'department_manager', scenario: 'terminal' }).getOperation('operation-unknown'), 'NOT_FOUND')
   })
 })

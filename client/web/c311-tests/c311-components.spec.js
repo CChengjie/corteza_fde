@@ -7,6 +7,7 @@ import { formatC311DateTime as mockFormatC311DateTime } from './time-test-helper
 import Portal from '../compose/src/views/C311/Portal.vue'
 import PublicPortal from '../compose/src/views/C311/PublicPortal.vue'
 import Staff from '../admin/src/views/C311/Staff.vue'
+import Extensions from '../admin/src/views/C311/Extensions.vue'
 import Config from '../admin/src/views/C311/Config.vue'
 import composeRoutes from '../compose/src/views/routes'
 import adminRoutes from '../admin/src/views/routes'
@@ -55,6 +56,9 @@ jest.mock('@cortezaproject/corteza-vue', () => ({
   },
   c311: {
     c311StateForError (error) {
+      if (error?.status === 401 || error?.status === 403) return 'forbidden'
+      if (error?.status === 404) return 'not-found'
+      if (error?.status === 422) return 'validation-error'
       if (error?.status === 503 || error?.retryable) return 'retryable-error'
       return 'terminal-error'
     },
@@ -1865,6 +1869,135 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.form.summary).toBe('Keep this summary')
     expect(wrapper.vm.form.description).toBe('Keep this description while the map retries.')
     expect(wrapper.vm.form.requester.email).toBe('resident@example.test')
+  })
+
+  it('updates and cancels calendar events by importing contract-backed ICS', async () => {
+    const provider = {
+      exportCalendar: jest.fn().mockResolvedValue({ body: 'BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:calendar-1\nSUMMARY:Fixture event\nSTATUS:CONFIRMED\nEND:VEVENT\nEND:VCALENDAR\n' }),
+      importCalendar: jest.fn().mockResolvedValue({ operation_id: 'calendar-operation', status: 'PENDING' }),
+      getOperation: jest.fn().mockResolvedValue({ operation_id: 'calendar-operation', kind: 'calendar_import', status: 'SUCCEEDED', result: { summary: { updated: 1 } } }),
+    }
+    const wrapper = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/calendar', query: {} }, $C311: { provider, session: { actor: { capabilities: ['calendar_import', 'calendar_export'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    await wrapper.vm.updateCalendarEvent(wrapper.vm.calendarEvents[0])
+    await wrapper.vm.cancelCalendarEvent(wrapper.vm.calendarEvents[0])
+    expect(provider.importCalendar).toHaveBeenNthCalledWith(1, { ics: expect.stringContaining('UID:calendar-1\r\nSUMMARY:Fixture event (updated)') })
+    expect(provider.importCalendar).toHaveBeenNthCalledWith(2, { ics: expect.stringContaining('STATUS:CANCELLED') })
+    expect(provider.getOperation).toHaveBeenCalledTimes(2)
+    expect(provider.exportCalendar).toHaveBeenCalledTimes(3)
+    const utcBody = wrapper.vm.calendarImportBody({ uid: 'calendar-utc', summary: 'UTC event', dtstart: '20260115T150000Z', dtend: '20260115T160000Z', last_modified: '20260115T140000Z' })
+    expect(utcBody).toContain('DTSTART:20260115T150000Z')
+    expect(utcBody).not.toContain('DTSTART;TZID=')
+  })
+
+  it('observes mail delivery through the contract status endpoint', async () => {
+    const provider = {
+      sendMail: jest.fn().mockResolvedValue({ delivery_id: 'delivery-1', status: 'PENDING', attempts: 1 }),
+      getMailDelivery: jest.fn().mockResolvedValue({ delivery_id: 'delivery-1', status: 'DELIVERED', attempts: 2 }),
+    }
+    const wrapper = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/mail', query: {} }, $C311: { provider, session: { actor: { capabilities: ['mail_send'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    wrapper.vm.mail = { to: 'fixture@example.test', subject: 'Fixture', text: 'Message', template_id: '' }
+    await wrapper.vm.sendMail()
+    await wrapper.vm.refreshMailDelivery()
+    expect(provider.sendMail).toHaveBeenCalledTimes(1)
+    expect(provider.getMailDelivery).toHaveBeenCalledWith('delivery-1')
+    expect(wrapper.vm.delivery).toEqual(expect.objectContaining({ status: 'DELIVERED', attempts: 2 }))
+  })
+
+  it('validates report limits, sends filters, and preserves UTF-8 CSV content', async () => {
+    const provider = {
+      listReportCatalogue: jest.fn().mockResolvedValue({ items: [{ report_key: 'service_requests', name: 'Catalogue', supported_filters: ['status'], supported_grouping: ['status'], supported_sort: ['created_at'] }] }),
+      listReports: jest.fn().mockResolvedValue({ items: [] }),
+      createReport: jest.fn().mockResolvedValue({ report_id: 'report-1', name: 'Fixture report', entity: 'service_requests', columns: ['request_number', 'summary', 'status'], filters: { status: 'SUBMITTED' }, sort: [], version: 1 }),
+      exportReport: jest.fn().mockResolvedValue({ operation_id: 'export-1', status: 'PENDING' }),
+      getOperation: jest.fn().mockResolvedValue({ operation_id: 'export-1', kind: 'report_export', status: 'SUCCEEDED', result: { body: '"summary"\r\n"城市 311 ""fixture"""' } }),
+    }
+    const wrapper = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/reports', query: {} }, $C311: { provider, session: { actor: { capabilities: ['report_catalogue', 'saved_report_create', 'report_export'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    wrapper.vm.reportForm = { name: 'Too many', columnsText: Array.from({ length: 21 }, (_, index) => `column_${index}`).join(','), grouping: '', sortText: '', filtersText: '{}' }
+    expect(wrapper.vm.reportValid).toBe(false)
+    wrapper.vm.reportForm = { name: 'Fixture report', columnsText: 'request_number,summary,status', grouping: '', sortText: '-created_at', filtersText: '{"status":"SUBMITTED"}' }
+    await wrapper.vm.saveReport()
+    await wrapper.vm.exportReport(wrapper.vm.reports[0])
+    expect(provider.createReport).toHaveBeenCalledWith(expect.objectContaining({ filters: { status: 'SUBMITTED' } }))
+    expect(wrapper.vm.csvPreview).toContain('城市 311 ""fixture""')
+  })
+
+  it('executes the workflow OAuth2 action and displays its execution result', async () => {
+    const provider = {
+      executeWorkflowAction: jest.fn().mockResolvedValue({ execution_id: 'execution-1', accepted_at: '2026-01-15T15:00:00.000Z' }),
+      getWorkflowExecution: jest.fn().mockResolvedValue({ execution_id: 'execution-1', outcome: 'SUCCEEDED', succeeded: true }),
+    }
+    const wrapper = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/oauth', query: {} }, $C311: { provider, session: { actor: { scopes: ['workflow.execute'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await wrapper.vm.executeWorkflowOAuthAction()
+    expect(provider.executeWorkflowAction).toHaveBeenCalledWith({ action: 'notify_department', request_id: 'request-fixture-001', payload: {} }, { idempotencyKey: 'workflow-action-request-fixture-001-notify_department' })
+    expect(provider.getWorkflowExecution).toHaveBeenCalledWith('execution-1')
+    expect(wrapper.vm.oauthStatus).toContain('SUCCEEDED')
+  })
+
+  it('hides OAuth navigation without scope and sends complete audit filters', async () => {
+    const provider = {
+      listAuditEvents: jest.fn().mockResolvedValue({ items: [], next_page_token: null }),
+    }
+    const denied = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/audit', query: {} }, $C311: { provider, session: { actor: { capabilities: ['audit_list'], scopes: [] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    expect(denied.vm.navItems.some(item => item.route === '/c311/staff/oauth')).toBe(false)
+
+    const allowed = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/audit', query: {} }, $C311: { provider, session: { actor: { capabilities: ['audit_list'], scopes: ['workflow.execute'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    expect(allowed.vm.navItems.some(item => item.route === '/c311/staff/oauth')).toBe(true)
+    allowed.vm.auditForm = { ...allowed.vm.auditForm, actorType: 'staff', entityId: 'request-fixture-001', entityType: 'service_request', requestId: 'request-fixture-001', sourceChannel: 'STAFF_IN_PERSON', occurredFrom: '2026-01-01T00:00:00.000Z', occurredTo: '2026-01-31T00:00:00.000Z' }
+    await allowed.vm.applyAuditFilters()
+    expect(provider.listAuditEvents).toHaveBeenLastCalledWith({
+      filters: {
+        actor_type: ['staff'],
+        entity_id: ['request-fixture-001'],
+        entity_type: ['service_request'],
+        request_id: ['request-fixture-001'],
+        source_channel: ['STAFF_IN_PERSON'],
+        occurred_from: '2026-01-01T00:00:00.000Z',
+        occurred_to: '2026-01-31T00:00:00.000Z',
+      },
+      page_size: 50,
+    })
+  })
+
+  it('keeps audit filters visible for empty results and maps load errors to C311 states', async () => {
+    const emptyProvider = {
+      listAuditEvents: jest.fn().mockResolvedValue({ items: [], next_page_token: null }),
+    }
+    const empty = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/audit', query: {} }, $C311: { provider: emptyProvider, session: { actor: { capabilities: ['audit_list'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    expect(empty.find('[data-c311-audit-filters]').exists()).toBe(true)
+    expect(empty.find('[data-c311-audit-empty]').exists()).toBe(true)
+
+    const denied = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/workflows', query: {} }, $C311: { provider: { listWorkflows: jest.fn().mockRejectedValue({ status: 403, message: 'Forbidden' }) }, session: { actor: { capabilities: ['workflow_list'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    expect(denied.vm.state).toBe('forbidden')
   })
 
   it('covers admin configuration lifecycle, labelled fields, and capability-gated actions', async () => {

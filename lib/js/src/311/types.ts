@@ -683,6 +683,93 @@ export interface WorkflowDefinition {
   updated_at: ISODateTime
 }
 
+export interface WorkflowTestInput { request_id: string }
+export interface WorkflowExecution {
+  execution_id: string
+  workflow_version: number
+  trigger: string
+  outcome: 'SUCCEEDED' | 'FAILED'
+  actions_attempted: string[]
+  succeeded: boolean
+  occurred_at: ISODateTime
+  response_status?: number
+  error?: C311ErrorPayload
+}
+
+export interface CalendarExport { content_type: 'text/calendar', body: string }
+export interface CalendarImport { ics: string }
+export interface CalendarEvent {
+  uid: string
+  summary: string
+  description?: string
+  dtstart?: string
+  dtend?: string
+  rrule?: string
+  last_modified?: string
+  timezone?: string
+  cancelled: boolean
+  updated_at: ISODateTime
+}
+export interface MailCompose {
+  to: string[]
+  subject: string
+  text: string
+  html?: string
+  template_id?: string | null
+  attachments?: PortalAttachment[]
+}
+export interface MailPreview { subject: string, text: string, html: string }
+export interface MailDelivery { delivery_id: string, status: 'PENDING' | 'DELIVERED' | 'TERMINAL_FAILURE', attempts: number, updated_at: ISODateTime, error: C311ErrorPayload | null }
+/** Mock-only template editing until a contract-backed template operation exists. */
+export interface MailTemplate { template_id: string, name: string, subject: string, text: string, html: string, version: number, updated_at: ISODateTime }
+export interface ReportCatalogueItem {
+  report_key: string
+  name: string
+  supported_filters: string[]
+  supported_grouping: string[]
+  supported_sort: string[]
+}
+export interface ReportShare { roles: ApplicationRole[] }
+export interface AuditEvent {
+  audit_id?: string
+  actor_id: string
+  actor_type: string
+  entity_type: string
+  entity_id: string
+  event_type: string
+  occurred_at: ISODateTime
+  source_channel: SourceChannel
+  before: Record<string, unknown>
+  after: Record<string, unknown>
+}
+export interface FollowUpAction {
+  action_type: string
+  actor: string
+  occurred_at: ISODateTime
+  local_display_time: string
+  request_id: string
+  visibility: string
+  payload: Record<string, unknown>
+}
+export interface AuditFilters {
+  actor_id?: string[]
+  actor_type?: string[]
+  entity_id?: string[]
+  entity_type?: string[]
+  event_type?: string[]
+  occurred_from?: ISODateTime
+  occurred_to?: ISODateTime
+  request_id?: string[]
+  source_channel?: SourceChannel[]
+}
+export interface ContactEmailExportRequest { filters: Record<string, unknown> }
+export interface DataExportQuery extends ListQuery {
+  updated_since?: ISODateTime
+}
+export interface ExportResponse<T = Record<string, unknown>> { generated_at: ISODateTime, items: T[], next_page_token: string | null }
+export interface WorkflowActionRequest { action: string, request_id: string, payload: Record<string, unknown> }
+export interface WorkflowActionAccepted { execution_id: string, accepted_at: ISODateTime }
+
 export interface C311FixtureSet {
   fixture_id: 'contract-v1'
   contract_version: '1.0.0'
@@ -695,7 +782,19 @@ export interface C311FixtureSet {
   drafts: Record<string, ServiceRequest | DraftWrite>
   attachments: Record<string, BinaryAttachment>
   reports: ReportDefinition[]
+  /** Mock-only report sharing metadata; not serialized in report DTOs. */
+  report_shares?: Record<string, ApplicationRole[]>
+  /** Mock-only ownership metadata for resource_owner authorization. */
+  report_owners?: Record<string, string>
   workflows: WorkflowDefinition[]
+  workflow_executions?: WorkflowExecution[]
+  mail_deliveries?: MailDelivery[]
+  /** Mock-only template fixtures; no contract-backed template endpoint exists yet. */
+  mail_templates?: MailTemplate[]
+  audit_events?: AuditEvent[]
+  follow_up_actions?: FollowUpAction[]
+  /** Fixture-only verification metadata; never serialized as a public DTO. */
+  verified_emails?: Record<string, string[]>
   geocodes: Record<string, GeocodeResponse>
   errors: Record<string, C311ErrorPayload>
   branding?: Branding

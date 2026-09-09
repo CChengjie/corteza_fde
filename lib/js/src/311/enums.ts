@@ -206,6 +206,7 @@ export const C311_SCENARIOS = [
   'not-found',
   'validation',
   'retryable',
+  'rate-limited',
   'terminal',
   'version-conflict',
   'idempotency-conflict',
@@ -253,6 +254,16 @@ export const C311_SCENARIOS = [
   'reminder-validation',
   'reminder-retryable',
   'reminder-terminal',
+  'workflow-invalid-client',
+  'workflow-invalid-token',
+  'workflow-insufficient-scope',
+  'invalid-client',
+  'invalid-token',
+  'insufficient-scope',
+  'smtp-421',
+  'smtp-451',
+  'smtp-550',
+  'smtp-553',
 ] as const
 export type C311Scenario = typeof C311_SCENARIOS[number]
 

@@ -66,6 +66,23 @@ import type {
   BulkResult,
   CivicWorksEvent,
   CivicWorksEventResult,
+  WorkflowTestInput,
+  WorkflowExecution,
+  CalendarExport,
+  CalendarImport,
+  MailCompose,
+  MailPreview,
+  MailDelivery,
+  MailTemplate,
+  ReportCatalogueItem,
+  ReportShare,
+  AuditEvent,
+  AuditFilters,
+  ExportResponse,
+  WorkflowActionRequest,
+  WorkflowActionAccepted,
+  DataExportQuery,
+  ContactEmailExportRequest,
 } from './types'
 
 export interface C311RequestOptions {
@@ -312,6 +329,27 @@ export interface C311Provider {
   getWorkflow (workflowID: string): Promise<WorkflowDefinition>
   createWorkflow (input: WorkflowDefinition): Promise<WorkflowDefinition>
   updateWorkflow (workflowID: string, input: WorkflowDefinition, options?: C311RequestOptions): Promise<WorkflowDefinition>
+  activateWorkflow (workflowID: string, options?: C311RequestOptions): Promise<WorkflowDefinition>
+  deactivateWorkflow (workflowID: string, options?: C311RequestOptions): Promise<WorkflowDefinition>
+  testWorkflow (workflowID: string, input: WorkflowTestInput): Promise<Operation>
+  listWorkflowExecutions (query?: ListQuery): Promise<PageResponse<WorkflowExecution>>
+  getWorkflowExecution (executionID: string): Promise<WorkflowExecution>
+  executeWorkflowAction (input: WorkflowActionRequest, options?: C311RequestOptions): Promise<WorkflowActionAccepted>
+  importCalendar (input: CalendarImport): Promise<Operation>
+  exportCalendar (): Promise<CalendarExport>
+  previewMail (input: MailCompose): Promise<MailPreview>
+  sendMail (input: MailCompose, options?: C311RequestOptions): Promise<MailDelivery>
+  getMailDelivery (deliveryID: string): Promise<MailDelivery>
+  /** Mock-only until a mail-template contract operation is published. */
+  listMailTemplates?: () => Promise<MailTemplate[]>
+  /** Mock-only until a mail-template contract operation is published. */
+  updateMailTemplate?: (templateID: string, input: Pick<MailTemplate, 'name' | 'subject' | 'text' | 'html'>) => Promise<MailTemplate>
+  listReportCatalogue (query?: ListQuery): Promise<PageResponse<ReportCatalogueItem>>
+  shareReport (reportID: string, input: ReportShare, options?: C311RequestOptions): Promise<ReportDefinition>
+  listAuditEvents (query?: ListQuery & { filters?: AuditFilters }): Promise<PageResponse<AuditEvent>>
+  exportAuditEvents (filters: AuditFilters): Promise<Operation>
+  exportContactEmails (input: ContactEmailExportRequest): Promise<Operation>
+  exportData (entity: 'audit-events' | 'constituents' | 'follow-up-actions' | 'service-requests', query?: DataExportQuery): Promise<ExportResponse>
 }
 
 export class C311HttpProvider implements C311Provider {
@@ -678,6 +716,24 @@ export class C311HttpProvider implements C311Provider {
   updateWorkflow (workflowID: string, input: WorkflowDefinition, options: C311RequestOptions = {}): Promise<WorkflowDefinition> {
     return this.request({ method: 'PATCH', path: `/api/v1/admin/workflows/${encodeURIComponent(workflowID)}`, body: input, ...this.requestOptions(options) })
   }
+
+  activateWorkflow (workflowID: string, options: C311RequestOptions = {}): Promise<WorkflowDefinition> { return this.request({ method: 'POST', path: `/api/v1/admin/workflows/${encodeURIComponent(workflowID)}/activate`, body: {}, ...this.requestOptions(options) }) }
+  deactivateWorkflow (workflowID: string, options: C311RequestOptions = {}): Promise<WorkflowDefinition> { return this.request({ method: 'POST', path: `/api/v1/admin/workflows/${encodeURIComponent(workflowID)}/deactivate`, body: {}, ...this.requestOptions(options) }) }
+  testWorkflow (workflowID: string, input: WorkflowTestInput): Promise<Operation> { return this.request({ method: 'POST', path: `/api/v1/admin/workflows/${encodeURIComponent(workflowID)}/test`, body: input }) }
+  listWorkflowExecutions (query: ListQuery = {}): Promise<PageResponse<WorkflowExecution>> { return this.request({ method: 'GET', path: '/api/v1/admin/workflow-executions', query: this.listQuery(query) }) }
+  getWorkflowExecution (executionID: string): Promise<WorkflowExecution> { return this.request({ method: 'GET', path: `/api/v1/admin/workflow-executions/${encodeURIComponent(executionID)}` }) }
+  executeWorkflowAction (input: WorkflowActionRequest, options: C311RequestOptions = {}): Promise<WorkflowActionAccepted> { return this.request({ method: 'POST', path: '/api/v1/actions', body: input, ...this.requestOptions(options, false) }) }
+  importCalendar (input: CalendarImport): Promise<Operation> { return this.request({ method: 'POST', path: '/api/v1/staff/calendar/import', body: input }) }
+  exportCalendar (): Promise<CalendarExport> { return this.request({ method: 'GET', path: '/api/v1/staff/calendar/export' }) }
+  previewMail (input: MailCompose): Promise<MailPreview> { return this.request({ method: 'POST', path: '/api/v1/staff/mail/preview', body: input }) }
+  sendMail (input: MailCompose, options: C311RequestOptions = {}): Promise<MailDelivery> { return this.request({ method: 'POST', path: '/api/v1/staff/mail', body: input, ...this.requestOptions(options, false) }) }
+  getMailDelivery (deliveryID: string): Promise<MailDelivery> { return this.request({ method: 'GET', path: `/api/v1/staff/mail/${encodeURIComponent(deliveryID)}` }) }
+  listReportCatalogue (query: ListQuery = {}): Promise<PageResponse<ReportCatalogueItem>> { return this.request({ method: 'GET', path: '/api/v1/staff/reports/catalogue', query: this.listQuery(query) }) }
+  shareReport (reportID: string, input: ReportShare, options: C311RequestOptions = {}): Promise<ReportDefinition> { return this.request({ method: 'POST', path: `/api/v1/staff/reports/${encodeURIComponent(reportID)}/share`, body: input, ...this.requestOptions(options) }) }
+  listAuditEvents (query: ListQuery & { filters?: AuditFilters } = {}): Promise<PageResponse<AuditEvent>> { return this.request({ method: 'GET', path: '/api/v1/staff/audit-events', query: this.listQuery(query) }) }
+  exportAuditEvents (filters: AuditFilters): Promise<Operation> { return this.request({ method: 'POST', path: '/api/v1/staff/audit-events/export', body: { filters } }) }
+  exportContactEmails (input: ContactEmailExportRequest): Promise<Operation> { return this.request({ method: 'POST', path: '/api/v1/staff/contact-email-export', body: input }) }
+  exportData (entity: 'audit-events' | 'constituents' | 'follow-up-actions' | 'service-requests', query: DataExportQuery = {}): Promise<ExportResponse> { return this.request({ method: 'GET', path: `/api/v1/export/${encodeURIComponent(entity)}`, query: { ...this.listQuery(query), ...(query.updated_since ? { updated_since: query.updated_since } : {}) } }) }
 }
 
 export type C311TransportResult<T> = C311EndpointResponse<T>

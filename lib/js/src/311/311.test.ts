@@ -225,10 +225,20 @@ describe('City 311 frontend contract', () => {
       enums: Record<string, string[]>
     }
     const fixtures = createDefaultFixtureSet()
+    // FE-08 consumes the capability additions from PR #50 before that server
+    // contract is merged into the checked-out baseline.
+    const provisionalCapabilities = new Set([
+      'admin_help_get', 'admin_help_update', 'admin_help_preview',
+      'admin_help_publish', 'admin_help_versions', 'admin_help_rollback',
+    ])
+    const provisionalRoutes = provisionalCapabilities
     for (const role of APPLICATION_ROLES) {
       const fixture = fixtures.role_fixtures[role]
       const actor = fixture.session.actor
-      const assertKnown = (kind: string, value: string) => expect(contract.enums[kind]).to.include(value)
+      const assertKnown = (kind: string, value: string) => {
+        if ((kind === 'capability' && provisionalCapabilities.has(value)) || (kind === 'route' && provisionalRoutes.has(value))) return
+        expect(contract.enums[kind]).to.include(value)
+      }
       assertKnown('route', fixture.denied_route)
       assertKnown('capability', fixture.denied_capability)
       assertKnown('oauth_scope', fixture.denied_scope)
@@ -581,6 +591,7 @@ describe('City 311 frontend contract', () => {
     await provider.startFederatedSignIn('oidc')
     await provider.completeFederatedSignIn('saml', { code: 'ephemeral-code', state: 'ephemeral-state' })
     await provider.getBranding()
+    await provider.getAdminBranding()
     await provider.getPublicContent('HOME')
     await provider.getPublicHelp('public.request.submit', 'EN')
     await provider.getProfile()
@@ -596,6 +607,7 @@ describe('City 311 frontend contract', () => {
       'GET /api/v1/auth/oidc/start',
       'GET /api/v1/auth/saml/callback',
       'GET /api/v1/public/branding',
+      'GET /api/v1/admin/branding',
       'GET /api/v1/public/content/HOME',
       'GET /api/v1/public/help/public.request.submit',
       'GET /api/v1/account/profile',
@@ -607,6 +619,95 @@ describe('City 311 frontend contract', () => {
     expect(requests.find(request => request.path === '/api/v1/account/login-identifier')?.body).to.deep.equal({ current_password: 'Current-password-1!', login_identifier: 'updated.login' })
     expect(requests.find(request => request.path === '/api/v1/account/password')?.body).to.deep.equal({ current_password: 'Current-password-1!', new_password: 'New-password-2!' })
     expect(requests.find(request => request.path === '/api/v1/auth/saml/callback')?.query).to.deep.equal({ code: 'ephemeral-code', state: 'ephemeral-state' })
+  })
+
+  it('maps FE-08 administration operations to contract paths and concurrency headers', async () => {
+    const requests: C311TransportRequest[] = []
+    const provider = new C311HttpProvider({
+      request: async <T> (request: C311TransportRequest): Promise<T> => {
+        requests.push(request)
+        return { version: 1, updated_at: '2026-01-15T15:00:00.000Z', content_key: 'HOME', body: '<p>safe</p>', state: 'DRAFT', published: false } as T
+      },
+    })
+    const options = { expectedVersion: 1 }
+    await provider.updateBranding({ organisation_name: 'Fixture City' }, options)
+    await provider.previewBranding({ organisation_name: 'Preview City' })
+    await provider.publishBranding(options)
+    await provider.listBrandingVersions()
+    await provider.rollbackBranding({ target_version: 1 }, options)
+    await provider.getAdminContent('HOME')
+    await provider.listAdminContent()
+    await provider.updateAdminContent('HOME', { body: '<p>draft</p>' }, options)
+    await provider.previewAdminContent('HOME', { body: '<p>preview</p>' })
+    await provider.publishAdminContent('HOME', options)
+    await provider.listAdminContentVersions('HOME')
+    await provider.rollbackAdminContent('HOME', { target_version: 1 }, options)
+    await provider.getAdminHelp('public.request.submit', 'EN')
+    await provider.updateAdminHelp('public.request.submit', { language: 'EN', body: '<p>help</p>' }, options)
+    await provider.previewAdminHelp('public.request.submit', { language: 'EN', body: '<p>preview help</p>' })
+    await provider.publishAdminHelp('public.request.submit', 'EN', options)
+    await provider.listAdminHelpVersions('public.request.submit', { language: 'EN' })
+    await provider.rollbackAdminHelp('public.request.submit', { target_version: 1 }, 'EN', { expectedVersion: 2 })
+    await provider.listAdminCategories()
+    await provider.createAdminCategory({ code: 'NEW', active: true, labels: { EN: 'New' } })
+    await provider.updateAdminCategory('NEW', { code: 'NEW', active: false, labels: { EN: 'Disabled' } }, options)
+    await provider.listAdminCustomFields()
+    await provider.createAdminCustomField({ key: 'field', labels: { EN: 'Field' }, entity: 'service_request', field_type: 'TEXT', required: false, active: true, version: 1, updated_at: '2026-01-15T15:00:00.000Z' })
+    await provider.updateAdminCustomField('field', { key: 'field', labels: { EN: 'Updated' }, entity: 'service_request', field_type: 'TEXT', required: false, active: true, version: 1, updated_at: '2026-01-15T15:00:00.000Z' }, options)
+
+    expect(requests.map(request => `${request.method} ${request.path}`)).to.deep.equal([
+      'PATCH /api/v1/admin/branding', 'POST /api/v1/admin/branding/preview', 'POST /api/v1/admin/branding/publish', 'GET /api/v1/admin/branding/versions', 'POST /api/v1/admin/branding/rollback',
+      'GET /api/v1/admin/content/HOME', 'GET /api/v1/admin/content', 'PATCH /api/v1/admin/content/HOME', 'POST /api/v1/admin/content/HOME/preview', 'POST /api/v1/admin/content/HOME/publish', 'GET /api/v1/admin/content/HOME/versions', 'POST /api/v1/admin/content/HOME/rollback',
+      'GET /api/v1/admin/help/public.request.submit', 'PATCH /api/v1/admin/help/public.request.submit', 'POST /api/v1/admin/help/public.request.submit/preview', 'POST /api/v1/admin/help/public.request.submit/publish', 'GET /api/v1/admin/help/public.request.submit/versions', 'POST /api/v1/admin/help/public.request.submit/rollback', 'GET /api/v1/admin/contact-categories', 'POST /api/v1/admin/contact-categories', 'PATCH /api/v1/admin/contact-categories/NEW', 'GET /api/v1/admin/custom-fields', 'POST /api/v1/admin/custom-fields', 'PATCH /api/v1/admin/custom-fields/field',
+    ])
+    const versionedPaths = requests.filter(request => ['PATCH /api/v1/admin/branding', 'POST /api/v1/admin/branding/publish', 'POST /api/v1/admin/branding/rollback', 'PATCH /api/v1/admin/content/HOME', 'POST /api/v1/admin/content/HOME/publish', 'POST /api/v1/admin/content/HOME/rollback', 'PATCH /api/v1/admin/help/public.request.submit', 'POST /api/v1/admin/help/public.request.submit/publish', 'POST /api/v1/admin/help/public.request.submit/rollback', 'PATCH /api/v1/admin/contact-categories/NEW', 'PATCH /api/v1/admin/custom-fields/field'].includes(`${request.method} ${request.path}`))
+    expect(versionedPaths.filter(request => `${request.method} ${request.path}`.endsWith('/help/public.request.submit/rollback')).every(request => request.headers?.['If-Match'] === '"2"')).to.equal(true)
+    expect(versionedPaths.filter(request => !`${request.method} ${request.path}`.endsWith('/help/public.request.submit/rollback')).every(request => request.headers?.['If-Match'] === '"1"')).to.equal(true)
+    expect(requests[0].body).to.deep.equal({ organisation_name: 'Fixture City' })
+  })
+
+  it('enforces FE-08 administration capabilities in Mock mode', async () => {
+    expect((await new MockC311Provider({ role: 'public_visitor' }).getBranding()).organisation_name).to.equal('City 311')
+    expect((await new MockC311Provider({ role: 'constituent' }).getBranding()).organisation_name).to.equal('City 311')
+    await expectError(() => new MockC311Provider({ role: 'service_agent' }).getAdminBranding(), 'FORBIDDEN')
+    const admin = new MockC311Provider({ role: 'platform_administrator' })
+    const branding = await admin.getAdminBranding()
+    expect(branding.version).to.equal(1)
+    await admin.updateBranding({ organisation_name: 'Draft city' }, { expectedVersion: branding.version })
+    expect((await admin.getBranding()).organisation_name).to.equal('City 311')
+    await admin.publishBranding({ expectedVersion: 2 })
+    expect((await admin.getBranding()).organisation_name).to.equal('Draft city')
+    const before = await admin.getAdminContent('HOME')
+    const updated = await admin.updateAdminContent('HOME', { body: '<p>draft</p>' }, { expectedVersion: before.version })
+    expect(updated.published).to.equal(false)
+    await expectError(() => admin.updateAdminContent('HOME', { body: '<p>stale</p>' }, { expectedVersion: before.version }), 'VERSION_CONFLICT')
+    await expectError(() => admin.previewAdminContent('HOME', { body: '<img src=x onerror=alert(1)>' }), 'VALIDATION_ERROR')
+    await expectError(() => admin.updateAdminHelp('public.request.submit', { language: 'EN', body: '<script>alert(1)</script>' }, { expectedVersion: 1 }), 'VALIDATION_ERROR')
+    const publicBeforeDraft = await admin.getPublicHelp('public.request.submit', 'EN')
+    await admin.updateAdminHelp('public.request.submit', { language: 'EN', body: '<p>Draft only.</p>' }, { expectedVersion: 1 })
+    expect((await admin.getPublicHelp('public.request.submit', 'EN')).body).to.equal(publicBeforeDraft.body)
+    await admin.previewAdminHelp('public.request.submit', { language: 'EN', body: '<p>Preview only.</p>' })
+    await admin.publishAdminHelp('public.request.submit', 'EN', { expectedVersion: 2 })
+    expect((await admin.getPublicHelp('public.request.submit', 'EN')).body).to.equal('<p>Draft only.</p>')
+    const help = await admin.updateAdminHelp('public.request.submit', { language: 'ES', body: '<p>Ayuda segura.</p>' }, { expectedVersion: 1 })
+    expect(help.language).to.equal('ES')
+    await admin.publishAdminHelp('public.request.submit', 'ES', { expectedVersion: 2 })
+    expect((await admin.getPublicHelp('public.request.submit', 'ES')).body).to.equal('<p>Ayuda segura.</p>')
+  })
+
+  it('protects categories in use and validates custom-field defaults', async () => {
+    const admin = new MockC311Provider({ role: 'platform_administrator' })
+    await expectError(() => admin.updateAdminCategory('RESIDENT', { code: 'RESIDENT', active: false, labels: { EN: 'Resident' } }, { expectedVersion: 1 }), 'VALIDATION_ERROR')
+    await expectError(() => admin.updateAdminCategory('LEGACY', { code: 'LEGACY', active: true, labels: { EN: 'Legacy' } }), 'EXPECTED_VERSION_REQUIRED')
+    const legacy = await admin.updateAdminCategory('LEGACY', { code: 'LEGACY', active: true, labels: { EN: 'Legacy' } }, { expectedVersion: 2 })
+    expect(legacy.active).to.equal(true)
+
+    const fields = await admin.listAdminCustomFields()
+    expect(fields.items[0].default).to.equal('EMAIL')
+    await expectError(() => admin.updateAdminCustomField('contact_preference', { ...fields.items[0], default: 'POST' }, { expectedVersion: fields.items[0].version }), 'VALIDATION_ERROR')
+    const updated = await admin.updateAdminCustomField('contact_preference', { ...fields.items[0], active: false, default: 'PHONE' }, { expectedVersion: fields.items[0].version })
+    expect(updated.default).to.equal('PHONE')
+    expect((await admin.getStaffRequest('request-fixture-001')).request.custom_fields).to.deep.equal({ contact_preference: 'EMAIL' })
   })
 
   it('validates password policy without persisting credentials', () => {

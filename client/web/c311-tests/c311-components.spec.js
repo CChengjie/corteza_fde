@@ -378,6 +378,19 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.statusResultState).toBe('not-found')
   })
 
+  it('clears an earlier status validation state when the lookup is corrected', async () => {
+    const wrapper = mount(Portal, {
+      mocks: { ...mocks, $route: { name: 'c311.status', path: '/c311/status', query: {} }, $C311: { provider: { getPublicStatus: jest.fn() }, session: { authenticated: false } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    wrapper.vm.statusResultState = 'validation-error'
+    wrapper.vm.statusErrors = [{ field: 'request_number', code: 'INVALID_FORMAT' }]
+    await wrapper.find('#c311-status-request-number').setValue('SR-2026-00001')
+    await wrapper.find('#c311-status-email').setValue('alex@example.test')
+    expect(wrapper.vm.statusErrors).toEqual([])
+    expect(wrapper.vm.statusResultState).toBe('empty')
+  })
+
   it('maps status validation links to the actual request number and email controls', async () => {
     const wrapper = mount(Portal, {
       mocks: { ...mocks, $route: { name: 'c311.status', path: '/c311/status', query: {} }, $C311: { provider: { getPublicStatus: jest.fn() }, session: { authenticated: false } } },

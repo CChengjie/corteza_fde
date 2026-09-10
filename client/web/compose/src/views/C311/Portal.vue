@@ -20,11 +20,11 @@
       <form @submit.prevent="lookupStatus">
         <div class="form-group">
           <label for="c311-status-request-number">{{ t('field.requestNumber', 'Request number') }}</label>
-          <input id="c311-status-request-number" v-model.trim="statusLookup.request_number" class="form-control" autocomplete="off" :aria-invalid="hasStatusError('request_number') ? 'true' : 'false'" @input="statusErrors = []">
+          <input id="c311-status-request-number" v-model.trim="statusLookup.request_number" class="form-control" autocomplete="off" :aria-invalid="hasStatusError('request_number') ? 'true' : 'false'" @input="handleStatusInput">
         </div>
         <div class="form-group">
           <label for="c311-status-email">{{ t('field.email', 'Email') }}</label>
-          <input id="c311-status-email" v-model.trim="statusLookup.email" class="form-control" type="email" autocomplete="email" :aria-invalid="hasStatusError('email') ? 'true' : 'false'" @input="statusErrors = []">
+          <input id="c311-status-email" v-model.trim="statusLookup.email" class="form-control" type="email" autocomplete="email" :aria-invalid="hasStatusError('email') ? 'true' : 'false'" @input="handleStatusInput">
         </div>
         <button class="btn btn-primary" type="submit" data-c311-action="lookup-status" :disabled="statusBusy">
           {{ statusBusy ? t('action.working', 'Working…') : t('action.lookupStatus', 'Check status') }}
@@ -494,6 +494,14 @@ export default {
     hasStatusError (field) {
       const target = normalizeFieldPath(field)
       return this.statusErrors.some(error => normalizeFieldPath(error.field) === target)
+    },
+    handleStatusInput () {
+      this.statusErrors = []
+      this.statusError = null
+      if (!this.statusBusy) {
+        this.statusResult = null
+        this.statusResultState = 'empty'
+      }
     },
     readStatusLookup () {
       if (typeof window === 'undefined' || !window.sessionStorage) return { request_number: '', email: '' }

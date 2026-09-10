@@ -49,6 +49,10 @@ func clientSchemas() map[string]map[string]interface{} {
 			"authorization_url":          map[string]interface{}{"type": "string", "format": "uri"},
 			"link_confirmation_required": map[string]interface{}{"type": "boolean", "default": false},
 		}),
+		"federated_saml_callback": object([]string{"RelayState", "SAMLResponse"}, map[string]interface{}{
+			"RelayState":   map[string]interface{}{"type": "string", "min_length": 1},
+			"SAMLResponse": map[string]interface{}{"type": "string", "min_length": 1, "write_only": true},
+		}),
 		"operation": object([]string{"operation_id", "kind", "status", "created_at", "updated_at"}, map[string]interface{}{
 			"operation_id": map[string]interface{}{"type": "string"},
 			"kind":         map[string]interface{}{"type": "string"},

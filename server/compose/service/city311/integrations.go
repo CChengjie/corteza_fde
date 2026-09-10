@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -222,30 +223,27 @@ func (svc *Service) UpdateIntegration(ctx context.Context, actor contract.Actor,
 	if input.Active == nil {
 		return nil, validationError(contract.FieldError{Field: "/active", Code: contract.ValidationRequired})
 	}
-	svc.integrationMu.Lock()
-	defer svc.integrationMu.Unlock()
-	current, payload, secrets, err := svc.currentIntegration(ctx, integrationID, expectedVersion)
-	if err != nil {
-		return nil, err
-	}
-	payload.Active = *input.Active
-	if input.Configuration != nil {
-		payload.Configuration = cloneAnyMap(input.Configuration)
-	}
-	if input.Secret != nil {
-		if err = replaceIntegrationSecret(payload.Kind, secrets, *input.Secret, "/secret"); err != nil {
-			return nil, err
+	return svc.reviseIntegration(ctx, actor, integrationID, expectedVersion, "INTEGRATION_UPDATED", "", func(payload *integrationConnectionPayload, secrets integrationSecretBundle) (preparedIntegrationRuntime, error) {
+		payload.Active = *input.Active
+		if input.Configuration != nil {
+			payload.Configuration = cloneAnyMap(input.Configuration)
 		}
-	}
-	payload.Configuration, err = validateIntegrationConfiguration(payload.Kind, payload.Configuration)
-	if err != nil {
-		return nil, err
-	}
-	runtime, err := prepareIntegrationRuntime(payload.Kind, payload.Active, payload.Configuration, secrets)
-	if err != nil {
-		return nil, validationError(contract.FieldError{Field: "/configuration", Code: contract.ValidationInvalidValue})
-	}
-	return svc.appendIntegrationRevision(ctx, actor, current, payload, secrets, runtime, "INTEGRATION_UPDATED", "")
+		if input.Secret != nil {
+			if err := replaceIntegrationSecret(payload.Kind, secrets, *input.Secret, "/secret"); err != nil {
+				return preparedIntegrationRuntime{}, err
+			}
+		}
+		configuration, err := validateIntegrationConfiguration(payload.Kind, payload.Configuration)
+		if err != nil {
+			return preparedIntegrationRuntime{}, err
+		}
+		payload.Configuration = configuration
+		runtime, err := prepareIntegrationRuntime(payload.Kind, payload.Active, payload.Configuration, secrets)
+		if err != nil {
+			return preparedIntegrationRuntime{}, validationError(contract.FieldError{Field: "/configuration", Code: contract.ValidationInvalidValue})
+		}
+		return runtime, nil
+	})
 }
 
 func (svc *Service) RotateIntegrationSecret(ctx context.Context, actor contract.Actor, integrationID string, expectedVersion uint64, input contract.SecretRotation) (*contract.IntegrationConnection, error) {
@@ -255,20 +253,16 @@ func (svc *Service) RotateIntegrationSecret(ctx context.Context, actor contract.
 	if expectedVersion == 0 {
 		return nil, expectedVersionRequired()
 	}
-	svc.integrationMu.Lock()
-	defer svc.integrationMu.Unlock()
-	current, payload, secrets, err := svc.currentIntegration(ctx, integrationID, expectedVersion)
-	if err != nil {
-		return nil, err
-	}
-	if err = replaceIntegrationSecret(payload.Kind, secrets, input.NewSecret, "/new_secret"); err != nil {
-		return nil, err
-	}
-	runtime, err := prepareIntegrationRuntime(payload.Kind, payload.Active, payload.Configuration, secrets)
-	if err != nil {
-		return nil, validationError(contract.FieldError{Field: "/new_secret", Code: contract.ValidationInvalidValue})
-	}
-	return svc.appendIntegrationRevision(ctx, actor, current, payload, secrets, runtime, "INTEGRATION_SECRET_ROTATED", "")
+	return svc.reviseIntegration(ctx, actor, integrationID, expectedVersion, "INTEGRATION_SECRET_ROTATED", "", func(payload *integrationConnectionPayload, secrets integrationSecretBundle) (preparedIntegrationRuntime, error) {
+		if err := replaceIntegrationSecret(payload.Kind, secrets, input.NewSecret, "/new_secret"); err != nil {
+			return preparedIntegrationRuntime{}, err
+		}
+		runtime, err := prepareIntegrationRuntime(payload.Kind, payload.Active, payload.Configuration, secrets)
+		if err != nil {
+			return preparedIntegrationRuntime{}, validationError(contract.FieldError{Field: "/new_secret", Code: contract.ValidationInvalidValue})
+		}
+		return runtime, nil
+	})
 }
 
 func (svc *Service) RevokeIntegration(ctx context.Context, actor contract.Actor, integrationID string, expectedVersion uint64, input contract.Reason) (*contract.IntegrationConnection, error) {
@@ -282,18 +276,17 @@ func (svc *Service) RevokeIntegration(ctx context.Context, actor contract.Actor,
 	if reason == "" {
 		return nil, validationError(contract.FieldError{Field: "/reason", Code: contract.ValidationRequired})
 	}
-	svc.integrationMu.Lock()
-	defer svc.integrationMu.Unlock()
-	current, payload, _, err := svc.currentIntegration(ctx, integrationID, expectedVersion)
-	if err != nil {
-		return nil, err
-	}
-	payload.Active = false
-	return svc.appendIntegrationRevision(ctx, actor, current, payload, integrationSecretBundle{}, preparedIntegrationRuntime{}, "INTEGRATION_REVOKED", reason)
+	return svc.reviseIntegration(ctx, actor, integrationID, expectedVersion, "INTEGRATION_REVOKED", reason, func(payload *integrationConnectionPayload, secrets integrationSecretBundle) (preparedIntegrationRuntime, error) {
+		payload.Active = false
+		for key := range secrets {
+			delete(secrets, key)
+		}
+		return preparedIntegrationRuntime{}, nil
+	})
 }
 
-func (svc *Service) currentIntegration(ctx context.Context, integrationID string, expectedVersion uint64) (*composeTypes.City311ConfigurationRevision, integrationConnectionPayload, integrationSecretBundle, error) {
-	current, err := svc.integrationRevision(ctx, integrationID)
+func (svc *Service) currentIntegration(ctx context.Context, st store.Storer, integrationID string, expectedVersion uint64) (*composeTypes.City311ConfigurationRevision, integrationConnectionPayload, integrationSecretBundle, error) {
+	current, err := svc.integrationRevisionInStore(ctx, st, integrationID)
 	if err != nil {
 		return nil, integrationConnectionPayload{}, nil, err
 	}
@@ -310,18 +303,67 @@ func (svc *Service) currentIntegration(ctx context.Context, integrationID string
 }
 
 func (svc *Service) integrationRevision(ctx context.Context, integrationID string) (*composeTypes.City311ConfigurationRevision, error) {
+	return svc.integrationRevisionInStore(ctx, svc.store, integrationID)
+}
+
+func (svc *Service) integrationRevisionInStore(ctx context.Context, st store.Storer, integrationID string) (*composeTypes.City311ConfigurationRevision, error) {
 	integrationID = strings.TrimSpace(integrationID)
 	if !knownIntegrationID(integrationID) {
 		return nil, apiError(http.StatusNotFound, contract.ErrorNotFound, "The integration connection was not found.")
 	}
-	revision, err := svc.latestConfigurationRevision(ctx, svc.store, configurationIntegration, integrationID, "", false)
+	revision, err := svc.latestConfigurationRevision(ctx, st, configurationIntegration, integrationID, "", false)
 	if err != nil {
 		return nil, apiError(http.StatusNotFound, contract.ErrorNotFound, "The integration connection was not found.")
 	}
 	return revision, nil
 }
 
-func (svc *Service) appendIntegrationRevision(ctx context.Context, actor contract.Actor, current *composeTypes.City311ConfigurationRevision, payload integrationConnectionPayload, secrets integrationSecretBundle, runtime preparedIntegrationRuntime, eventType, reason string) (*contract.IntegrationConnection, error) {
+func (svc *Service) reviseIntegration(ctx context.Context, actor contract.Actor, integrationID string, expectedVersion uint64, eventType, reason string, mutate func(*integrationConnectionPayload, integrationSecretBundle) (preparedIntegrationRuntime, error)) (*contract.IntegrationConnection, error) {
+	integrationID = strings.TrimSpace(integrationID)
+	if !knownIntegrationID(integrationID) {
+		return nil, apiError(http.StatusNotFound, contract.ErrorNotFound, "The integration connection was not found.")
+	}
+	svc.integrationMu.Lock()
+	defer svc.integrationMu.Unlock()
+	var next *composeTypes.City311ConfigurationRevision
+	var payload integrationConnectionPayload
+	var runtime preparedIntegrationRuntime
+	err := store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+		if err := store.LockCity311ConfigurationResource(ctx, tx, configurationIntegration, integrationID); err != nil {
+			return err
+		}
+		current, currentPayload, secrets, err := svc.currentIntegration(ctx, tx, integrationID, expectedVersion)
+		if err != nil {
+			return err
+		}
+		payload = currentPayload
+		runtime, err = mutate(&payload, secrets)
+		if err != nil {
+			return err
+		}
+		next, err = svc.appendIntegrationRevision(ctx, tx, actor, current, payload, secrets, eventType, reason)
+		return err
+	})
+	if err != nil {
+		return nil, svc.integrationWriteError(ctx, integrationID, expectedVersion, err)
+	}
+	svc.applyIntegrationRuntime(payload.Kind, payload.Active, runtime)
+	return integrationConnectionFromRevision(next), nil
+}
+
+func (svc *Service) integrationWriteError(ctx context.Context, integrationID string, expectedVersion uint64, err error) error {
+	var serviceErr *ServiceError
+	if stderrors.As(err, &serviceErr) {
+		return err
+	}
+	current, lookupErr := svc.integrationRevision(ctx, integrationID)
+	if lookupErr == nil && uint64(current.Version) > expectedVersion {
+		return versionConflict(current.Version)
+	}
+	return err
+}
+
+func (svc *Service) appendIntegrationRevision(ctx context.Context, st store.Storer, actor contract.Actor, current *composeTypes.City311ConfigurationRevision, payload integrationConnectionPayload, secrets integrationSecretBundle, eventType, reason string) (*composeTypes.City311ConfigurationRevision, error) {
 	sealed, err := svc.sealIntegrationSecrets(current.ResourceKey, secrets)
 	if err != nil {
 		return nil, err
@@ -336,26 +378,22 @@ func (svc *Service) appendIntegrationRevision(ctx context.Context, actor contrac
 		ID: svc.nextID(), ResourceType: configurationIntegration, ResourceKey: current.ResourceKey,
 		Payload: encoded, Version: current.Version + 1, Published: true, CreatedAt: now,
 	}
-	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
-		if err := store.CreateCity311ConfigurationRevision(ctx, tx, next); err != nil {
-			return err
-		}
-		before := integrationAuditSnapshot(current)
-		after := integrationAuditSnapshot(next)
-		if reason != "" {
-			after["reason"] = reason
-		}
-		return store.CreateCity311AuditEvent(ctx, tx, &composeTypes.City311AuditEvent{
-			ID: svc.nextID(), EntityType: "integration_connection", EntityID: current.ResourceKey, EventType: eventType,
-			ActorType: contract.AuditActorStaff, ActorID: actor.ID, SourceChannel: contract.SourceChannelStaffInPerson,
-			Before: before, After: after, CreatedAt: now,
-		})
-	})
-	if err != nil {
+	if err = store.CreateCity311ConfigurationRevision(ctx, st, next); err != nil {
 		return nil, err
 	}
-	svc.applyIntegrationRuntime(payload.Kind, payload.Active, runtime)
-	return integrationConnectionFromRevision(next), nil
+	before := integrationAuditSnapshot(current)
+	after := integrationAuditSnapshot(next)
+	if reason != "" {
+		after["reason"] = reason
+	}
+	if err = store.CreateCity311AuditEvent(ctx, st, &composeTypes.City311AuditEvent{
+		ID: svc.nextID(), EntityType: "integration_connection", EntityID: current.ResourceKey, EventType: eventType,
+		ActorType: contract.AuditActorStaff, ActorID: actor.ID, SourceChannel: contract.SourceChannelStaffInPerson,
+		Before: before, After: after, CreatedAt: now,
+	}); err != nil {
+		return nil, err
+	}
+	return next, nil
 }
 
 func integrationConnectionFromRevision(revision *composeTypes.City311ConfigurationRevision) *contract.IntegrationConnection {

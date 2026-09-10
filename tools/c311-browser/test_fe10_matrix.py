@@ -20,6 +20,14 @@ class Fe10MatrixTests(unittest.TestCase):
         self.assertNotIn("if width in (767, 1440)", source)
         self.assertIn("extension_smoke(page, base_url, label, results)", source)
 
+    def test_sonar_excludes_browser_harness_and_static_bootstrap_duplicates(self):
+        properties = Path(__file__).parents[2].joinpath("sonar-project.properties").read_text(encoding="utf-8")
+        self.assertIn("tools/c311-browser/fe10_matrix.py", properties)
+        self.assertIn(
+            "sonar.cpd.exclusions=**/*.gen.go,client/web/admin/public/index.html,client/web/compose/public/index.html",
+            properties,
+        )
+
     def test_artifact_directory_is_private(self):
         with tempfile.TemporaryDirectory(prefix="c311-fe10-test-") as parent:
             configured = Path(parent) / "artifacts"

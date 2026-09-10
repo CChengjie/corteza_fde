@@ -250,6 +250,55 @@ func TestDueEmailReminderPersistsTerminalFailureWithoutRedelivery(t *testing.T) 
 	require.Equal(t, 1, count)
 }
 
+func TestDueEmailReminderPersistsInvalidRecipientWithoutReprocessing(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	require.NoError(t, svc.Seed(ctx, svc.now()))
+	request, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
+	require.NoError(t, err)
+	agent := seededAssignmentActor(t, ctx, svc, st, "service-agent@city311.example.invalid")
+	recipient := seededAssignmentUser(t, ctx, st, "department-manager@city311.example.invalid")
+	sender := &scriptedMailSender{}
+	svc.SetMailSender(sender)
+
+	created, err := svc.CreateReminder(ctx, agent, request.ID, contract.ReminderWrite{
+		Title: "Recipient loses email", DueAt: svc.now().Add(-time.Minute), Timezone: "America/New_York",
+		RecipientStaffID: strconv.FormatUint(recipient.ID, 10), Channel: contract.ReminderChannelEmail,
+	})
+	require.NoError(t, err)
+	recipient.Email = ""
+	require.NoError(t, store.UpdateUser(ctx, st, recipient))
+
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	require.Empty(t, sender.messages)
+	reminderID, err := strconv.ParseUint(created.ReminderID, 10, 64)
+	require.NoError(t, err)
+	persisted, err := store.LookupReminderByID(ctx, st, reminderID)
+	require.NoError(t, err)
+	payload, err := decodeReminderPayload(persisted)
+	require.NoError(t, err)
+	require.Equal(t, reminderDeliveryTerminalFailure, payload.DeliveryStatus)
+	require.Equal(t, 1, payload.DeliveryAttempts)
+	require.Contains(t, payload.LastDeliveryError, "no valid email address")
+	require.Nil(t, payload.DeliveredAt)
+
+	// A later pass sees the terminal marker and performs no additional work.
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	require.Empty(t, sender.messages)
+	audits, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{
+		RequestID: request.ID, EntityType: "reminder", EntityID: strconv.FormatUint(reminderID, 10),
+	})
+	require.NoError(t, err)
+	count := 0
+	for _, audit := range audits {
+		if audit.EventType == "REMINDER_EMAIL_DELIVERY_FAILED" {
+			count++
+			require.Equal(t, contract.AuditActorSystem, audit.ActorType)
+		}
+	}
+	require.Equal(t, 1, count)
+}
+
 func TestReminderWorkerMakesOneDueInAppNotificationVisible(t *testing.T) {
 	svc, st := testService(t)
 	ctx, cancel := context.WithCancel(context.Background())

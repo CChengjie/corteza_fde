@@ -332,7 +332,10 @@ func (svc *Service) dispatchDueReminder(ctx context.Context, reminder *systemTyp
 	case contract.ReminderChannelEmail:
 		message, err := svc.reminderMailMessage(ctx, reminder, payload)
 		if err != nil {
-			return "", 0, err
+			// Recipient and request data are persisted inputs to this occurrence.
+			// Re-polling cannot repair an invalid message, so record the failed
+			// preparation as the occurrence's single terminal attempt.
+			return reminderDeliveryTerminalFailure, 1, err
 		}
 		svc.mailMu.Lock()
 		status, attempts, deliveryErr := svc.deliverMail(ctx, message, payload.DeliveryKey)

@@ -50,6 +50,12 @@ type city311ReminderPayload struct {
 	LastDeliveryError string                   `json:"last_delivery_error,omitempty"`
 }
 
+type permanentReminderPreparationError struct {
+	message string
+}
+
+func (e *permanentReminderPreparationError) Error() string { return e.message }
+
 func (svc *Service) CreateReminder(ctx context.Context, actor contract.Actor, requestID uint64, input contract.ReminderWrite) (*contract.Reminder, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Timezone = strings.TrimSpace(input.Timezone)
@@ -332,6 +338,10 @@ func (svc *Service) dispatchDueReminder(ctx context.Context, reminder *systemTyp
 	case contract.ReminderChannelEmail:
 		message, err := svc.reminderMailMessage(ctx, reminder, payload)
 		if err != nil {
+			var permanentErr *permanentReminderPreparationError
+			if errors.IsNotFound(err) || errors.As(err, &permanentErr) {
+				return reminderDeliveryTerminalFailure, 1, err
+			}
 			return "", 0, err
 		}
 		svc.mailMu.Lock()
@@ -353,7 +363,9 @@ func (svc *Service) reminderMailMessage(ctx context.Context, reminder *systemTyp
 	}
 	email := normalizeEmail(recipient.Email)
 	if !validEmail(email) {
-		return MailMessage{}, fmt.Errorf("reminder recipient %d has no valid email address", reminder.AssignedTo)
+		return MailMessage{}, &permanentReminderPreparationError{
+			message: fmt.Sprintf("reminder recipient %d has no valid email address", reminder.AssignedTo),
+		}
 	}
 	subject := "City 311 reminder: " + payload.Title
 	body := payload.Title

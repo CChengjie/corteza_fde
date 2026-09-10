@@ -119,6 +119,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Patch("/preferences/language", h.languageUpdate)
 		r.Get("/auth/{provider}/start", h.federatedSignInStart)
 		r.Get("/auth/{provider}/callback", h.federatedSignInCallback)
+		r.Post("/auth/{provider}/callback", h.federatedSignInCallback)
 		r.With(requireIdentity).Get("/operations/{operation_id}", h.operationGet)
 		r.With(requireIdentity).Get("/operations/{operation_id}/result", h.operationResult)
 		r.Route("/account", func(r chi.Router) {

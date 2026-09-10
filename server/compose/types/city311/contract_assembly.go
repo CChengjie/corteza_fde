@@ -88,6 +88,7 @@ func assembleContract(document *ContractDocument) {
 	applySchemaRules(document)
 	mergeMocks(document.Mocks, clientMocks())
 	linkMocks(document.Mocks)
+	mergeMocks(document.Mocks, federationMocks())
 	completeProfileContract(document)
 	completeEmailReplacementContract(document)
 

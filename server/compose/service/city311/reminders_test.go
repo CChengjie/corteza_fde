@@ -2,6 +2,7 @@ package city311
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -12,6 +13,19 @@ import (
 	systemTypes "github.com/cortezaproject/corteza/server/system/types"
 	"github.com/stretchr/testify/require"
 )
+
+type transientReminderUserLookupStore struct {
+	store.Storer
+	failures int
+}
+
+func (s *transientReminderUserLookupStore) LookupUserByID(ctx context.Context, id uint64) (*systemTypes.User, error) {
+	if s.failures > 0 {
+		s.failures--
+		return nil, errors.New("temporary recipient lookup failure")
+	}
+	return s.Storer.LookupUserByID(ctx, id)
+}
 
 func TestReminderLifecyclePersistsHistoryAndAudit(t *testing.T) {
 	svc, st := testService(t)
@@ -294,6 +308,56 @@ func TestDueEmailReminderPersistsInvalidRecipientWithoutReprocessing(t *testing.
 		if audit.EventType == "REMINDER_EMAIL_DELIVERY_FAILED" {
 			count++
 			require.Equal(t, contract.AuditActorSystem, audit.ActorType)
+		}
+	}
+	require.Equal(t, 1, count)
+}
+
+func TestDueEmailReminderRecoversAfterTransientRecipientLookupFailure(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	require.NoError(t, svc.Seed(ctx, svc.now()))
+	request, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
+	require.NoError(t, err)
+	agent := seededAssignmentActor(t, ctx, svc, st, "service-agent@city311.example.invalid")
+	recipient := seededAssignmentUser(t, ctx, st, "department-manager@city311.example.invalid")
+	sender := &scriptedMailSender{codes: []int{250}}
+	svc.SetMailSender(sender)
+
+	created, err := svc.CreateReminder(ctx, agent, request.ID, contract.ReminderWrite{
+		Title: "Recoverable lookup", DueAt: svc.now().Add(-time.Minute), Timezone: "America/New_York",
+		RecipientStaffID: strconv.FormatUint(recipient.ID, 10), Channel: contract.ReminderChannelEmail,
+	})
+	require.NoError(t, err)
+	reminderID, err := strconv.ParseUint(created.ReminderID, 10, 64)
+	require.NoError(t, err)
+	svc.store = &transientReminderUserLookupStore{Storer: st, failures: 1}
+
+	require.EqualError(t, svc.ProcessDueReminders(ctx), "temporary recipient lookup failure")
+	persisted, err := store.LookupReminderByID(ctx, st, reminderID)
+	require.NoError(t, err)
+	payload, err := decodeReminderPayload(persisted)
+	require.NoError(t, err)
+	require.Equal(t, reminderDeliveryPending, payload.DeliveryStatus)
+	require.Zero(t, payload.DeliveryAttempts)
+	require.Empty(t, sender.messages)
+
+	require.NoError(t, svc.ProcessDueReminders(ctx))
+	require.Len(t, sender.messages, 1)
+	persisted, err = store.LookupReminderByID(ctx, st, reminderID)
+	require.NoError(t, err)
+	payload, err = decodeReminderPayload(persisted)
+	require.NoError(t, err)
+	require.Equal(t, reminderDeliveryDelivered, payload.DeliveryStatus)
+	require.Equal(t, 1, payload.DeliveryAttempts)
+	audits, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{
+		RequestID: request.ID, EntityType: "reminder", EntityID: strconv.FormatUint(reminderID, 10),
+	})
+	require.NoError(t, err)
+	count := 0
+	for _, audit := range audits {
+		if audit.EventType == "REMINDER_EMAIL_DELIVERED" {
+			count++
 		}
 	}
 	require.Equal(t, 1, count)

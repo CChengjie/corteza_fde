@@ -13,8 +13,8 @@ docker compose up --build --detach
 curl --fail http://localhost:8080/healthz
 ```
 
-The ready response is exactly the following two-field JSON object (field order
-is not significant):
+The ready response contains the following required fields; additive non-secret
+readiness fields are permitted:
 
 ```json
 {"status":"ok","database":"ok"}
@@ -49,9 +49,13 @@ The full check uses an isolated `city311-acceptance` Compose project and port
 database, creates representative data through the HTTP API, restarts only the
 application twice, and verifies:
 
-- `/healthz` reaches the exact ready contract within 120 seconds;
+- `/healthz` reports `status=ok` and `database=ok` within 120 seconds;
 - clean and already-migrated databases both start successfully;
 - repeated `UPGRADE_ALWAYS=true` upgrades are idempotent;
+- the eight canonical public requests `SR-2026-00033` through
+  `SR-2026-00040`, their seed audit/history rows, and all eight seed actor
+  identities are installed exactly once and remain unchanged after each
+  application restart;
 - the PostgreSQL container is neither replaced nor restarted;
 - account/session, request, draft, workflow, audit, attachment, integration,
   and object-store volume state remain readable after each restart.

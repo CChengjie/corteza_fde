@@ -28,6 +28,16 @@ class Fe10MatrixTests(unittest.TestCase):
             properties,
         )
 
+    def test_runner_uses_isolated_ports_and_verifies_server_ownership(self):
+        source = Path(__file__).with_name("run-fe10.sh").read_text(encoding="utf-8")
+        self.assertIn('admin_port="${C311_ADMIN_PORT:-18120}"', source)
+        self.assertIn('compose_port="${C311_COMPOSE_PORT:-18121}"', source)
+        self.assertIn('PORT="$admin_port"', source)
+        self.assertIn('PORT="$compose_port"', source)
+        self.assertIn('wait_for_server "$admin_pid" "$admin_port" "$admin_log"', source)
+        self.assertIn('wait_for_server "$compose_pid" "$compose_port" "$compose_log"', source)
+        self.assertIn('grep -F "http://127.0.0.1:$port/"', source)
+
     def test_artifact_directory_is_private(self):
         with tempfile.TemporaryDirectory(prefix="c311-fe10-test-") as parent:
             configured = Path(parent) / "artifacts"

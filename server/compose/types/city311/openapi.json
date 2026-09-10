@@ -1568,6 +1568,7 @@
           "civicworks_event_callback",
           "contact_email_export",
           "data_export",
+          "federated_saml_callback",
           "federated_sign_in_callback",
           "federated_sign_in_start",
           "geocode_proxy",
@@ -1797,6 +1798,24 @@
         },
         "required": [
           "authorization_url"
+        ],
+        "type": "object"
+      },
+      "federated_saml_callback": {
+        "properties": {
+          "RelayState": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "SAMLResponse": {
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "RelayState",
+          "SAMLResponse"
         ],
         "type": "object"
       },
@@ -13326,6 +13345,219 @@
         "x-city311-required-capability": "attachment_download"
       }
     },
+    "/api/v1/auth/oidc/callback": {
+      "get": {
+        "operationId": "federated_sign_in_callback",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "description": "Required with state for a successful OIDC callback.",
+              "example": "authorization-code",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "description": "Provider error alternative to state and code.",
+              "example": "access_denied",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "description": "Required with code for a successful OIDC callback.",
+              "example": "returned-state",
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "federated_oidc_callback_authenticated": {
+                    "value": {
+                      "actor": {
+                        "actor_id": "staff-0042",
+                        "application_roles": [
+                          "service_agent"
+                        ],
+                        "available_routes": [
+                          "staff_request_queue"
+                        ],
+                        "capabilities": [
+                          "staff_request_queue"
+                        ],
+                        "department_codes": [
+                          "STREETS"
+                        ],
+                        "display_name": "Federated Staff",
+                        "district_codes": [
+                          "NORTH"
+                        ],
+                        "scopes": []
+                      },
+                      "authenticated": true,
+                      "expires_at": "2026-08-25T20:00:00Z",
+                      "preferred_language": "EN"
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "actor": {
+                        "actor_id": "staff-0042",
+                        "application_roles": [
+                          "service_agent"
+                        ],
+                        "available_routes": [
+                          "staff_request_queue"
+                        ],
+                        "capabilities": [
+                          "staff_request_queue"
+                        ],
+                        "department_codes": [
+                          "STREETS"
+                        ],
+                        "display_name": "Federated Staff",
+                        "district_codes": [
+                          "NORTH"
+                        ],
+                        "scopes": []
+                      },
+                      "authenticated": true,
+                      "expires_at": "2026-08-25T20:00:00Z",
+                      "preferred_language": "EN"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/session"
+                }
+              }
+            },
+            "description": "success",
+            "x-city311-example": {
+              "body": {
+                "actor": {
+                  "actor_id": "staff-0042",
+                  "application_roles": [
+                    "service_agent"
+                  ],
+                  "available_routes": [
+                    "staff_request_queue"
+                  ],
+                  "capabilities": [
+                    "staff_request_queue"
+                  ],
+                  "department_codes": [
+                    "STREETS"
+                  ],
+                  "display_name": "Federated Staff",
+                  "district_codes": [
+                    "NORTH"
+                  ],
+                  "scopes": []
+                },
+                "authenticated": true,
+                "expires_at": "2026-08-25T20:00:00Z",
+                "preferred_language": "EN"
+              },
+              "status": 200
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "federated_oidc_callback_rejected": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "Federated authentication failed. Please return to sign in and try again.",
+                      "retryable": false
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "Federated authentication failed. Please return to sign in and try again.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "Federated authentication failed. Please return to sign in and try again.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "federated_oidc_callback_unavailable": {
+                    "value": {
+                      "error": "TEMPORARILY_UNAVAILABLE",
+                      "message": "Federated identity is temporarily unavailable.",
+                      "retryable": true
+                    }
+                  },
+                  "temporarily_unavailable": {
+                    "value": {
+                      "error": "TEMPORARILY_UNAVAILABLE",
+                      "message": "Federated identity is temporarily unavailable.",
+                      "retryable": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "TEMPORARILY UNAVAILABLE",
+            "x-city311-example": {
+              "body": {
+                "error": "TEMPORARILY_UNAVAILABLE",
+                "message": "Federated identity is temporarily unavailable.",
+                "retryable": true
+              },
+              "status": 503
+            }
+          }
+        },
+        "security": [],
+        "summary": "federated sign in callback",
+        "tags": [
+          "auth"
+        ],
+        "x-city311-authentication": {
+          "mode": "none"
+        },
+        "x-city311-direction": "provided_by_crm"
+      }
+    },
     "/api/v1/auth/password-reset/confirm": {
       "post": {
         "operationId": "password_reset_confirm",
@@ -13486,29 +13718,89 @@
         "x-city311-privacy-rule": "every submitted email returns the same public response"
       }
     },
-    "/api/v1/auth/{provider}/callback": {
-      "get": {
-        "operationId": "federated_sign_in_callback",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "provider",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/enum_identity_provider",
-              "type": "string",
-              "x-city311-enum-ref": "identity_provider"
+    "/api/v1/auth/saml/callback": {
+      "post": {
+        "operationId": "federated_saml_callback",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "examples": {
+                "federated_saml_callback_request": {
+                  "value": {
+                    "RelayState": "returned-state",
+                    "SAMLResponse": "signed-assertion"
+                  }
+                },
+                "request": {
+                  "value": {
+                    "RelayState": "xxxxxx",
+                    "SAMLResponse": "xxxxxx"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/federated_saml_callback"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "examples": {
+                  "federated_saml_callback_authenticated": {
+                    "value": {
+                      "actor": {
+                        "actor_id": "staff-0042",
+                        "application_roles": [
+                          "service_agent"
+                        ],
+                        "available_routes": [
+                          "staff_request_queue"
+                        ],
+                        "capabilities": [
+                          "staff_request_queue"
+                        ],
+                        "department_codes": [
+                          "STREETS"
+                        ],
+                        "display_name": "Federated Staff",
+                        "district_codes": [
+                          "NORTH"
+                        ],
+                        "scopes": []
+                      },
+                      "authenticated": true,
+                      "expires_at": "2026-08-25T20:00:00Z",
+                      "preferred_language": "EN"
+                    }
+                  },
                   "success": {
                     "value": {
-                      "authenticated": false,
+                      "actor": {
+                        "actor_id": "staff-0042",
+                        "application_roles": [
+                          "service_agent"
+                        ],
+                        "available_routes": [
+                          "staff_request_queue"
+                        ],
+                        "capabilities": [
+                          "staff_request_queue"
+                        ],
+                        "department_codes": [
+                          "STREETS"
+                        ],
+                        "display_name": "Federated Staff",
+                        "district_codes": [
+                          "NORTH"
+                        ],
+                        "scopes": []
+                      },
+                      "authenticated": true,
+                      "expires_at": "2026-08-25T20:00:00Z",
                       "preferred_language": "EN"
                     }
                   }
@@ -13521,7 +13813,28 @@
             "description": "success",
             "x-city311-example": {
               "body": {
-                "authenticated": false,
+                "actor": {
+                  "actor_id": "staff-0042",
+                  "application_roles": [
+                    "service_agent"
+                  ],
+                  "available_routes": [
+                    "staff_request_queue"
+                  ],
+                  "capabilities": [
+                    "staff_request_queue"
+                  ],
+                  "department_codes": [
+                    "STREETS"
+                  ],
+                  "display_name": "Federated Staff",
+                  "district_codes": [
+                    "NORTH"
+                  ],
+                  "scopes": []
+                },
+                "authenticated": true,
+                "expires_at": "2026-08-25T20:00:00Z",
                 "preferred_language": "EN"
               },
               "status": 200
@@ -13531,10 +13844,17 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "federated_saml_callback_rejected": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "Federated authentication failed. Please return to sign in and try again.",
+                      "retryable": false
+                    }
+                  },
                   "unauthenticated": {
                     "value": {
                       "error": "UNAUTHENTICATED",
-                      "message": "unauthenticated.",
+                      "message": "Federated authentication failed. Please return to sign in and try again.",
                       "retryable": false
                     }
                   }
@@ -13548,7 +13868,7 @@
             "x-city311-example": {
               "body": {
                 "error": "UNAUTHENTICATED",
-                "message": "unauthenticated.",
+                "message": "Federated authentication failed. Please return to sign in and try again.",
                 "retryable": false
               },
               "status": 401
@@ -13558,10 +13878,17 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "federated_saml_callback_unavailable": {
+                    "value": {
+                      "error": "TEMPORARILY_UNAVAILABLE",
+                      "message": "Federated identity is temporarily unavailable.",
+                      "retryable": true
+                    }
+                  },
                   "temporarily_unavailable": {
                     "value": {
                       "error": "TEMPORARILY_UNAVAILABLE",
-                      "message": "temporarily unavailable.",
+                      "message": "Federated identity is temporarily unavailable.",
                       "retryable": true
                     }
                   }
@@ -13575,7 +13902,7 @@
             "x-city311-example": {
               "body": {
                 "error": "TEMPORARILY_UNAVAILABLE",
-                "message": "temporarily unavailable.",
+                "message": "Federated identity is temporarily unavailable.",
                 "retryable": true
               },
               "status": 503
@@ -13583,7 +13910,7 @@
           }
         },
         "security": [],
-        "summary": "federated sign in callback",
+        "summary": "federated saml callback",
         "tags": [
           "auth"
         ],
@@ -13606,6 +13933,21 @@
               "type": "string",
               "x-city311-enum-ref": "identity_provider"
             }
+          },
+          {
+            "in": "query",
+            "name": "client",
+            "required": false,
+            "schema": {
+              "default": "staff",
+              "description": "Selects the OIDC relying-party client. SAML accepts only staff.",
+              "enum": [
+                "staff",
+                "public"
+              ],
+              "example": "public",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -13613,9 +13955,14 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "federated_oidc_start_public": {
+                    "value": {
+                      "authorization_url": "https://identity.example.test/authorize?client_id=city311-public\u0026state=returned-state"
+                    }
+                  },
                   "success": {
                     "value": {
-                      "authorization_url": "https://city311.example.test/resource"
+                      "authorization_url": "https://identity.example.test/authorize?client_id=city311-public\u0026state=returned-state"
                     }
                   }
                 },
@@ -13627,9 +13974,129 @@
             "description": "success",
             "x-city311-example": {
               "body": {
-                "authorization_url": "https://city311.example.test/resource"
+                "authorization_url": "https://identity.example.test/authorize?client_id=city311-public\u0026state=returned-state"
               },
               "status": 200
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "federated_start_unknown_provider": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "The identity provider was not found.",
+                      "retryable": false
+                    }
+                  },
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "The identity provider was not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "The identity provider was not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "federated_start_invalid_client": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "errors": [
+                        {
+                          "code": "INVALID_VALUE",
+                          "field": "/query/client"
+                        }
+                      ],
+                      "message": "The request contains invalid fields.",
+                      "retryable": false
+                    }
+                  },
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "errors": [
+                        {
+                          "code": "INVALID_VALUE",
+                          "field": "/query/client"
+                        }
+                      ],
+                      "message": "The request contains invalid fields.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "errors": [
+                  {
+                    "code": "INVALID_VALUE",
+                    "field": "/query/client"
+                  }
+                ],
+                "message": "The request contains invalid fields.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "federated_start_unavailable": {
+                    "value": {
+                      "error": "TEMPORARILY_UNAVAILABLE",
+                      "message": "Federated identity is temporarily unavailable.",
+                      "retryable": true
+                    }
+                  },
+                  "temporarily_unavailable": {
+                    "value": {
+                      "error": "TEMPORARILY_UNAVAILABLE",
+                      "message": "Federated identity is temporarily unavailable.",
+                      "retryable": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "TEMPORARILY UNAVAILABLE",
+            "x-city311-example": {
+              "body": {
+                "error": "TEMPORARILY_UNAVAILABLE",
+                "message": "Federated identity is temporarily unavailable.",
+                "retryable": true
+              },
+              "status": 503
             }
           }
         },

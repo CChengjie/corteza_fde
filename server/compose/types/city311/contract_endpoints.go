@@ -18,7 +18,8 @@ func addContractEndpoints(document *ContractDocument) {
 		{"session_sign_out", "DELETE", "/api/v1/session", "session required", "", "empty_response", 204},
 		{"account_register", "POST", "/api/v1/accounts", "public", "account_registration", "session", 201},
 		{"federated_sign_in_start", "GET", "/api/v1/auth/{provider}/start", "public", "", "federated_redirect", 200},
-		{"federated_sign_in_callback", "GET", "/api/v1/auth/{provider}/callback", "public", "", "session", 200},
+		{"federated_sign_in_callback", "GET", "/api/v1/auth/oidc/callback", "public", "", "session", 200},
+		{"federated_saml_callback", "POST", "/api/v1/auth/saml/callback", "public", "federated_saml_callback", "session", 200},
 		{"operation_get", "GET", "/api/v1/operations/{operation_id}", "session required", "", "operation", 200},
 		{"geocode_proxy", "POST", "/api/v1/geocode", "session optional", "geocode_request", "geocode_response", 200},
 		{"portal_attachment_upload", "POST", "/api/v1/portal/attachments", "session optional", "portal_attachment_upload", "portal_attachment", 201},
@@ -153,6 +154,27 @@ func addConsumedEndpoints(document *ContractDocument) {
 }
 
 func configureEndpointMechanics(document *ContractDocument) {
+	start := document.Endpoints["federated_sign_in_start"]
+	start.QueryParameters = map[string]map[string]interface{}{
+		"client": {
+			"type": "string", "enum": []string{"staff", "public"}, "default": "staff", "example": "public",
+			"description": "Selects the OIDC relying-party client. SAML accepts only staff.",
+		},
+	}
+	document.Endpoints["federated_sign_in_start"] = start
+
+	oidcCallback := document.Endpoints["federated_sign_in_callback"]
+	oidcCallback.QueryParameters = map[string]map[string]interface{}{
+		"state": {"type": "string", "min_length": 1, "example": "returned-state", "description": "Required with code for a successful OIDC callback."},
+		"code":  {"type": "string", "min_length": 1, "example": "authorization-code", "description": "Required with state for a successful OIDC callback."},
+		"error": {"type": "string", "min_length": 1, "example": "access_denied", "description": "Provider error alternative to state and code."},
+	}
+	document.Endpoints["federated_sign_in_callback"] = oidcCallback
+
+	samlCallback := document.Endpoints["federated_saml_callback"]
+	samlCallback.RequestMediaType = "application/x-www-form-urlencoded"
+	document.Endpoints["federated_saml_callback"] = samlCallback
+
 	for _, name := range []string{
 		"portal_draft_update", "portal_draft_delete", "portal_draft_submit", "profile_update",
 		"staff_request_transition", "staff_request_reassign", "staff_collaborator_add", "staff_collaborator_remove",
@@ -244,8 +266,16 @@ func configurePublicEndpointErrors(document *ContractDocument) {
 	setErrors("public_branding_get", map[string]int{})
 	setErrors("public_content_get", map[string]int{string(ErrorNotFound): 404})
 	setErrors("public_help_get", map[string]int{string(ErrorNotFound): 404})
-	setErrors("federated_sign_in_start", map[string]int{})
+	setErrors("federated_sign_in_start", map[string]int{
+		string(ErrorNotFound):               404,
+		string(ErrorValidation):             422,
+		string(ErrorTemporarilyUnavailable): 503,
+	})
 	setErrors("federated_sign_in_callback", map[string]int{
+		string(ErrorUnauthenticated):        401,
+		string(ErrorTemporarilyUnavailable): 503,
+	})
+	setErrors("federated_saml_callback", map[string]int{
 		string(ErrorUnauthenticated):        401,
 		string(ErrorTemporarilyUnavailable): 503,
 	})

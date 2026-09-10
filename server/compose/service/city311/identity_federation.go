@@ -93,31 +93,38 @@ func (svc *IdentityService) UpdateIdentityConfiguration(ctx context.Context, act
 	}
 	svc.federationMu.Lock()
 	defer svc.federationMu.Unlock()
-	current, err := svc.ensureIdentityConfiguration(ctx)
-	if err != nil {
+	if _, err := svc.ensureIdentityConfiguration(ctx); err != nil {
 		return nil, err
 	}
-	if uint64(current.Version) != expectedVersion {
-		return nil, versionConflict(current.Version)
-	}
-	payload := identityConfigurationPayload{}
-	decodeConfigurationPayload(current.Payload, &payload)
-	if input.OIDCEnabled != nil {
-		payload.OIDCEnabled = *input.OIDCEnabled
-	}
-	if input.SAMLEnabled != nil {
-		payload.SAMLEnabled = *input.SAMLEnabled
-	}
-	if fields := svc.validateIdentityEnablement(payload); len(fields) > 0 {
-		return nil, validationError(fields...)
-	}
-	now := svc.now().UTC()
-	next := &composeTypes.City311ConfigurationRevision{
-		ID: svc.nextID(), ResourceType: configurationIdentity, ResourceKey: identityConfigurationKey,
-		Payload: composeTypes.City311JSON{"oidc_enabled": payload.OIDCEnabled, "saml_enabled": payload.SAMLEnabled},
-		Version: current.Version + 1, Published: true, CreatedAt: now,
-	}
-	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+	var next *composeTypes.City311ConfigurationRevision
+	err := store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+		if err := store.LockCity311ConfigurationResource(ctx, tx, configurationIdentity, identityConfigurationKey); err != nil {
+			return err
+		}
+		current, err := svc.latestIdentityRevision(ctx, tx, configurationIdentity, identityConfigurationKey)
+		if err != nil {
+			return err
+		}
+		if uint64(current.Version) != expectedVersion {
+			return versionConflict(current.Version)
+		}
+		payload := identityConfigurationPayload{}
+		decodeConfigurationPayload(current.Payload, &payload)
+		if input.OIDCEnabled != nil {
+			payload.OIDCEnabled = *input.OIDCEnabled
+		}
+		if input.SAMLEnabled != nil {
+			payload.SAMLEnabled = *input.SAMLEnabled
+		}
+		if fields := svc.validateIdentityEnablement(payload); len(fields) > 0 {
+			return validationError(fields...)
+		}
+		now := svc.now().UTC()
+		next = &composeTypes.City311ConfigurationRevision{
+			ID: svc.nextID(), ResourceType: configurationIdentity, ResourceKey: identityConfigurationKey,
+			Payload: composeTypes.City311JSON{"oidc_enabled": payload.OIDCEnabled, "saml_enabled": payload.SAMLEnabled},
+			Version: current.Version + 1, Published: true, CreatedAt: now,
+		}
 		if err := store.CreateCity311ConfigurationRevision(ctx, tx, next); err != nil {
 			return err
 		}
@@ -128,9 +135,21 @@ func (svc *IdentityService) UpdateIdentityConfiguration(ctx context.Context, act
 		})
 	})
 	if err != nil {
-		return nil, err
+		return nil, svc.identityConfigurationWriteError(ctx, expectedVersion, err)
 	}
 	return svc.identityConfigurationFromRevision(next), nil
+}
+
+func (svc *IdentityService) identityConfigurationWriteError(ctx context.Context, expectedVersion uint64, err error) error {
+	var serviceErr *ServiceError
+	if stderrors.As(err, &serviceErr) {
+		return err
+	}
+	current, lookupErr := svc.latestIdentityRevision(ctx, svc.store, configurationIdentity, identityConfigurationKey)
+	if lookupErr == nil && uint64(current.Version) > expectedVersion {
+		return versionConflict(current.Version)
+	}
+	return err
 }
 
 func (svc *IdentityService) ensureIdentityConfiguration(ctx context.Context) (*composeTypes.City311ConfigurationRevision, error) {
@@ -150,6 +169,11 @@ func (svc *IdentityService) ensureIdentityConfiguration(ctx context.Context) (*c
 		Version: 1, Published: true, CreatedAt: now,
 	}
 	if err = store.CreateCity311ConfigurationRevision(ctx, svc.store, revision); err != nil {
+		if errors.IsDuplicateData(err) {
+			if winner, lookupErr := svc.latestIdentityRevision(ctx, svc.store, configurationIdentity, identityConfigurationKey); lookupErr == nil {
+				return winner, nil
+			}
+		}
 		return nil, err
 	}
 	return revision, nil

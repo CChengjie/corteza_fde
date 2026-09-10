@@ -46,6 +46,7 @@ type EndpointContract struct {
 	RequiredHeaders             []string                          `json:"required_headers,omitempty"`
 	PathParameters              map[string]map[string]interface{} `json:"path_parameters,omitempty"`
 	RequestSchema               string                            `json:"request_schema,omitempty"`
+	RequestMediaType            string                            `json:"request_media_type,omitempty"`
 	ResponseSchema              string                            `json:"response_schema,omitempty"`
 	EntityResponseSchemas       map[string]string                 `json:"entity_response_schemas,omitempty"`
 	SuccessStatuses             map[string]int                    `json:"success_statuses"`

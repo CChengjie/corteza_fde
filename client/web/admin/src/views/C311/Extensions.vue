@@ -992,4 +992,27 @@ export default {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+[data-c311-workflows],
+[data-c311-reports],
+[data-c311-oauth],
+[data-c311-audit] {
+  max-width: 100%;
+  min-width: 0;
+}
+
+[data-c311-workflows] .form-row,
+[data-c311-reports] .form-row,
+[data-c311-audit] .form-row {
+  margin-left: 0;
+  margin-right: 0;
+  max-width: 100%;
+}
+
+[data-c311-workflows] .form-group,
+[data-c311-reports] .form-group,
+[data-c311-audit] .form-group {
+  max-width: 100%;
+  min-width: 0;
+}
 </style>

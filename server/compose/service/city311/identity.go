@@ -70,6 +70,7 @@ var (
 type (
 	IdentityNotifier interface {
 		PasswordReset(context.Context, string, string, string) error
+		EmailReplacementVerification(context.Context, string, string, string) error
 		SecurityNotice(context.Context, string, string, string, string) error
 	}
 
@@ -78,6 +79,8 @@ type (
 		Now                func() time.Time
 		NextID             func() uint64
 		Random             io.Reader
+		Runtime            *IdentityRuntimeConfiguration
+		Federation         FederationProvider
 		Notifier           IdentityNotifier
 		Wait               func(context.Context, time.Duration) error
 		ConfigurationError error
@@ -87,18 +90,22 @@ type (
 	}
 
 	IdentityService struct {
-		store     store.Storer
-		secret    []byte
-		now       func() time.Time
-		nextID    func() uint64
-		random    io.Reader
-		notifier  IdentityNotifier
-		wait      func(context.Context, time.Duration) error
-		configErr error
+		store      store.Storer
+		secret     []byte
+		now        func() time.Time
+		nextID     func() uint64
+		random     io.Reader
+		runtime    IdentityRuntimeConfiguration
+		federation FederationProvider
+		notifier   IdentityNotifier
+		wait       func(context.Context, time.Duration) error
+		configErr  error
 
-		mfaMu       sync.RWMutex
-		mfaSettings authSettings.Settings
-		resetMu     sync.Mutex
+		mfaMu        sync.RWMutex
+		runtimeMu    sync.RWMutex
+		mfaSettings  authSettings.Settings
+		resetMu      sync.Mutex
+		federationMu sync.Mutex
 
 		notificationWake chan struct{}
 		notificationPoll time.Duration
@@ -150,6 +157,16 @@ func NewIdentity(s store.Storer, options IdentityOptions) *IdentityService {
 		notificationWake: make(chan struct{}, identityNotificationQueueSize),
 		notificationPoll: options.NotificationPoll, workerError: options.WorkerError,
 	}
+	if options.Runtime == nil {
+		service.runtime = IdentityRuntimeFromEnvironment()
+	} else {
+		service.runtime = *options.Runtime
+	}
+	if options.Federation == nil {
+		service.federation = NewRuntimeFederationProvider(service.runtime, nil, service.now)
+	} else {
+		service.federation = options.Federation
+	}
 	service.UpdateMFASettings(options.MFASettings)
 	return service
 }
@@ -165,6 +182,21 @@ func (svc *IdentityService) UpdateMFASettings(settings *authSettings.Settings) {
 
 func (svc *IdentityService) ConfigurationError() error {
 	return svc.configErr
+}
+
+// SetFederationRuntime atomically replaces the live identity-provider
+// connection without changing local-account or local-session behavior.
+func (svc *IdentityService) SetFederationRuntime(runtime IdentityRuntimeConfiguration) {
+	svc.runtimeMu.Lock()
+	defer svc.runtimeMu.Unlock()
+	svc.runtime = runtime
+	svc.federation = NewRuntimeFederationProvider(runtime, nil, svc.now)
+}
+
+func (svc *IdentityService) federationRuntime() (IdentityRuntimeConfiguration, FederationProvider) {
+	svc.runtimeMu.RLock()
+	defer svc.runtimeMu.RUnlock()
+	return svc.runtime, svc.federation
 }
 
 func NewDefaultIdentity(s store.Storer, now func() time.Time) (*IdentityService, error) {
@@ -187,6 +219,24 @@ func ValidateIdentityEnvironment() error {
 	parsedBaseURL, err := url.Parse(baseURL)
 	if err != nil || parsedBaseURL.Host == "" || (parsedBaseURL.Scheme != "http" && parsedBaseURL.Scheme != "https") {
 		return fmt.Errorf("APP_BASE_URL must be an absolute HTTP or HTTPS URL")
+	}
+	runtime := IdentityRuntimeFromEnvironment()
+	for _, input := range []struct{ key, value string }{
+		{"OIDC_STAFF_CLIENT_ID", runtime.OIDCStaffClientID}, {"OIDC_PUBLIC_CLIENT_ID", runtime.OIDCPublicClientID},
+		{"OIDC_CLIENT_SECRET", runtime.OIDCClientSecret},
+	} {
+		if input.value == "" {
+			return fmt.Errorf("%s is required for City 311 federated identity", input.key)
+		}
+	}
+	for _, input := range []struct{ key, value string }{
+		{"OIDC_ISSUER_URL", runtime.OIDCIssuerURL}, {"SAML_METADATA_URL", runtime.SAMLMetadataURL},
+		{"SAML_SP_ENTITY_ID", runtime.SAMLServiceProvider},
+	} {
+		parsed, parseErr := url.Parse(input.value)
+		if parseErr != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return fmt.Errorf("%s must be an absolute HTTP or HTTPS URL", input.key)
+		}
 	}
 	for _, key := range []string{seedConstituentPasswordEnv, seedConstituentTwoPasswordEnv} {
 		if value := os.Getenv(key); value == "" {
@@ -215,6 +265,15 @@ func (notifier defaultIdentityNotifier) PasswordReset(ctx context.Context, recip
 	message.SetHeader("Subject", "Reset your City 311 password")
 	message.SetHeader("X-City311-Delivery-Key", deliveryKey)
 	message.SetBody("text/plain", fmt.Sprintf("Use this link within 15 minutes: %s/reset-password?token=%s", notifier.baseURL, token))
+	return mailService.Send(message)
+}
+
+func (notifier defaultIdentityNotifier) EmailReplacementVerification(ctx context.Context, recipient, token, deliveryKey string) error {
+	message := mailService.New()
+	message.SetHeader("To", recipient)
+	message.SetHeader("Subject", "Verify your new City 311 email address")
+	message.SetHeader("X-City311-Delivery-Key", deliveryKey)
+	message.SetBody("text/plain", fmt.Sprintf("Use this link within 30 minutes: %s/verify-email?token=%s", notifier.baseURL, url.QueryEscape(token)))
 	return mailService.Send(message)
 }
 
@@ -1153,6 +1212,13 @@ func (svc *IdentityService) sendIdentityNotification(ctx context.Context, notifi
 			return err
 		}
 		return svc.notifier.PasswordReset(ctx, notification.Recipient, token, notification.DeliveryKey)
+	case emailReplacementKind:
+		sealedToken, _ := notification.Payload["sealed_token"].(string)
+		token, err := svc.openNotificationSecret(sealedToken, notification.DeliveryKey)
+		if err != nil {
+			return err
+		}
+		return svc.notifier.EmailReplacementVerification(ctx, notification.Recipient, token, notification.DeliveryKey)
 	case securityNoticeKind:
 		subject, _ := notification.Payload["subject"].(string)
 		body, _ := notification.Payload["body"].(string)

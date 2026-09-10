@@ -105,6 +105,7 @@ func MountRoutesWithService(service *city311Service.Service) func(chi.Router) {
 
 func MountRoutesWithServices(service *city311Service.Service, identity *city311Service.IdentityService) func(chi.Router) {
 	return func(r chi.Router) {
+		service.BindIdentityService(identity)
 		h := &handler{service: service, identity: identity}
 		r.Use(h.optionalIdentitySession)
 		r.Post("/public/service-request-status", h.publicStatusLookup)
@@ -114,13 +115,19 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Delete(sessionRoute, h.sessionSignOut)
 		r.Post("/auth/password-reset/request", h.passwordResetRequest)
 		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
+		r.Post("/auth/email-replacement/confirm", h.emailReplacementConfirm)
 		r.Patch("/preferences/language", h.languageUpdate)
+		r.Get("/auth/{provider}/start", h.federatedSignInStart)
+		r.Get("/auth/{provider}/callback", h.federatedSignInCallback)
+		r.Post("/auth/{provider}/callback", h.federatedSignInCallback)
 		r.With(requireIdentity).Get("/operations/{operation_id}", h.operationGet)
 		r.With(requireIdentity).Get("/operations/{operation_id}/result", h.operationResult)
 		r.Route("/account", func(r chi.Router) {
 			r.Use(requireCityIdentitySession)
+			r.With(requireProfileConstituent).Delete("/", h.accountDelete)
 			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
 			r.With(requireProfileConstituent).Patch("/profile", h.profileUpdate)
+			r.With(requireProfileConstituent).Post("/email-replacement", h.emailReplacementRequest)
 			r.Post("/password", h.passwordChange)
 			r.Post("/login-identifier", h.loginIdentifierChange)
 		})
@@ -131,6 +138,13 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Get("/public/help/{help_key}", h.publicHelpGet)
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(requireIdentity)
+			r.Get("/identity", h.adminIdentityConfigurationGet)
+			r.Patch("/identity", h.adminIdentityConfigurationUpdate)
+			r.Get("/integrations", h.adminIntegrationList)
+			r.Get("/integrations/{integration_id}", h.adminIntegrationGet)
+			r.Patch("/integrations/{integration_id}", h.adminIntegrationUpdate)
+			r.Post("/integrations/{integration_id}/rotate", h.adminIntegrationRotate)
+			r.Post("/integrations/{integration_id}/revoke", h.adminIntegrationRevoke)
 			r.Get("/contact-categories", h.adminContactCategoryList)
 			r.Post("/contact-categories", h.adminContactCategoryCreate)
 			r.Patch("/contact-categories/{category_code}", h.adminContactCategoryUpdate)
@@ -180,6 +194,8 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.With(requireConstituentSession).Post("/portal/service-requests/{request_id}/reopen", h.portalReopenRequest)
 		r.Route("/staff", func(r chi.Router) {
 			r.Use(requireIdentity)
+			r.Get("/constituents", h.staffConstituentSearch)
+			r.Get("/constituents/{constituent_id}", h.staffConstituentDetail)
 			r.Get("/audit-events", h.staffAuditList)
 			r.Post("/audit-events/export", h.staffAuditExport)
 			r.Post("/contact-email-export", h.contactEmailExport)
@@ -188,6 +204,13 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Get("/mail/{delivery_id}", h.mailDeliveryGet)
 			r.Post("/calendar/import", h.calendarImport)
 			r.Get("/calendar/export", h.calendarExport)
+			r.Get("/reports/catalogue", h.reportCatalogue)
+			r.Post("/reports/run", h.reportRun)
+			r.Get("/reports", h.savedReportList)
+			r.Post("/reports", h.savedReportCreate)
+			r.Patch("/reports/{report_id}", h.savedReportUpdate)
+			r.Post("/reports/{report_id}/share", h.savedReportShare)
+			r.Post("/reports/{report_id}/export", h.reportExport)
 			r.Post(serviceRequestsRoute, h.staffSubmit)
 			r.Post("/service-requests/bulk", h.staffBulk)
 			r.Get(serviceRequestsRoute, h.staffList)
@@ -244,6 +267,7 @@ func identitySessionFromContext(ctx context.Context) *city311Service.ResolvedSes
 
 func requireCityIdentitySession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if identitySessionFromContext(r.Context()) == nil {
 			writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: authenticationRequiredMessage, Retryable: false})
 			return

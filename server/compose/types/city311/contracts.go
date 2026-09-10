@@ -26,7 +26,24 @@ type (
 	PhoneLabel           string
 	ValidationCode       string
 	ErrorCode            string
+	IntegrationKind      string
 )
+
+const (
+	IntegrationKindCivicWorks    IntegrationKind = "CIVICWORKS"
+	IntegrationKindMapping       IntegrationKind = "MAPPING"
+	IntegrationKindWorkflowOAuth IntegrationKind = "WORKFLOW_OAUTH"
+	IntegrationKindMail          IntegrationKind = "MAIL"
+	IntegrationKindIdentity      IntegrationKind = "IDENTITY"
+)
+
+var IntegrationKinds = []IntegrationKind{
+	IntegrationKindCivicWorks,
+	IntegrationKindMapping,
+	IntegrationKindWorkflowOAuth,
+	IntegrationKindMail,
+	IntegrationKindIdentity,
+}
 
 const (
 	ServiceRequestStatusDraft      ServiceRequestStatus = "DRAFT"
@@ -291,28 +308,30 @@ var ValidationCodes = []ValidationCode{
 }
 
 const (
-	ErrorUnauthenticated           ErrorCode = "UNAUTHENTICATED"
-	ErrorForbidden                 ErrorCode = "FORBIDDEN"
-	ErrorValidation                ErrorCode = "VALIDATION_ERROR"
-	ErrorInvalidStatusTransition   ErrorCode = "INVALID_STATUS_TRANSITION"
-	ErrorIdempotencyConflict       ErrorCode = "IDEMPOTENCY_CONFLICT"
-	ErrorVersionConflict           ErrorCode = "VERSION_CONFLICT"
-	ErrorInvalidFilter             ErrorCode = "INVALID_FILTER"
-	ErrorInvalidPageToken          ErrorCode = "INVALID_PAGE_TOKEN"
-	ErrorRateLimited               ErrorCode = "RATE_LIMITED"
-	ErrorAddressNotFound           ErrorCode = "ADDRESS_NOT_FOUND"
-	ErrorMapUnauthenticated        ErrorCode = "MAP_UNAUTHENTICATED"
-	ErrorMapTemporarilyUnavailable ErrorCode = "MAP_TEMPORARILY_UNAVAILABLE"
-	ErrorInvalidResetToken         ErrorCode = "INVALID_RESET_TOKEN"
-	ErrorExpiredResetToken         ErrorCode = "EXPIRED_RESET_TOKEN"
-	ErrorInsufficientScope         ErrorCode = "INSUFFICIENT_SCOPE"
-	ErrorInvalidClient             ErrorCode = "INVALID_CLIENT"
-	ErrorInvalidToken              ErrorCode = "INVALID_TOKEN"
-	ErrorTemporarilyUnavailable    ErrorCode = "TEMPORARILY_UNAVAILABLE"
-	ErrorNotFound                  ErrorCode = "NOT_FOUND"
-	ErrorExpectedVersionRequired   ErrorCode = "EXPECTED_VERSION_REQUIRED"
-	ErrorInvalidSignature          ErrorCode = "INVALID_SIGNATURE"
-	ErrorOperationFailed           ErrorCode = "OPERATION_FAILED"
+	ErrorUnauthenticated               ErrorCode = "UNAUTHENTICATED"
+	ErrorForbidden                     ErrorCode = "FORBIDDEN"
+	ErrorValidation                    ErrorCode = "VALIDATION_ERROR"
+	ErrorInvalidStatusTransition       ErrorCode = "INVALID_STATUS_TRANSITION"
+	ErrorIdempotencyConflict           ErrorCode = "IDEMPOTENCY_CONFLICT"
+	ErrorVersionConflict               ErrorCode = "VERSION_CONFLICT"
+	ErrorInvalidFilter                 ErrorCode = "INVALID_FILTER"
+	ErrorInvalidPageToken              ErrorCode = "INVALID_PAGE_TOKEN"
+	ErrorRateLimited                   ErrorCode = "RATE_LIMITED"
+	ErrorAddressNotFound               ErrorCode = "ADDRESS_NOT_FOUND"
+	ErrorMapUnauthenticated            ErrorCode = "MAP_UNAUTHENTICATED"
+	ErrorMapTemporarilyUnavailable     ErrorCode = "MAP_TEMPORARILY_UNAVAILABLE"
+	ErrorInvalidResetToken             ErrorCode = "INVALID_RESET_TOKEN"
+	ErrorExpiredResetToken             ErrorCode = "EXPIRED_RESET_TOKEN"
+	ErrorInvalidEmailVerificationToken ErrorCode = "INVALID_EMAIL_VERIFICATION_TOKEN"
+	ErrorExpiredEmailVerificationToken ErrorCode = "EXPIRED_EMAIL_VERIFICATION_TOKEN"
+	ErrorInsufficientScope             ErrorCode = "INSUFFICIENT_SCOPE"
+	ErrorInvalidClient                 ErrorCode = "INVALID_CLIENT"
+	ErrorInvalidToken                  ErrorCode = "INVALID_TOKEN"
+	ErrorTemporarilyUnavailable        ErrorCode = "TEMPORARILY_UNAVAILABLE"
+	ErrorNotFound                      ErrorCode = "NOT_FOUND"
+	ErrorExpectedVersionRequired       ErrorCode = "EXPECTED_VERSION_REQUIRED"
+	ErrorInvalidSignature              ErrorCode = "INVALID_SIGNATURE"
+	ErrorOperationFailed               ErrorCode = "OPERATION_FAILED"
 )
 
 var ErrorCodes = []ErrorCode{
@@ -330,6 +349,8 @@ var ErrorCodes = []ErrorCode{
 	ErrorMapTemporarilyUnavailable,
 	ErrorInvalidResetToken,
 	ErrorExpiredResetToken,
+	ErrorInvalidEmailVerificationToken,
+	ErrorExpiredEmailVerificationToken,
 	ErrorInsufficientScope,
 	ErrorInvalidClient,
 	ErrorInvalidToken,
@@ -341,18 +362,20 @@ var ErrorCodes = []ErrorCode{
 }
 
 const (
-	ServiceRequestsPath       = "/api/v1/service-requests"
-	ExportPathTemplate        = "/api/v1/export/{entity}"
-	AnonymousStatusLookupPath = "/api/v1/public/service-request-status"
-	PasswordResetRequestPath  = "/api/v1/auth/password-reset/request"
-	PasswordResetConfirmPath  = "/api/v1/auth/password-reset/confirm"
-	WorkflowActionsPath       = "/api/v1/actions"
-	IdempotencyHeader         = "Idempotency-Key"
-	IfMatchHeader             = "If-Match"
-	RetryAfterHeader          = "Retry-After"
-	ScopeRequestWrite         = "service_requests.write"
-	ScopeCRMExport            = "crm.export"
-	ScopeWorkflowExecute      = "workflow.execute"
+	ServiceRequestsPath         = "/api/v1/service-requests"
+	ExportPathTemplate          = "/api/v1/export/{entity}"
+	AnonymousStatusLookupPath   = "/api/v1/public/service-request-status"
+	PasswordResetRequestPath    = "/api/v1/auth/password-reset/request"
+	PasswordResetConfirmPath    = "/api/v1/auth/password-reset/confirm"
+	EmailReplacementRequestPath = "/api/v1/account/email-replacement"
+	EmailReplacementConfirmPath = "/api/v1/auth/email-replacement/confirm"
+	WorkflowActionsPath         = "/api/v1/actions"
+	IdempotencyHeader           = "Idempotency-Key"
+	IfMatchHeader               = "If-Match"
+	RetryAfterHeader            = "Retry-After"
+	ScopeRequestWrite           = "service_requests.write"
+	ScopeCRMExport              = "crm.export"
+	ScopeWorkflowExecute        = "workflow.execute"
 )
 
 type (
@@ -381,6 +404,7 @@ type (
 		PrimaryCategory   ContactCategory `json:"primary_category"`
 		PreferredLanguage Language        `json:"preferred_language"`
 		EmailOptOut       bool            `json:"email_opt_out"`
+		CustomFields      map[string]any  `json:"custom_fields,omitempty"`
 	}
 
 	RequesterInput struct {
@@ -569,7 +593,12 @@ type (
 		WorkOrderID          string           `json:"work_order_id"`
 		SourceCaseID         string           `json:"source_case_id"`
 		ServiceRequestNumber string           `json:"service_request_number"`
+		ServiceType          ServiceType      `json:"service_type"`
+		Summary              string           `json:"summary"`
+		DepartmentCode       DepartmentCode   `json:"department_code"`
+		FulfilmentSource     string           `json:"fulfilment_source"`
 		Status               CivicWorksStatus `json:"status"`
+		Location             map[string]any   `json:"location,omitempty"`
 		ExternalStatusURL    string           `json:"external_status_url"`
 		Version              uint64           `json:"version"`
 		CreatedAt            time.Time        `json:"created_at"`

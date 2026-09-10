@@ -434,6 +434,54 @@ type CustomFieldDefinitionList struct {
 	Sort           []string                `json:"sort"`
 }
 
+type ReportCatalogueItem struct {
+	ReportKey         string   `json:"report_key"`
+	Name              string   `json:"name"`
+	SupportedFilters  []string `json:"supported_filters"`
+	SupportedGrouping []string `json:"supported_grouping"`
+	SupportedSort     []string `json:"supported_sort"`
+}
+
+type ReportCatalogueList struct {
+	Items          []ReportCatalogueItem `json:"items"`
+	NextPageToken  *string               `json:"next_page_token"`
+	TotalCount     int                   `json:"total_count"`
+	AppliedFilters map[string]any        `json:"applied_filters"`
+	Sort           []string              `json:"sort"`
+}
+
+type ReportDefinition struct {
+	ReportID  string         `json:"report_id"`
+	Name      string         `json:"name"`
+	Entity    string         `json:"entity"`
+	Columns   []string       `json:"columns"`
+	Filters   map[string]any `json:"filters"`
+	Grouping  *string        `json:"grouping,omitempty"`
+	Sort      []string       `json:"sort"`
+	Version   uint64         `json:"version"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+type ReportDefinitionList struct {
+	Items          []ReportDefinition `json:"items"`
+	NextPageToken  *string            `json:"next_page_token"`
+	TotalCount     int                `json:"total_count"`
+	AppliedFilters map[string]any     `json:"applied_filters"`
+	Sort           []string           `json:"sort"`
+}
+
+type ReportRun struct {
+	Definition ReportDefinition `json:"definition"`
+}
+
+type ReportShare struct {
+	Roles []ApplicationRole `json:"roles"`
+}
+
+type ReportExport struct {
+	Format string `json:"format"`
+}
+
 type Rollback struct {
 	TargetVersion uint64 `json:"target_version"`
 }
@@ -516,6 +564,14 @@ type ListResponse struct {
 	Sort           []string           `json:"sort"`
 }
 
+type ConstituentList struct {
+	Items          []Constituent  `json:"items"`
+	NextPageToken  *string        `json:"next_page_token"`
+	TotalCount     int            `json:"total_count"`
+	AppliedFilters map[string]any `json:"applied_filters"`
+	Sort           []string       `json:"sort"`
+}
+
 type AccountRegistration struct {
 	DisplayName       string   `json:"display_name"`
 	Email             string   `json:"email"`
@@ -560,6 +616,89 @@ type PasswordChange struct {
 type LoginIdentifierChange struct {
 	CurrentPassword string `json:"current_password"`
 	LoginIdentifier string `json:"login_identifier"`
+}
+
+type EmailReplacementRequest struct {
+	Email string `json:"email"`
+}
+
+type EmailReplacementAcknowledgement struct {
+	Accepted bool `json:"accepted"`
+}
+
+type EmailReplacementConfirm struct {
+	Token string `json:"token"`
+}
+
+type EmailReplacementResult struct {
+	VerifiedEmail string `json:"verified_email"`
+}
+
+// FederatedRedirect describes the provider authorization hand-off. Account
+// linking is never inferred from a matching email address; callers must first
+// establish a local session and deliberately start another federated flow.
+type FederatedRedirect struct {
+	AuthorizationURL         string `json:"authorization_url"`
+	LinkConfirmationRequired bool   `json:"link_confirmation_required,omitempty"`
+}
+
+type ActorRoleMapping struct {
+	AssertedRole    ActorRole       `json:"asserted_role"`
+	ApplicationRole ApplicationRole `json:"application_role"`
+}
+
+// IdentityConfiguration combines administrator-controlled enablement with
+// effective, read-only runtime values. The OIDC secret itself is never part of
+// this projection.
+type IdentityConfiguration struct {
+	OIDCEnabled                bool               `json:"oidc_enabled"`
+	SAMLEnabled                bool               `json:"saml_enabled"`
+	OIDCIssuerURL              string             `json:"oidc_issuer_url"`
+	OIDCStaffClientID          string             `json:"oidc_staff_client_id"`
+	OIDCPublicClientID         string             `json:"oidc_public_client_id"`
+	OIDCClientSecretConfigured bool               `json:"oidc_client_secret_configured"`
+	SAMLMetadataURL            string             `json:"saml_metadata_url"`
+	SAMLSPServiceEntityID      string             `json:"saml_sp_entity_id"`
+	ActorRoleMappings          []ActorRoleMapping `json:"actor_role_mappings"`
+	Version                    uint64             `json:"version"`
+	UpdatedAt                  time.Time          `json:"updated_at"`
+}
+
+// IdentityConfigurationWrite uses pointers because the frozen PATCH schema
+// permits either enablement flag to be omitted.
+type IdentityConfigurationWrite struct {
+	OIDCEnabled *bool `json:"oidc_enabled,omitempty"`
+	SAMLEnabled *bool `json:"saml_enabled,omitempty"`
+}
+
+// IntegrationConnection is the non-secret administrator projection of one
+// configured external-system connection. Secret material is write-only and is
+// represented to readers solely by SecretConfigured.
+type IntegrationConnection struct {
+	IntegrationID    string          `json:"integration_id"`
+	Kind             IntegrationKind `json:"kind"`
+	Active           bool            `json:"active"`
+	SecretConfigured bool            `json:"secret_configured"`
+	Version          uint64          `json:"version"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+}
+
+type IntegrationConnectionWrite struct {
+	Active        *bool          `json:"active"`
+	Configuration map[string]any `json:"configuration,omitempty"`
+	Secret        *string        `json:"secret,omitempty"`
+}
+
+type SecretRotation struct {
+	NewSecret string `json:"new_secret"`
+}
+
+type IntegrationConnectionList struct {
+	Items          []IntegrationConnection `json:"items"`
+	NextPageToken  *string                 `json:"next_page_token"`
+	TotalCount     int                     `json:"total_count"`
+	AppliedFilters map[string]any          `json:"applied_filters"`
+	Sort           []string                `json:"sort"`
 }
 
 // Actor carries server-resolved roles and record scope.

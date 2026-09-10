@@ -22,6 +22,21 @@ Help lifecycle persistence reuses the existing `compose_city311_configuration_re
 
 Contact categories use the existing immutable revision table with `resource_type=CONTACT_CATEGORY` and stable `code` as the resource key, so the concurrency contract requires no schema migration. Category update requires a quoted current revision in `If-Match`; version comparison, in-use validation, revision insertion, and `CONTACT_CATEGORY_UPDATED` audit insertion run atomically. A stale revision returns `409 VERSION_CONFLICT` with `current_version`, a missing header returns `428 EXPECTED_VERSION_REQUIRED`, and attempting to deactivate a category assigned as any constituent's `primary_category` returns `422 VALIDATION_ERROR` at `/active` without creating a revision or audit event. Profile assignment resolves the current active administrator-managed vocabulary rather than the seven-value seed enum. Assignment and deactivation take the same database-visible category lock, preventing either interleaving from committing an inactive category that remains in use. Labels may change, but the category code does not.
 
+The current contract retains the provision 9.1.2(b) verified-email replacement
+handoff. An authenticated constituent requests an address, receives a
+privacy-preserving 202 acknowledgement, and proves control through the public
+single-use confirmation operation. The current email remains unchanged before
+confirmation. The contract publishes the DTOs, capability, 30-minute lifetime,
+validation and token errors, supersession behavior, and deterministic examples;
+neither operation uses `Idempotency-Key` or `If-Match`.
+
+Contract `3.0.0` makes the binding CivicWorks companion profile the sole current
+integration contract. Work-order responses carry the canonical service type,
+summary, department, fulfilment source and optional location, and the CRM sends
+an absolute server-owned callback URL. The former relative callback value is
+not supported. The separately deployed deterministic fixture and its
+evaluator-only controls are not City 311 product endpoints.
+
 Optional-session endpoints discard an absent, expired or invalid cookie and continue anonymously. Their error sets therefore exclude authentication and authorization failures; the browser geocode proxy instead exposes the actionable `ADDRESS_NOT_FOUND`, `MAP_TEMPORARILY_UNAVAILABLE` and `VALIDATION_ERROR` outcomes. Every deterministic mock identifies its endpoint and whether it represents a request or response, and the contract tests verify every response status and error code against that endpoint.
 
 Identity-provider endpoints, client identifiers, role mappings and secrets are supplied by runtime configuration. The identity administration response publishes effective non-secret values, OIDC secret-configuration status and the mapping from asserted `actor_role` values to `application_role`; its update request may enable or disable OIDC and SAML only. Secret values are never returned or accepted by this API.

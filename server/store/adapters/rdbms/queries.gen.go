@@ -1811,6 +1811,102 @@ var (
 		}
 	}
 
+	// city311EmailReplacementTokenTable represents city311EmailReplacementTokens store table
+	//
+	// This value is auto-generated
+	city311EmailReplacementTokenTable = goqu.T("compose_city311_email_replacement_token")
+
+	// city311EmailReplacementTokenSelectQuery assembles select query for fetching city311EmailReplacementTokens
+	//
+	// This function is auto-generated
+	city311EmailReplacementTokenSelectQuery = func(d goqu.DialectWrapper) *goqu.SelectDataset {
+		return d.Select(
+			"id",
+			"token_hash",
+			"user_id",
+			"pending_email",
+			"created_at",
+			"expires_at",
+			"used_at",
+		).From(city311EmailReplacementTokenTable)
+	}
+
+	// city311EmailReplacementTokenInsertQuery assembles query inserting city311EmailReplacementTokens
+	//
+	// This function is auto-generated
+	city311EmailReplacementTokenInsertQuery = func(d goqu.DialectWrapper, res *composeType.City311EmailReplacementToken) *goqu.InsertDataset {
+		return d.Insert(city311EmailReplacementTokenTable).
+			Rows(goqu.Record{
+				"id":            res.ID,
+				"token_hash":    res.TokenHash,
+				"user_id":       res.UserID,
+				"pending_email": res.PendingEmail,
+				"created_at":    res.CreatedAt,
+				"expires_at":    res.ExpiresAt,
+				"used_at":       res.UsedAt,
+			})
+	}
+
+	// city311EmailReplacementTokenUpsertQuery assembles (insert+on-conflict) query for replacing city311EmailReplacementTokens
+	//
+	// This function is auto-generated
+	city311EmailReplacementTokenUpsertQuery = func(d goqu.DialectWrapper, res *composeType.City311EmailReplacementToken) *goqu.InsertDataset {
+		var target = `,id`
+
+		return city311EmailReplacementTokenInsertQuery(d, res).
+			OnConflict(
+				goqu.DoUpdate(target[1:],
+					goqu.Record{
+						"token_hash":    res.TokenHash,
+						"user_id":       res.UserID,
+						"pending_email": res.PendingEmail,
+						"created_at":    res.CreatedAt,
+						"expires_at":    res.ExpiresAt,
+						"used_at":       res.UsedAt,
+					},
+				),
+			)
+	}
+
+	// city311EmailReplacementTokenUpdateQuery assembles query for updating city311EmailReplacementTokens
+	//
+	// This function is auto-generated
+	city311EmailReplacementTokenUpdateQuery = func(d goqu.DialectWrapper, res *composeType.City311EmailReplacementToken) *goqu.UpdateDataset {
+		return d.Update(city311EmailReplacementTokenTable).
+			Set(goqu.Record{
+				"token_hash":    res.TokenHash,
+				"user_id":       res.UserID,
+				"pending_email": res.PendingEmail,
+				"created_at":    res.CreatedAt,
+				"expires_at":    res.ExpiresAt,
+				"used_at":       res.UsedAt,
+			}).
+			Where(city311EmailReplacementTokenPrimaryKeys(res))
+	}
+
+	// city311EmailReplacementTokenDeleteQuery assembles delete query for removing city311EmailReplacementTokens
+	//
+	// This function is auto-generated
+	city311EmailReplacementTokenDeleteQuery = func(d goqu.DialectWrapper, ee ...goqu.Expression) *goqu.DeleteDataset {
+		return d.Delete(city311EmailReplacementTokenTable).Where(ee...)
+	}
+
+	// city311EmailReplacementTokenDeleteQuery assembles delete query for removing city311EmailReplacementTokens
+	//
+	// This function is auto-generated
+	city311EmailReplacementTokenTruncateQuery = func(d goqu.DialectWrapper) *goqu.TruncateDataset {
+		return d.Truncate(city311EmailReplacementTokenTable)
+	}
+
+	// city311EmailReplacementTokenPrimaryKeys assembles set of conditions for all primary keys
+	//
+	// This function is auto-generated
+	city311EmailReplacementTokenPrimaryKeys = func(res *composeType.City311EmailReplacementToken) goqu.Ex {
+		return goqu.Ex{
+			"id": res.ID,
+		}
+	}
+
 	// city311IdempotencyRecordTable represents city311IdempotencyRecords store table
 	//
 	// This value is auto-generated

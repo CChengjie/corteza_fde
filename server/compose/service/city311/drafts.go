@@ -221,11 +221,15 @@ func (svc *Service) SubmitDraft(ctx context.Context, ownerID, requestID, expecte
 		}); err != nil {
 			return err
 		}
+		if err := svc.enqueueRelationshipNotifications(ctx, tx, request, contract.ServiceRequestStatusDraft, RelationshipNotificationSubmitted, ownerID, contract.SourceChannelPortalAuthenticated); err != nil {
+			return err
+		}
 		result = responseFor(request)
 		return nil
 	})
 	svc.mu.Unlock()
 	if err == nil && result != nil {
+		svc.wakeRequestNotificationWorker()
 		if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
 			actor := contract.Actor{ID: ownerID}
 			if storedActor, actorErr := svc.FindActor(ctx, ownerID); actorErr == nil {

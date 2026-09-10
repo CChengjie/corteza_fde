@@ -87,7 +87,26 @@ func NewCivicWorksFromEnvironment(client *http.Client) (CivicWorksClient, string
 
 func ValidateCivicWorksEnvironment() error {
 	_, _, err := NewCivicWorksFromEnvironment(nil)
+	if err == nil {
+		_, err = civicWorksCallbackURLFromEnvironment()
+	}
 	return err
+}
+
+func civicWorksCallbackURLFromEnvironment() (string, error) {
+	return civicWorksCallbackURL(strings.TrimSpace(os.Getenv("CIVICWORKS_CALLBACK_BASE_URL")))
+}
+
+func civicWorksCallbackURL(value string) (string, error) {
+	baseURL, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || baseURL.Host == "" || (baseURL.Scheme != "http" && baseURL.Scheme != "https") {
+		return "", fmt.Errorf("CIVICWORKS_CALLBACK_BASE_URL must be an absolute HTTP or HTTPS URL")
+	}
+	if baseURL.User != nil || baseURL.RawQuery != "" || baseURL.Fragment != "" {
+		return "", fmt.Errorf("CIVICWORKS_CALLBACK_BASE_URL must not contain credentials, a query, or a fragment")
+	}
+	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + civicWorksCallbackPath
+	return baseURL.String(), nil
 }
 
 func validateCivicWorksOptions(options CivicWorksOptions) (*url.URL, error) {
@@ -182,19 +201,34 @@ func decodeCivicWorksResponse(data []byte, workOrder *contract.CivicWorksWorkOrd
 		return fmt.Errorf("CivicWorks response has an invalid status URL")
 	}
 	if strings.TrimSpace(workOrder.WorkOrderID) == "" || workOrder.SourceCaseID != input.SourceCaseID ||
-		workOrder.ServiceRequestNumber != input.ServiceRequestNumber || workOrder.Status != contract.CivicWorksStatusAssigned ||
+		workOrder.ServiceRequestNumber != input.ServiceRequestNumber || workOrder.ServiceType != input.ServiceType ||
+		workOrder.Summary != input.Summary || workOrder.DepartmentCode != input.DepartmentCode ||
+		workOrder.FulfilmentSource != "CIVICWORKS" || !equalCivicWorksLocation(workOrder.Location, input.Location) ||
+		workOrder.Status != contract.CivicWorksStatusAssigned ||
 		workOrder.Version == 0 || workOrder.CreatedAt.IsZero() || workOrder.UpdatedAt.IsZero() {
 		return fmt.Errorf("CivicWorks response does not satisfy the work-order contract")
 	}
 	return nil
 }
 
+func equalCivicWorksLocation(left, right map[string]any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
+}
+
 func (svc *Service) SetCivicWorks(client CivicWorksClient, webhookSecret string) {
+	callbackURL, err := civicWorksCallbackURLFromEnvironment()
+	svc.setCivicWorks(client, webhookSecret, callbackURL, err)
+}
+
+func (svc *Service) setCivicWorks(client CivicWorksClient, webhookSecret, callbackURL string, configurationError error) {
 	svc.runtimeMu.Lock()
 	defer svc.runtimeMu.Unlock()
 	svc.civicWorksClient = client
 	svc.civicWorksSecret = strings.TrimSpace(webhookSecret)
-	svc.civicWorksConfig = nil
+	svc.civicWorksCallback = callbackURL
+	svc.civicWorksConfig = configurationError
 	if client == nil || svc.civicWorksSecret == "" {
 		svc.civicWorksConfig = fmt.Errorf("CivicWorks client and webhook secret are required")
 	}
@@ -228,13 +262,13 @@ func (svc *Service) AssignCivicWorks(ctx context.Context, actor contract.Actor, 
 		return nil, err
 	}
 	svc.runtimeMu.RLock()
-	client, configurationError := svc.civicWorksClient, svc.civicWorksConfig
+	client, callbackURL, configurationError := svc.civicWorksClient, svc.civicWorksCallback, svc.civicWorksConfig
 	svc.runtimeMu.RUnlock()
 	if configurationError != nil || client == nil {
 		svc.mu.Unlock()
 		return nil, civicWorksUnavailableError()
 	}
-	input := civicWorksCreateInput(request)
+	input := civicWorksCreateInput(request, callbackURL)
 	workOrder, err := client.CreateWorkOrder(ctx, input, civicWorksIdempotencyKey(request.ID))
 	if err != nil {
 		svc.mu.Unlock()
@@ -278,6 +312,7 @@ func (svc *Service) AssignCivicWorks(ctx context.Context, actor contract.Actor, 
 	if err != nil {
 		return nil, err
 	}
+	svc.wakeRequestNotificationWorker()
 	if request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID); lookupErr == nil {
 		svc.runActiveWorkflows(ctx, actor, WorkflowTriggerStatusChanged, request)
 	}
@@ -371,6 +406,7 @@ func (svc *Service) HandleCivicWorksEvent(ctx context.Context, body []byte, head
 	if err != nil || !statusChanged {
 		return err
 	}
+	svc.wakeRequestNotificationWorker()
 	request, lookupErr := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID)
 	if lookupErr != nil {
 		return lookupErr
@@ -451,9 +487,13 @@ func (svc *Service) persistCivicWorksTransition(ctx context.Context, tx store.St
 	}); err != nil {
 		return err
 	}
-	return store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
+	if err := store.CreateCity311PublicHistoryItem(ctx, tx, &composeTypes.City311PublicHistoryItem{
 		ID: svc.nextID(), RequestID: request.ID, Action: string(request.Status), ResponsibleDepartment: request.OwningDepartment, OccurredAt: event.OccurredAt.UTC(),
-	})
+	}); err != nil {
+		return err
+	}
+	previousStatus := contract.ServiceRequestStatus(anyString(before["status"]))
+	return svc.enqueueRelationshipNotifications(ctx, tx, request, previousStatus, relationshipNotificationEvent(request.Status), 0, contract.SourceChannelAPI)
 }
 
 func (svc *Service) persistCivicWorksWorkOrderUpdate(ctx context.Context, tx store.Storer, request *composeTypes.City311ServiceRequest, event contract.CivicWorksEvent, before map[string]any) error {
@@ -474,12 +514,38 @@ func (svc *Service) persistCivicWorksReceipt(ctx context.Context, tx store.Store
 	})
 }
 
-func civicWorksCreateInput(request *composeTypes.City311ServiceRequest) contract.CivicWorksWorkOrderCreate {
+func civicWorksCreateInput(request *composeTypes.City311ServiceRequest, callbackURL string) contract.CivicWorksWorkOrderCreate {
 	return contract.CivicWorksWorkOrderCreate{
 		SourceCaseID: "city311-case-" + strconv.FormatUint(request.ID, 10), ServiceRequestNumber: request.RequestNumber,
 		ServiceType: request.ServiceType, Summary: request.Summary, DepartmentCode: request.OwningDepartment,
-		Location: cloneOptionalMap(request.Location), CallbackURL: civicWorksCallbackPath,
+		Location: civicWorksLocation(request.Location), CallbackURL: callbackURL,
 	}
+}
+
+func civicWorksLocation(location map[string]any) map[string]any {
+	if len(location) == 0 {
+		return nil
+	}
+	out := map[string]any{}
+	switch address := location["address"].(type) {
+	case string:
+		if strings.TrimSpace(address) != "" {
+			out["address"] = strings.TrimSpace(address)
+		}
+	case map[string]any:
+		if line := strings.TrimSpace(anyString(address["line1"])); line != "" {
+			out["address"] = line
+		}
+	}
+	for _, coordinate := range []string{"latitude", "longitude"} {
+		if value, present := location[coordinate]; present {
+			out[coordinate] = value
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func civicWorksIdempotencyKey(requestID uint64) string {

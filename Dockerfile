@@ -18,6 +18,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=1 go build -trimpath \
       -ldflags="-s -w -X github.com/cortezaproject/corteza/server/pkg/version.Version=${BUILD_VERSION}" \
       -o /out/corteza-server ./cmd/corteza/main.go
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+      -o /out/civicworks-fixture ./cmd/civicworks-fixture/main.go
 
 FROM debian:bookworm-slim
 
@@ -34,6 +38,7 @@ ENV HTTP_ADDR=0.0.0.0:80 \
     STORAGE_PATH=/data
 
 COPY --from=server-build /out/corteza-server /usr/local/bin/corteza-server
+COPY --from=server-build /out/civicworks-fixture /usr/local/bin/civicworks-fixture
 COPY --from=server-build /src/server/provision /corteza/provision
 
 USER 10001:10001

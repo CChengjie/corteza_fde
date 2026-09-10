@@ -99,6 +99,7 @@ func (svc *Service) ImportCalendar(ctx context.Context, actor contract.Actor, in
 	if err != nil {
 		return nil, err
 	}
+	svc.wakeReminderWorker()
 	return pending, nil
 }
 
@@ -130,17 +131,16 @@ func (svc *Service) importCalendarEvents(ctx context.Context, tx store.Storer, a
 		}
 		if reminder == nil {
 			payload := calendarPayload(event, 0)
-			encoded, encodeErr := json.Marshal(payload)
-			if encodeErr != nil {
-				return summary, encodeErr
-			}
 			now := svc.now().UTC()
 			reminder = &systemTypes.Reminder{
-				ID: svc.nextID(), Resource: calendarReminderResource(actor.ID), Payload: types.JSONText(encoded),
+				ID: svc.nextID(), Resource: calendarReminderResource(actor.ID),
 				AssignedTo: actor.ID, AssignedBy: actor.ID, AssignedAt: now, RemindAt: utcTime(event.Start), CreatedAt: now,
 			}
 			applyCalendarStatus(reminder, &payload, event.Status, actor.ID, now)
-			encoded, encodeErr = json.Marshal(payload)
+			if !reminderTerminal(payload.Status) {
+				resetReminderDelivery(reminder, &payload)
+			}
+			encoded, encodeErr := json.Marshal(payload)
 			if encodeErr != nil {
 				return summary, encodeErr
 			}
@@ -171,6 +171,9 @@ func (svc *Service) importCalendarEvents(ctx context.Context, tx store.Storer, a
 		payload.LastModified = &modified
 		now := svc.now().UTC()
 		applyCalendarStatus(reminder, &payload, event.Status, actor.ID, now)
+		if !reminderTerminal(payload.Status) {
+			resetReminderDelivery(reminder, &payload)
+		}
 		encoded, encodeErr := json.Marshal(payload)
 		if encodeErr != nil {
 			return summary, encodeErr

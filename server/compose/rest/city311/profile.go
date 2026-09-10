@@ -15,6 +15,16 @@ func (h *handler) profileGet(w http.ResponseWriter, r *http.Request) {
 	writeProfile(w, profile, err)
 }
 
+func (h *handler) accountDelete(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if err := h.identity.DeleteAccount(r.Context(), identitySessionFromContext(r.Context())); err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	h.expireIdentityCookie(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func requireProfileConstituent(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resolved := identitySessionFromContext(r.Context())

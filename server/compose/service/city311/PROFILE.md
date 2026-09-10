@@ -17,8 +17,8 @@ Implemented or directly verified provisions:
 - 6.7.2(c): an authenticated constituent's language selection persists to the
   account. The accepted vocabulary is EN, ES, VI (6.7.1).
 - 7.11.3, 9.1.1 and 9.1.2(a): maintain the five editable profile fields with
-  the published cardinalities and validation. This is not the separate verified
-  email replacement flow in 9.1.2(b).
+  the published cardinalities and validation. The separate verified email
+  replacement flow in 9.1.2(b) is documented in `EMAIL_REPLACEMENT.md`.
 - 9.1.3: updates do not rewrite historical request snapshots or prior audit
   values.
 - 9.7.1–9.7.2: successful effective changes write an immutable audit event with
@@ -155,8 +155,9 @@ PostgreSQL contention, clean/migrated container startup and retained-volume
 restart, browser persistence, responsive and accessibility acceptance remain
 required integration work, not claims of this isolated backend delivery.
 
-Remaining work includes linked request access, drafts, constituent notes/reopen,
-verified email replacement, category administration, and account deletion.
+Remaining work listed for this profile unit includes linked request access,
+drafts, constituent notes/reopen, and category administration; verified email
+replacement is implemented as the separate flow in `EMAIL_REPLACEMENT.md`.
 CivicWorks, broader mail flows, federation, calendar and exports are additional
 backend candidates, but need their own transactional models/fixture acceptance
 and coordination of shared schema/route ownership before parallel PRs.

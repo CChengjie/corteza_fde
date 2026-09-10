@@ -656,13 +656,27 @@
             "type": "string",
             "x-city311-explicit-utc-offset": true
           },
+          "department_code": {
+            "$ref": "#/components/schemas/enum_department_code",
+            "x-city311-enum-ref": "department_code"
+          },
           "external_status_url": {
             "format": "uri",
             "type": "string"
           },
+          "fulfilment_source": {
+            "const": "CIVICWORKS"
+          },
+          "location": {
+            "$ref": "#/components/schemas/location_input"
+          },
           "service_request_number": {
             "pattern": "^SR-[0-9]{4}-[0-9]{5}$",
             "type": "string"
+          },
+          "service_type": {
+            "$ref": "#/components/schemas/enum_service_type",
+            "x-city311-enum-ref": "service_type"
           },
           "source_case_id": {
             "type": "string"
@@ -670,6 +684,11 @@
           "status": {
             "$ref": "#/components/schemas/enum_civicworks_status",
             "x-city311-enum-ref": "civicworks_status"
+          },
+          "summary": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
           },
           "updated_at": {
             "format": "date-time",
@@ -688,6 +707,10 @@
           "work_order_id",
           "source_case_id",
           "service_request_number",
+          "service_type",
+          "summary",
+          "department_code",
+          "fulfilment_source",
           "status",
           "external_status_url",
           "version",
@@ -699,7 +722,9 @@
       "civicworks_work_order_create": {
         "properties": {
           "callback_url": {
-            "const": "/integrations/civicworks/events"
+            "format": "uri",
+            "pattern": "^https?://",
+            "type": "string"
           },
           "department_code": {
             "$ref": "#/components/schemas/enum_department_code",
@@ -768,7 +793,9 @@
               "type": "string"
             },
             "type": "array",
+            "x-city311-current-value-retained-until-verification": true,
             "x-city311-min-items-for-portal-account": 1,
+            "x-city311-replacement-operation": "email_replacement_request followed by email_replacement_confirm",
             "x-city311-verified-login-case-insensitive-unique": true
           },
           "login_identifier": {
@@ -1149,6 +1176,57 @@
         ],
         "type": "object"
       },
+      "email_replacement_acknowledgement": {
+        "properties": {
+          "accepted": {
+            "const": true
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "type": "object"
+      },
+      "email_replacement_confirm": {
+        "properties": {
+          "token": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
+      "email_replacement_request": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "email_replacement_result": {
+        "properties": {
+          "verified_email": {
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "required": [
+          "verified_email"
+        ],
+        "type": "object"
+      },
       "empty_request": {
         "properties": {},
         "required": [],
@@ -1218,6 +1296,7 @@
       },
       "enum_capability": {
         "enum": [
+          "account_delete",
           "admin_branding_get",
           "admin_branding_preview",
           "admin_branding_publish",
@@ -1244,6 +1323,7 @@
           "calendar_export",
           "calendar_import",
           "contact_email_export",
+          "email_replacement_request",
           "identity_configuration_get",
           "identity_configuration_update",
           "integration_get",
@@ -1380,6 +1460,8 @@
           "MAP_TEMPORARILY_UNAVAILABLE",
           "INVALID_RESET_TOKEN",
           "EXPIRED_RESET_TOKEN",
+          "INVALID_EMAIL_VERIFICATION_TOKEN",
+          "EXPIRED_EMAIL_VERIFICATION_TOKEN",
           "INSUFFICIENT_SCOPE",
           "INVALID_CLIENT",
           "INVALID_TOKEN",
@@ -1536,6 +1618,7 @@
       },
       "enum_route": {
         "enum": [
+          "account_delete",
           "account_register",
           "admin_branding_get",
           "admin_branding_preview",
@@ -1566,6 +1649,8 @@
           "civicworks_event_callback",
           "contact_email_export",
           "data_export",
+          "email_replacement_confirm",
+          "email_replacement_request",
           "federated_saml_callback",
           "federated_sign_in_callback",
           "federated_sign_in_start",
@@ -3856,11 +3941,334 @@
   "info": {
     "description": "Developer 1-owned BE-contract-v1 generated from NewContractDocument().",
     "title": "City 311 CRM client/server API",
-    "version": "2.0.0"
+    "version": "3.0.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/account": {
+      "delete": {
+        "operationId": "account_delete",
+        "responses": {
+          "204": {
+            "description": "success",
+            "x-city311-example": {
+              "body": null,
+              "status": 204
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "account delete",
+        "tags": [
+          "account"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "constituent"
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-required-capability": "account_delete"
+      }
+    },
+    "/api/v1/account/email-replacement": {
+      "post": {
+        "operationId": "email_replacement_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "email_replacement_request_body": {
+                  "value": {
+                    "email": "replacement@example.test"
+                  }
+                },
+                "request": {
+                  "value": {
+                    "email": "resident@example.test"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/email_replacement_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "accepted": {
+                    "value": {
+                      "accepted": true
+                    }
+                  },
+                  "email_replacement_requested": {
+                    "value": {
+                      "accepted": true
+                    }
+                  },
+                  "unavailable_address_indistinguishable": {
+                    "value": {
+                      "accepted": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/email_replacement_acknowledgement"
+                }
+              }
+            },
+            "description": "accepted",
+            "x-city311-example": {
+              "body": {
+                "accepted": true
+              },
+              "status": 202
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "temporarily_unavailable": {
+                    "value": {
+                      "error": "TEMPORARILY_UNAVAILABLE",
+                      "message": "temporarily unavailable.",
+                      "retryable": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "TEMPORARILY UNAVAILABLE",
+            "x-city311-example": {
+              "body": {
+                "error": "TEMPORARILY_UNAVAILABLE",
+                "message": "temporarily unavailable.",
+                "retryable": true
+              },
+              "status": 503
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "email replacement request",
+        "tags": [
+          "account"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "constituent"
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-privacy-rule": "every syntactically valid replacement address receives the same 202 acknowledgement; an address already used as a verified login email is not disclosed and no token is issued",
+        "x-city311-required-capability": "email_replacement_request"
+      }
+    },
     "/api/v1/account/login-identifier": {
       "post": {
         "operationId": "login_identifier_change",
@@ -13206,6 +13614,140 @@
         "x-city311-required-capability": "attachment_download"
       }
     },
+    "/api/v1/auth/email-replacement/confirm": {
+      "post": {
+        "operationId": "email_replacement_confirm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "email_replacement_confirm_body": {
+                  "value": {
+                    "token": "one-time-verification-token"
+                  }
+                },
+                "request": {
+                  "value": {
+                    "token": "xxxxxx"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/email_replacement_confirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "email_replacement_confirmed": {
+                    "value": {
+                      "verified_email": "replacement@example.test"
+                    }
+                  },
+                  "success": {
+                    "value": {
+                      "verified_email": "replacement@example.test"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/email_replacement_result"
+                }
+              }
+            },
+            "description": "success",
+            "x-city311-example": {
+              "body": {
+                "verified_email": "replacement@example.test"
+              },
+              "status": 200
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "expired_email_verification_token": {
+                    "value": {
+                      "error": "EXPIRED_EMAIL_VERIFICATION_TOKEN",
+                      "message": "The email verification token has expired.",
+                      "retryable": false
+                    }
+                  },
+                  "invalid_email_verification_token": {
+                    "value": {
+                      "error": "INVALID_EMAIL_VERIFICATION_TOKEN",
+                      "message": "The email verification token is invalid.",
+                      "retryable": false
+                    }
+                  },
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "EXPIRED EMAIL VERIFICATION TOKEN",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "temporarily_unavailable": {
+                    "value": {
+                      "error": "TEMPORARILY_UNAVAILABLE",
+                      "message": "temporarily unavailable.",
+                      "retryable": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "TEMPORARILY UNAVAILABLE",
+            "x-city311-example": {
+              "body": {
+                "error": "TEMPORARILY_UNAVAILABLE",
+                "message": "temporarily unavailable.",
+                "retryable": true
+              },
+              "status": 503
+            }
+          }
+        },
+        "security": [],
+        "summary": "email replacement confirm",
+        "tags": [
+          "auth"
+        ],
+        "x-city311-authentication": {
+          "mode": "none"
+        },
+        "x-city311-direction": "provided_by_crm"
+      }
+    },
     "/api/v1/auth/oidc/callback": {
       "get": {
         "operationId": "federated_sign_in_callback",
@@ -22290,10 +22832,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -22388,10 +22934,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -22908,10 +23458,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -23006,10 +23560,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -23283,10 +23841,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -23381,10 +23943,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -23715,10 +24281,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -23813,10 +24383,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -24145,10 +24719,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -24243,10 +24821,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -24572,10 +25154,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -24670,10 +25256,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -25003,10 +25593,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -25101,10 +25695,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -25426,10 +26024,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -25524,10 +26126,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -25848,10 +26454,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -25946,10 +26556,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -26462,10 +27076,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -26560,10 +27178,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -27091,10 +27713,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -27189,10 +27815,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -27519,10 +28149,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -27617,10 +28251,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -27943,10 +28581,14 @@
                       ],
                       "external_work_order": {
                         "created_at": "2026-08-25T12:00:00Z",
+                        "department_code": "PUBLIC_WORKS",
                         "external_status_url": "https://city311.example.test/resource",
+                        "fulfilment_source": "CIVICWORKS",
                         "service_request_number": "SR-2026-00041",
+                        "service_type": "TREE_MAINTENANCE",
                         "source_case_id": "xxxxxx",
                         "status": "ASSIGNED",
+                        "summary": "xxxxxx",
                         "updated_at": "2026-08-25T12:00:00Z",
                         "version": 1,
                         "work_order_id": "xxxxxx"
@@ -28041,10 +28683,14 @@
                 ],
                 "external_work_order": {
                   "created_at": "2026-08-25T12:00:00Z",
+                  "department_code": "PUBLIC_WORKS",
                   "external_status_url": "https://city311.example.test/resource",
+                  "fulfilment_source": "CIVICWORKS",
                   "service_request_number": "SR-2026-00041",
+                  "service_type": "TREE_MAINTENANCE",
                   "source_case_id": "xxxxxx",
                   "status": "ASSIGNED",
+                  "summary": "xxxxxx",
                   "updated_at": "2026-08-25T12:00:00Z",
                   "version": 1,
                   "work_order_id": "xxxxxx"
@@ -28558,7 +29204,7 @@
               "examples": {
                 "request": {
                   "value": {
-                    "callback_url": "/integrations/civicworks/events",
+                    "callback_url": "https://city311.example.test/resource",
                     "department_code": "PUBLIC_WORKS",
                     "service_request_number": "SR-2026-00041",
                     "service_type": "TREE_MAINTENANCE",
@@ -28582,10 +29228,14 @@
                   "equivalent_replay": {
                     "value": {
                       "created_at": "2026-08-25T12:00:00Z",
+                      "department_code": "PUBLIC_WORKS",
                       "external_status_url": "https://city311.example.test/resource",
+                      "fulfilment_source": "CIVICWORKS",
                       "service_request_number": "SR-2026-00041",
+                      "service_type": "TREE_MAINTENANCE",
                       "source_case_id": "xxxxxx",
                       "status": "ASSIGNED",
+                      "summary": "xxxxxx",
                       "updated_at": "2026-08-25T12:00:00Z",
                       "version": 1,
                       "work_order_id": "xxxxxx"
@@ -28601,10 +29251,14 @@
             "x-city311-example": {
               "body": {
                 "created_at": "2026-08-25T12:00:00Z",
+                "department_code": "PUBLIC_WORKS",
                 "external_status_url": "https://city311.example.test/resource",
+                "fulfilment_source": "CIVICWORKS",
                 "service_request_number": "SR-2026-00041",
+                "service_type": "TREE_MAINTENANCE",
                 "source_case_id": "xxxxxx",
                 "status": "ASSIGNED",
+                "summary": "xxxxxx",
                 "updated_at": "2026-08-25T12:00:00Z",
                 "version": 1,
                 "work_order_id": "xxxxxx"
@@ -28619,10 +29273,19 @@
                   "civicworks_created": {
                     "value": {
                       "created_at": "2026-08-20T10:00:00Z",
+                      "department_code": "PUBLIC_WORKS",
                       "external_status_url": "http://civicworks:8080/ui/work-orders/WO-000001",
+                      "fulfilment_source": "CIVICWORKS",
+                      "location": {
+                        "address": "100 Example Street",
+                        "latitude": 42.9001,
+                        "longitude": -78.8801
+                      },
                       "service_request_number": "SR-2026-00041",
+                      "service_type": "TREE_MAINTENANCE",
                       "source_case_id": "case-7c58d2",
                       "status": "ASSIGNED",
+                      "summary": "Fallen branch obstructing pavement",
                       "updated_at": "2026-08-20T10:00:00Z",
                       "version": 1,
                       "work_order_id": "WO-000001"
@@ -28631,10 +29294,19 @@
                   "created": {
                     "value": {
                       "created_at": "2026-08-20T10:00:00Z",
+                      "department_code": "PUBLIC_WORKS",
                       "external_status_url": "http://civicworks:8080/ui/work-orders/WO-000001",
+                      "fulfilment_source": "CIVICWORKS",
+                      "location": {
+                        "address": "100 Example Street",
+                        "latitude": 42.9001,
+                        "longitude": -78.8801
+                      },
                       "service_request_number": "SR-2026-00041",
+                      "service_type": "TREE_MAINTENANCE",
                       "source_case_id": "case-7c58d2",
                       "status": "ASSIGNED",
+                      "summary": "Fallen branch obstructing pavement",
                       "updated_at": "2026-08-20T10:00:00Z",
                       "version": 1,
                       "work_order_id": "WO-000001"
@@ -28650,10 +29322,19 @@
             "x-city311-example": {
               "body": {
                 "created_at": "2026-08-20T10:00:00Z",
+                "department_code": "PUBLIC_WORKS",
                 "external_status_url": "http://civicworks:8080/ui/work-orders/WO-000001",
+                "fulfilment_source": "CIVICWORKS",
+                "location": {
+                  "address": "100 Example Street",
+                  "latitude": 42.9001,
+                  "longitude": -78.8801
+                },
                 "service_request_number": "SR-2026-00041",
+                "service_type": "TREE_MAINTENANCE",
                 "source_case_id": "case-7c58d2",
                 "status": "ASSIGNED",
+                "summary": "Fallen branch obstructing pavement",
                 "updated_at": "2026-08-20T10:00:00Z",
                 "version": 1,
                 "work_order_id": "WO-000001"
@@ -29140,7 +29821,7 @@
     "stability": "frozen",
     "effective_at": "merge_to_2024.9.x",
     "first_published_version": "1.0.0",
-    "supported_major": 2,
+    "supported_major": 3,
     "major_version_rule": "after first publication, any consumer-incompatible contract revision increments the major version"
   },
   "x-city311-server-error-policy": {

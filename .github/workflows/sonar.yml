@@ -69,8 +69,8 @@ jobs:
         working-directory: server
         run: |
           go test -count=1 -covermode=atomic -coverprofile=../.sonar/coverage/go.out \
-            -coverpkg=./compose/rest/city311,./compose/service/city311,./compose/types/city311,./app,./store,./store/adapters/rdbms \
-            ./compose/rest/city311 ./compose/service/city311 ./compose/types/city311 ./app/... ./store/tests/...
+            -coverpkg=./compose/rest/city311,./compose/service/city311,./compose/types/city311,./app,./store,./store/adapters/rdbms,./pkg/civicworksfixture,./cmd/civicworks-fixture \
+            ./compose/rest/city311 ./compose/service/city311 ./compose/types/city311 ./app/... ./store/tests/... ./pkg/civicworksfixture ./cmd/civicworks-fixture
           test -s ../.sonar/coverage/go.out
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6

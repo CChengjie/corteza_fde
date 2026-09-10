@@ -78,6 +78,9 @@ type (
 		// optional city311Constituent filter function called after the generated function
 		City311Constituent func(*Store, composeType.City311ConstituentFilter) ([]goqu.Expression, composeType.City311ConstituentFilter, error)
 
+		// optional city311EmailReplacementToken filter function called after the generated function
+		City311EmailReplacementToken func(*Store, composeType.City311EmailReplacementTokenFilter) ([]goqu.Expression, composeType.City311EmailReplacementTokenFilter, error)
+
 		// optional city311IdempotencyRecord filter function called after the generated function
 		City311IdempotencyRecord func(*Store, composeType.City311IdempotencyRecordFilter) ([]goqu.Expression, composeType.City311IdempotencyRecordFilter, error)
 
@@ -648,6 +651,22 @@ func City311ConstituentFilter(d drivers.Dialect, f composeType.City311Constituen
 
 	if val := strings.TrimSpace(f.CouncilDistrict); len(val) > 0 {
 		ee = append(ee, goqu.C("council_district").Eq(f.CouncilDistrict))
+	}
+
+	return ee, f, err
+}
+
+// City311EmailReplacementTokenFilter returns logical expressions
+//
+// This function is called from Store.QueryCity311EmailReplacementTokens() and can be extended
+// by setting Store.Filters.City311EmailReplacementToken. Extension is called after all expressions
+// are generated and can choose to ignore or alter them.
+//
+// This function is auto-generated
+func City311EmailReplacementTokenFilter(d drivers.Dialect, f composeType.City311EmailReplacementTokenFilter) (ee []goqu.Expression, _ composeType.City311EmailReplacementTokenFilter, err error) {
+
+	if f.UserID > 0 {
+		ee = append(ee, goqu.C("user_id").Eq(f.UserID))
 	}
 
 	return ee, f, err

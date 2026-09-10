@@ -20,6 +20,14 @@ class Fe10MatrixTests(unittest.TestCase):
         self.assertNotIn("if width in (767, 1440)", source)
         self.assertIn("extension_smoke(page, base_url, label, results)", source)
 
+    def test_mail_controls_have_a_narrow_viewport_constraint(self):
+        source = Path(__file__).parents[2].joinpath("client/web/admin/src/views/C311/Extensions.vue").read_text(encoding="utf-8")
+        self.assertIn('class="c311-mail"', source)
+        self.assertIn('.c311-mail .form-control {', source)
+        self.assertIn('box-sizing: border-box;', source)
+        self.assertIn('width: 100%;', source)
+        self.assertIn('.c311-mail label {', source)
+
     def test_sonar_excludes_browser_harness_and_static_bootstrap_duplicates(self):
         properties = Path(__file__).parents[2].joinpath("sonar-project.properties").read_text(encoding="utf-8")
         self.assertIn("tools/c311-browser/fe10_matrix.py", properties)

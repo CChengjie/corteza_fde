@@ -352,6 +352,7 @@
         </section>
         <section
           v-else-if="mode === 'mail'"
+          class="c311-mail"
           data-c311-mail
         >
           <h2>{{ t('mail.title', 'Mail') }}</h2>
@@ -927,6 +928,27 @@ export default {
 }
 </script>
 <style scoped>
+.c311-mail,
+.c311-mail .form-group {
+  min-width: 0;
+}
+
+.c311-mail label {
+  display: block;
+}
+
+.c311-mail .form-control {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.c311-mail .btn {
+  max-width: 100%;
+  white-space: normal;
+}
+
 .c311-output {
   max-width: 100%;
   overflow-x: auto;

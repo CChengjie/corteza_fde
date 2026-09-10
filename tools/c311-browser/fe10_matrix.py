@@ -349,6 +349,44 @@ def extension_smoke(page: Page, base_url: str, label: str, results: dict) -> Non
         workflow_page.close()
 
 
+def run_case(browser, width: int, height: int, app: str, base_url: str, path: str, role: str, artifact_dir: Path, results: dict) -> None:
+    context = browser.new_context(viewport={"width": width, "height": height})
+    page = context.new_page()
+    label = f"{browser.browser_type.name}:{app}@{width}x{height}"
+    observe_page(page, results, label)
+    try:
+        open_c311(page, base_url, path, role)
+        assert_layout(page, label)
+        assert_focus(page, label)
+        assert_modal_focus(page, base_url, label)
+        if app == "compose":
+            login_identity(page, base_url, label)
+            public_submit(page, base_url, label)
+            anonymous_lookup(page, base_url, label)
+        else:
+            staff_update(page, base_url, label)
+            extension_smoke(page, base_url, label, results)
+        screenshot = artifact_dir / f"{browser.browser_type.name}-{app}-{width}x{height}.png"
+        page.screenshot(path=str(screenshot), full_page=True)
+        results["checks"].append({"label": label, "status": "passed", "screenshot": str(screenshot)})
+    except Exception:
+        failure_screenshot = artifact_dir / f"{browser.browser_type.name}-{app}-{width}x{height}-failure.png"
+        try:
+            page.screenshot(path=str(failure_screenshot), full_page=True)
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            context.close()
+        except Exception:
+            pass
+
+
+def is_renderer_crash(error: Exception) -> bool:
+    return "Page crashed" in str(error)
+
+
 def run() -> dict:
     global ACTIVE_ARTIFACT_DIR
     artifact_dir = artifact_directory()
@@ -358,7 +396,7 @@ def run() -> dict:
     unknown_browsers = set(browser_names) - set(BROWSERS)
     if unknown_browsers:
         raise ValueError(f"Unsupported C311_BROWSER value: {', '.join(sorted(unknown_browsers))}")
-    results = {"viewports": [list(value) for value in VIEWPORTS], "browsers": list(browser_names), "journeys": list(JOURNEYS), "checks": [], "console_errors": [], "page_errors": [], "failed_requests": [], "write_requests": [], "mocked_locale_requests": [], "cancelled_locale_requests": [], "started_at": datetime.now(timezone.utc).isoformat()}
+    results = {"viewports": [list(value) for value in VIEWPORTS], "browsers": list(browser_names), "journeys": list(JOURNEYS), "checks": [], "renderer_retries": [], "console_errors": [], "page_errors": [], "failed_requests": [], "write_requests": [], "mocked_locale_requests": [], "cancelled_locale_requests": [], "started_at": datetime.now(timezone.utc).isoformat()}
     with sync_playwright() as playwright:
         for browser_name in browser_names:
             browser_type = getattr(playwright, browser_name)
@@ -366,34 +404,16 @@ def run() -> dict:
             try:
                 for width, height in VIEWPORTS:
                     for app, base_url, path, role in (("compose", COMPOSE_URL, "/c311", "public_visitor"), ("admin", ADMIN_URL, "/c311/staff", "service_agent")):
-                        context = browser.new_context(viewport={"width": width, "height": height})
-                        page = context.new_page()
                         label = f"{browser_name}:{app}@{width}x{height}"
-                        observe_page(page, results, label)
-                        try:
-                            open_c311(page, base_url, path, role)
-                            assert_layout(page, label)
-                            assert_focus(page, label)
-                            assert_modal_focus(page, base_url, label)
-                            if app == "compose":
-                                login_identity(page, base_url, label)
-                                public_submit(page, base_url, label)
-                                anonymous_lookup(page, base_url, label)
-                            else:
-                                staff_update(page, base_url, label)
-                                extension_smoke(page, base_url, label, results)
-                            screenshot = artifact_dir / f"{browser_name}-{app}-{width}x{height}.png"
-                            page.screenshot(path=str(screenshot), full_page=True)
-                            results["checks"].append({"label": label, "status": "passed", "screenshot": str(screenshot)})
-                        except Exception:
-                            failure_screenshot = artifact_dir / f"{browser_name}-{app}-{width}x{height}-failure.png"
+                        for attempt in range(2):
                             try:
-                                page.screenshot(path=str(failure_screenshot), full_page=True)
-                            except Exception:
-                                pass
-                            raise
-                        finally:
-                            context.close()
+                                run_case(browser, width, height, app, base_url, path, role, artifact_dir, results)
+                                break
+                            except Exception as error:
+                                if attempt == 0 and is_renderer_crash(error):
+                                    results["renderer_retries"].append({"label": label, "error": str(error)})
+                                    continue
+                                raise
             finally:
                 browser.close()
     check(not results["page_errors"], f"page errors detected: {results['page_errors']}")

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$repo_root/tools/c311-browser/process-tree.sh"
 artifact_dir="${C311_ARTIFACT_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/c311-fe10.XXXXXX")}"
 if [[ -L "$artifact_dir" ]]; then echo "artifact directory must not be a symbolic link" >&2; exit 1; fi
 mkdir -p "$artifact_dir"; chmod 700 "$artifact_dir"
@@ -12,8 +13,8 @@ admin_pid=""
 compose_pid=""
 
 cleanup () {
-  [[ -z "$admin_pid" ]] || kill "$admin_pid" 2>/dev/null || true
-  [[ -z "$compose_pid" ]] || kill "$compose_pid" 2>/dev/null || true
+  terminate_process_tree "$admin_pid"
+  terminate_process_tree "$compose_pid"
 }
 
 wait_for_server () {

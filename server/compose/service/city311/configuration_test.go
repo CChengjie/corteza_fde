@@ -41,12 +41,33 @@ func TestContactCategoryLifecycleRolesAndActiveFilters(t *testing.T) {
 	_, err = svc.CreateContactCategory(ctx, administrator, contract.CategoryWrite{Code: "bad-code", Active: true, Labels: map[string]string{"EN": "Bad"}})
 	requireValidationCode(t, err, "/code", contract.ValidationInvalidFormat)
 
-	_, err = svc.UpdateContactCategory(ctx, manager, "NONPROFIT", contract.CategoryWrite{Code: "RENAMED", Active: false, Labels: map[string]string{"EN": "Renamed"}})
+	_, err = svc.UpdateContactCategory(ctx, manager, "NONPROFIT", 1, contract.CategoryWrite{Code: "RENAMED", Active: false, Labels: map[string]string{"EN": "Renamed"}})
 	requireValidationCode(t, err, "/code", contract.ValidationConflict)
-	updated, err := svc.UpdateContactCategory(ctx, manager, "NONPROFIT", contract.CategoryWrite{Code: "NONPROFIT", Active: false, Labels: map[string]string{"EN": "Nonprofit organisation"}})
+	updated, err := svc.UpdateContactCategory(ctx, manager, "NONPROFIT", 1, contract.CategoryWrite{Code: "NONPROFIT", Active: false, Labels: map[string]string{"EN": "Nonprofit organisation"}})
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), updated.Version)
 	require.False(t, updated.Active)
+	_, err = svc.UpdateContactCategory(ctx, manager, "NONPROFIT", 1, contract.CategoryWrite{Code: "NONPROFIT", Active: true, Labels: map[string]string{"EN": "Stale"}})
+	requireServiceError(t, err, http.StatusConflict, contract.ErrorVersionConflict)
+	_, err = svc.UpdateContactCategory(ctx, manager, "NONPROFIT", 0, contract.CategoryWrite{Code: "NONPROFIT", Active: true, Labels: map[string]string{"EN": "Missing version"}})
+	requireServiceError(t, err, http.StatusPreconditionRequired, contract.ErrorExpectedVersionRequired)
+
+	_, err = svc.UpdateContactCategory(ctx, manager, "RESIDENT", 1, contract.CategoryWrite{Code: "RESIDENT", Active: false, Labels: map[string]string{"EN": "Resident"}})
+	requireValidationCode(t, err, "/active", contract.ValidationConflict)
+	residentRevisions, _, err := store.SearchCity311ConfigurationRevisions(ctx, st, composeTypes.City311ConfigurationRevisionFilter{ResourceType: configurationContactCategory, ResourceKey: "RESIDENT"})
+	require.NoError(t, err)
+	require.Len(t, residentRevisions, 1, "rejected deactivation must not create a revision")
+	residentAudits, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{EntityID: "RESIDENT", EventType: "CONTACT_CATEGORY_UPDATED"})
+	require.NoError(t, err)
+	require.Empty(t, residentAudits, "rejected deactivation must not create an audit event")
+	afterRejectedDeactivation, err := svc.ListContactCategories(ctx, manager, ConfigurationListQuery{})
+	require.NoError(t, err)
+	for _, category := range afterRejectedDeactivation.Items {
+		if category.Code == "RESIDENT" {
+			require.True(t, category.Active)
+			require.Equal(t, uint64(1), category.Version)
+		}
+	}
 
 	_, err = svc.List(ctx, manager, RequestFilter{Categories: []contract.ContactCategory{"NONPROFIT"}})
 	requireValidationCode(t, err, "/query/filters/category", contract.ValidationInvalidValue)
@@ -165,7 +186,7 @@ func TestConfigurationValidationAndPaginationEdges(t *testing.T) {
 	requireValidationCode(t, err, "/query/page_size", contract.ValidationOutOfRange)
 	_, err = svc.ListContactCategories(ctx, administrator, ConfigurationListQuery{PageToken: "invalid"})
 	requireServiceError(t, err, http.StatusBadRequest, contract.ErrorInvalidPageToken)
-	_, err = svc.UpdateContactCategory(ctx, administrator, "MISSING", contract.CategoryWrite{Code: "MISSING", Active: true, Labels: map[string]string{"EN": "Missing"}})
+	_, err = svc.UpdateContactCategory(ctx, administrator, "MISSING", 1, contract.CategoryWrite{Code: "MISSING", Active: true, Labels: map[string]string{"EN": "Missing"}})
 	requireServiceError(t, err, http.StatusNotFound, contract.ErrorNotFound)
 	_, err = svc.ListCustomFields(ctx, agent, ConfigurationListQuery{})
 	requireServiceError(t, err, http.StatusForbidden, contract.ErrorForbidden)
@@ -247,8 +268,8 @@ func TestCustomFieldValueAndFilterHelpers(t *testing.T) {
 
 func requireValidationCode(t *testing.T, err error, field string, code contract.ValidationCode) {
 	t.Helper()
-	serviceErr, ok := err.(*ServiceError)
-	require.True(t, ok, "expected ServiceError, got %T: %v", err, err)
+	var serviceErr *ServiceError
+	require.ErrorAs(t, err, &serviceErr)
 	require.Equal(t, http.StatusUnprocessableEntity, serviceErr.Status)
 	require.Contains(t, serviceErr.Payload.Errors, contract.FieldError{Field: field, Code: code})
 }

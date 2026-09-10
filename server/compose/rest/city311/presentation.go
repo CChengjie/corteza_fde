@@ -215,6 +215,30 @@ func (h *handler) adminContentVersions(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, http.StatusOK, result, err)
 }
 
+func (h *handler) adminHelpGet(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.workflowActor(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.AdminHelp(r.Context(), actor, chi.URLParam(r, "help_key"), helpLanguage(r))
+	writePresentationResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) adminHelpPreview(w http.ResponseWriter, r *http.Request) {
+	input := contract.HelpWrite{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.workflowActor(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.PreviewHelp(r.Context(), actor, chi.URLParam(r, "help_key"), input)
+	writePresentationResult(w, http.StatusOK, result, err)
+}
+
 func (h *handler) adminHelpUpdate(w http.ResponseWriter, r *http.Request) {
 	version, ok := requiredVersion(w, r)
 	if !ok {
@@ -231,6 +255,60 @@ func (h *handler) adminHelpUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.UpdateHelp(r.Context(), actor, chi.URLParam(r, "help_key"), version, input)
 	writePresentationResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) adminHelpPublish(w http.ResponseWriter, r *http.Request) {
+	version, ok := requiredVersion(w, r)
+	if !ok || !decodeEmptyJSON(w, r) {
+		return
+	}
+	actor, err := h.workflowActor(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.PublishHelp(r.Context(), actor, chi.URLParam(r, "help_key"), helpLanguage(r), version)
+	writePresentationResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) adminHelpVersions(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.workflowActor(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	query, ok := presentationListQuery(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.service.HelpVersions(r.Context(), actor, chi.URLParam(r, "help_key"), helpLanguage(r), query)
+	writeResult(w, http.StatusOK, result, err)
+}
+
+func (h *handler) adminHelpRollback(w http.ResponseWriter, r *http.Request) {
+	version, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
+	input := contract.Rollback{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.workflowActor(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.RollbackHelp(r.Context(), actor, chi.URLParam(r, "help_key"), helpLanguage(r), version, input.TargetVersion)
+	writePresentationResult(w, http.StatusOK, result, err)
+}
+
+func helpLanguage(r *http.Request) contract.Language {
+	value := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("language")))
+	if value == "" {
+		value = string(contract.LanguageEN)
+	}
+	return contract.Language(value)
 }
 
 func presentationListQuery(w http.ResponseWriter, r *http.Request) (city311Service.PresentationListQuery, bool) {

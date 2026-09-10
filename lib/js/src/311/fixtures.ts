@@ -1,5 +1,5 @@
 import { APPLICATION_ROLES, CONTRACT_VERSION, type ApplicationRole, type HelpKey, type PublicContentKey } from './enums'
-import type { Branding, C311FixtureSet, C311RoleFixture, Constituent, ContentObject, CurrentActor, HelpContent, PortalAttachment, PublicHistoryItem, RequestNote, RequestQueueItem, RequestRelationship, ServiceRequest, Session, StaffServiceRequestDetail } from './types'
+import type { AuditEvent, Branding, C311FixtureSet, C311RoleFixture, Category, Constituent, ContentObject, CustomFieldDefinition, CurrentActor, FollowUpAction, HelpContent, MailTemplate, PortalAttachment, PublicHistoryItem, RequestNote, RequestQueueItem, RequestRelationship, ServiceRequest, Session, StaffServiceRequestDetail, WorkflowExecution } from './types'
 
 export const BENCHMARK_NOW = '2026-01-15T15:00:00.000Z'
 export const BENCHMARK_TIMEZONE = 'America/New_York'
@@ -50,6 +50,7 @@ const request: ServiceRequest = {
     latitude: 42.9001,
     longitude: -78.8801,
   },
+  custom_fields: { contact_preference: 'EMAIL' },
   version: 1,
   created_at: BENCHMARK_NOW,
   updated_at: BENCHMARK_NOW,
@@ -85,7 +86,11 @@ const detail: StaffServiceRequestDetail = {
   available_actions: ['TRIAGE', 'ASSIGN'],
   primary_assignee_id: null,
   collaborator_ids: [],
-  reminders: [],
+  reminders: [
+    { reminder_id: 'reminder-fixture-001', request_id: request.request_id, title: 'Review request', due_at: '2026-01-16T15:00:00.000Z', timezone: 'America/New_York', recipient_staff_id: 'actor-fixture-supervisor', channel: 'IN_APP', status: 'SCHEDULED', completed_at: null, history: [] },
+    { reminder_id: 'reminder-fixture-002', request_id: request.request_id, title: 'Contact department', due_at: '2026-01-16T16:00:00.000Z', timezone: 'America/New_York', recipient_staff_id: 'actor-fixture-supervisor', channel: 'IN_APP', status: 'SCHEDULED', completed_at: null, history: [] },
+    { reminder_id: 'reminder-fixture-003', request_id: request.request_id, title: 'Resident follow-up', due_at: '2026-01-16T17:00:00.000Z', timezone: 'America/New_York', recipient_staff_id: 'actor-fixture-supervisor', channel: 'IN_APP', status: 'SCHEDULED', completed_at: null, history: [] },
+  ],
   attachments: [{ attachment_token: 'attachment-fixture-001', filename: 'fixture.txt', media_type: 'text/plain', size: 18, expires_at: BENCHMARK_NOW } as PortalAttachment],
   history,
   audit: [],
@@ -149,6 +154,13 @@ const branding: Branding = {
   portal_wallpaper_url: null,
 }
 
+const categories: Category[] = [
+  { code: 'RESIDENT', active: true, labels: { EN: 'Resident', ES: 'Residente', VI: 'Cu dan' }, version: 1, updated_at: BENCHMARK_NOW },
+  { code: 'LEGACY', active: false, labels: { EN: 'Legacy' }, version: 2, updated_at: BENCHMARK_NOW },
+]
+
+const customFields: CustomFieldDefinition[] = [{ key: 'contact_preference', labels: { EN: 'Contact preference', ES: 'Preferencia de contacto', VI: 'Uu tien lien he' }, entity: 'service_request', field_type: 'SINGLE_CHOICE', required: false, active: true, version: 1, updated_at: BENCHMARK_NOW, choice_values: ['EMAIL', 'PHONE'], default: 'EMAIL' }]
+
 const publicContent: Record<PublicContentKey, ContentObject> = {
   HOME: { content_key: 'HOME', body: '<p>Report an issue or find a city service.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
   SERVICE_CATALOGUE: { content_key: 'SERVICE_CATALOGUE', body: '<p>Browse available city services.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
@@ -158,15 +170,21 @@ const publicContent: Record<PublicContentKey, ContentObject> = {
 }
 
 const publicHelp: Record<HelpKey, HelpContent> = {
-  'admin.branding.publish': { help_key: 'admin.branding.publish', language: 'EN', body: '<p>Publish approved branding.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'admin.workflow.author': { help_key: 'admin.workflow.author', language: 'EN', body: '<p>Author an approved workflow.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'public.request.lookup': { help_key: 'public.request.lookup', language: 'EN', body: '<p>Use your request number and email.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'public.request.submit': { help_key: 'public.request.submit', language: 'EN', body: '<p>Describe the issue and submit it to the city.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'staff.report.create': { help_key: 'staff.report.create', language: 'EN', body: '<p>Create reports from permitted records.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.bulk-update': { help_key: 'staff.request.bulk-update', language: 'EN', body: '<p>Update selected requests.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.reassign': { help_key: 'staff.request.reassign', language: 'EN', body: '<p>Reassign a request.</p>', version: 1, updated_at: BENCHMARK_NOW },
-  'staff.request.triage': { help_key: 'staff.request.triage', language: 'EN', body: '<p>Review and classify a request.</p>', version: 1, updated_at: BENCHMARK_NOW },
+  'admin.branding.publish': { help_key: 'admin.branding.publish', language: 'EN', body: '<p>Publish approved branding.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'admin.workflow.author': { help_key: 'admin.workflow.author', language: 'EN', body: '<p>Author an approved workflow.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'public.request.lookup': { help_key: 'public.request.lookup', language: 'EN', body: '<p>Use your request number and email.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'public.request.submit': { help_key: 'public.request.submit', language: 'EN', body: '<p>Describe the issue and submit it to the city.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.report.create': { help_key: 'staff.report.create', language: 'EN', body: '<p>Create reports from permitted records.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.bulk-update': { help_key: 'staff.request.bulk-update', language: 'EN', body: '<p>Update selected requests.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.reassign': { help_key: 'staff.request.reassign', language: 'EN', body: '<p>Reassign a request.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
+  'staff.request.triage': { help_key: 'staff.request.triage', language: 'EN', body: '<p>Review and classify a request.</p>', state: 'PUBLISHED', published: true, version: 1, updated_at: BENCHMARK_NOW },
 }
+
+// Mail templates are Mock-only until the contract exposes template CRUD.
+const mailTemplates: MailTemplate[] = [
+  { template_id: 'service-update', name: 'Service update', subject: 'City 311 request update', text: 'Your City 311 request has been updated.', html: '<p>Your City 311 request has been updated.</p>', version: 1, updated_at: BENCHMARK_NOW },
+  { template_id: 'appointment-reminder', name: 'Appointment reminder', subject: 'City 311 appointment reminder', text: 'This is a reminder about your City 311 appointment.', html: '<p>This is a reminder about your City 311 appointment.</p>', version: 1, updated_at: BENCHMARK_NOW },
+]
 
 type RoleDefinition = {
   actor_id: string
@@ -178,6 +196,13 @@ type RoleDefinition = {
   routes: string[]
   deniedScope: string
 }
+
+const FE09_COMMON_CAPABILITIES = [
+  'operation_get',
+  'calendar_import', 'calendar_export', 'mail_delivery_get', 'mail_preview', 'mail_send',
+  'report_catalogue', 'saved_report_list', 'saved_report_create', 'saved_report_update', 'saved_report_share', 'report_run', 'report_export',
+]
+const FE09_COMMON_ROUTES = [...FE09_COMMON_CAPABILITIES]
 
 const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
   public_visitor: {
@@ -205,9 +230,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Service agent',
     departments: ['STREETS'],
     districts: ['NORTH'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_reminder_create', 'staff_note_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_service_request_create', 'report_catalogue', 'report_export'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_reminder_create', 'staff_note_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_service_request_create', ...FE09_COMMON_CAPABILITIES],
     scopes: ['service_requests.write'],
-    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_service_request_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_note_create', 'report_catalogue', 'report_export'],
+    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_service_request_create', 'staff_constituent_link', 'staff_constituent_unlink', 'staff_note_create', ...FE09_COMMON_ROUTES],
     deniedScope: 'workflow.execute',
   },
   supervisor: {
@@ -215,9 +240,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Supervisor',
     departments: ['STREETS'],
     districts: ['NORTH', 'CENTRAL'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_collaborator_add', 'staff_collaborator_remove', 'staff_reminder_action', 'staff_duplicate_group_confirm', 'staff_duplicate_group_remove', 'staff_reopen_approve', 'staff_request_bulk', 'report_catalogue', 'report_export'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_collaborator_add', 'staff_collaborator_remove', 'staff_reminder_action', 'staff_duplicate_group_confirm', 'staff_duplicate_group_remove', 'staff_reopen_approve', 'staff_request_bulk', ...FE09_COMMON_CAPABILITIES],
     scopes: ['service_requests.write'],
-    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_request_bulk', 'report_catalogue', 'report_export'],
+    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_request_bulk', ...FE09_COMMON_ROUTES],
     deniedScope: 'workflow.execute',
   },
   department_manager: {
@@ -225,9 +250,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Department manager',
     departments: ['STREETS', 'PUBLIC_WORKS'],
     districts: ['NORTH', 'CENTRAL', 'SOUTH'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_collaborator_add', 'staff_collaborator_remove', 'staff_origin_override', 'staff_scope_override', 'staff_reopen_approve', 'report_catalogue', 'report_export', 'audit_list', 'audit_export'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_collaborator_add', 'staff_collaborator_remove', 'staff_origin_override', 'staff_scope_override', 'staff_reopen_approve', 'staff_request_bulk', ...FE09_COMMON_CAPABILITIES, 'contact_email_export', 'audit_list', 'audit_export', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update'],
     scopes: ['service_requests.write', 'crm.export'],
-    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'report_catalogue', 'report_export', 'audit_list', 'audit_export'],
+    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_reassign', 'staff_request_bulk', ...FE09_COMMON_ROUTES, 'contact_email_export', 'audit_list', 'audit_export', 'data_export', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update'],
     deniedScope: 'workflow.execute',
   },
   platform_administrator: {
@@ -235,9 +260,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Platform administrator',
     departments: ['PUBLIC_WORKS', 'STREETS', 'SANITATION', 'GENERAL_SERVICES'],
     districts: ['NORTH', 'CENTRAL', 'SOUTH'],
-    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_origin_override', 'staff_scope_override', 'staff_request_bulk', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_update', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
+    capabilities: ['staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_origin_override', 'staff_scope_override', ...FE09_COMMON_CAPABILITIES, 'contact_email_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_get', 'admin_help_update', 'admin_help_preview', 'admin_help_publish', 'admin_help_versions', 'admin_help_rollback', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
     scopes: ['service_requests.write', 'crm.export'],
-    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', 'staff_request_bulk', 'report_catalogue', 'report_export', 'audit_list', 'audit_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_update', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
+    routes: ['session_current', 'staff_request_queue', 'staff_request_detail', 'staff_request_transition', ...FE09_COMMON_ROUTES, 'contact_email_export', 'audit_list', 'audit_export', 'data_export', 'admin_branding_get', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_rollback', 'admin_branding_update', 'admin_branding_versions', 'admin_content_get', 'admin_content_list', 'admin_content_preview', 'admin_content_publish', 'admin_content_rollback', 'admin_content_update', 'admin_content_versions', 'admin_help_get', 'admin_help_update', 'admin_help_preview', 'admin_help_publish', 'admin_help_versions', 'admin_help_rollback', 'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update'],
     deniedScope: 'workflow.execute',
   },
   workflow_designer: {
@@ -245,9 +270,9 @@ const roleDefinitions: Record<ApplicationRole, RoleDefinition> = {
     display_name: 'Workflow designer',
     departments: ['GENERAL_SERVICES'],
     districts: ['NORTH', 'CENTRAL', 'SOUTH'],
-    capabilities: ['workflow_list', 'workflow_get', 'workflow_create', 'workflow_update', 'workflow_test', 'workflow_activate', 'workflow_deactivate', 'workflow_execution_list', 'workflow_execution_get'],
+    capabilities: ['workflow_list', 'workflow_get', 'workflow_create', 'workflow_update', 'workflow_test', 'workflow_activate', 'workflow_deactivate', 'workflow_execution_list', 'workflow_execution_get', ...FE09_COMMON_CAPABILITIES],
     scopes: ['workflow.execute'],
-    routes: ['session_current', 'workflow_list', 'workflow_get', 'workflow_create', 'workflow_update', 'workflow_test', 'workflow_activate', 'workflow_deactivate', 'workflow_execution_list', 'workflow_execution_get'],
+    routes: ['session_current', 'workflow_list', 'workflow_get', 'workflow_create', 'workflow_update', 'workflow_test', 'workflow_activate', 'workflow_deactivate', 'workflow_execution_list', 'workflow_execution_get', ...FE09_COMMON_ROUTES],
     deniedScope: 'service_requests.write',
   },
   integration_client: {
@@ -361,7 +386,7 @@ export function createDefaultFixtureSet (): C311FixtureSet {
         report_id: 'report-fixture-001',
         name: 'Request volume',
         entity: 'service_requests',
-        columns: ['request_number', 'status'],
+        columns: ['request_number', 'summary', 'status'],
         filters: {},
         grouping: null,
         sort: ['-created_at'],
@@ -369,6 +394,8 @@ export function createDefaultFixtureSet (): C311FixtureSet {
         updated_at: BENCHMARK_NOW,
       },
     ],
+    report_owners: { 'report-fixture-001': 'actor-fixture-manager' },
+    report_shares: {},
     workflows: [
       {
         workflow_id: 'workflow-fixture-001',
@@ -376,11 +403,17 @@ export function createDefaultFixtureSet (): C311FixtureSet {
         trigger: 'SERVICE_REQUEST_CREATED',
         active: true,
         conditions: [],
-        actions: [{ type: 'notify' }],
+        actions: [{ type: 'notify', to: 'fixture@example.test', subject: 'Request update', text: 'A service request changed.' }],
         version: 1,
         updated_at: BENCHMARK_NOW,
       },
     ],
+    workflow_executions: [{ execution_id: 'execution-fixture-001', workflow_version: 1, trigger: 'SERVICE_REQUEST_CREATED', outcome: 'SUCCEEDED', actions_attempted: ['notify'], succeeded: true, occurred_at: BENCHMARK_NOW } as WorkflowExecution],
+    mail_deliveries: [{ delivery_id: 'delivery-fixture-001', status: 'DELIVERED', attempts: 1, updated_at: BENCHMARK_NOW, error: null }],
+    mail_templates: mailTemplates,
+    audit_events: [{ audit_id: 'audit-fixture-001', actor_id: 'actor-fixture-manager', actor_type: 'staff', entity_type: 'service_request', entity_id: request.request_id, event_type: 'REQUEST_CREATED', occurred_at: BENCHMARK_NOW, source_channel: 'STAFF_IN_PERSON', before: {}, after: { status: 'SUBMITTED' } } as AuditEvent],
+    follow_up_actions: [{ action_type: 'CALL_REQUESTER', actor: 'actor-fixture-agent', occurred_at: BENCHMARK_NOW, local_display_time: '2026-01-15 10:00 America/New_York', request_id: request.request_id, visibility: 'STAFF', payload: { outcome: 'PENDING' } } as FollowUpAction],
+    verified_emails: { [constituent.constituent_id]: ['alex@example.test'] },
     geocodes: {
       '100 Example Street, Buffalo, NY 14201': {
         address: '100 Example Street, Buffalo, NY 14201',
@@ -410,6 +443,11 @@ export function createDefaultFixtureSet (): C311FixtureSet {
       retryable: {
         error: 'TEMPORARILY_UNAVAILABLE',
         message: 'The service is temporarily unavailable.',
+        retryable: true,
+      },
+      'rate-limited': {
+        error: 'RATE_LIMITED',
+        message: 'Too many export requests were submitted.',
         retryable: true,
       },
       terminal: {
@@ -446,6 +484,25 @@ export function createDefaultFixtureSet (): C311FixtureSet {
       'map-auth-failure': { error: 'MAP_UNAUTHENTICATED', message: 'The mapping service credentials are unavailable.', retryable: false },
       'scope-denied': { error: 'FORBIDDEN', message: 'The request is outside your assigned scope.', retryable: false },
       'scope-filter': { error: 'FORBIDDEN', message: 'The request is outside your assigned scope.', retryable: false },
+      'invalid-status-transition': { error: 'INVALID_STATUS_TRANSITION', message: 'The requested status transition is not allowed.', retryable: false, errors: [{ field: '/to_status', code: 'INVALID_VALUE' }] },
+      'bulk-validation': { error: 'VALIDATION_ERROR', message: 'The bulk request is invalid.', retryable: false, errors: [{ field: '/request_items', code: 'INVALID_VALUE' }] },
+      'bulk-version-conflict': { error: 'VERSION_CONFLICT', message: 'A selected request changed before the bulk action.', retryable: false, current_version: 2, failing_request_id: 'request-fixture-001' },
+      'civicworks-invalid-signature': { error: 'INVALID_SIGNATURE', message: 'The CivicWorks event signature is invalid.', retryable: false },
+      'civicworks-stale': { error: 'VALIDATION_ERROR', message: 'The CivicWorks event version is stale.', retryable: false },
+      'civicworks-duplicate': { error: 'OPERATION_FAILED', message: 'The CivicWorks event was already acknowledged.', retryable: false },
+      'reminder-validation': { error: 'VALIDATION_ERROR', message: 'The reminder action is invalid.', retryable: false },
+      'reminder-retryable': { error: 'TEMPORARILY_UNAVAILABLE', message: 'The reminder service is temporarily unavailable.', retryable: true },
+      'reminder-terminal': { error: 'OPERATION_FAILED', message: 'The reminder service failed permanently.', retryable: false },
+      'workflow-invalid-client': { error: 'INVALID_CLIENT', message: 'The workflow client credentials are invalid.', retryable: false },
+      'workflow-invalid-token': { error: 'INVALID_TOKEN', message: 'The workflow access token is invalid or expired.', retryable: false },
+      'workflow-insufficient-scope': { error: 'INSUFFICIENT_SCOPE', message: 'The workflow token does not grant workflow.execute.', retryable: false },
+      'invalid-client': { error: 'INVALID_CLIENT', message: 'The workflow client credentials are invalid.', retryable: false },
+      'invalid-token': { error: 'INVALID_TOKEN', message: 'The workflow access token is invalid or expired.', retryable: false },
+      'insufficient-scope': { error: 'INSUFFICIENT_SCOPE', message: 'The workflow token does not grant workflow.execute.', retryable: false },
+      'smtp-421': { error: 'TEMPORARILY_UNAVAILABLE', message: 'SMTP 421 service is temporarily unavailable.', retryable: true },
+      'smtp-451': { error: 'TEMPORARILY_UNAVAILABLE', message: 'SMTP 451 service rejected the message temporarily.', retryable: true },
+      'smtp-550': { error: 'OPERATION_FAILED', message: 'SMTP 550 mailbox is unavailable.', retryable: false },
+      'smtp-553': { error: 'OPERATION_FAILED', message: 'SMTP 553 mailbox address is invalid.', retryable: false },
     },
     branding,
     public_content: publicContent,
@@ -454,6 +511,8 @@ export function createDefaultFixtureSet (): C311FixtureSet {
     notes,
     public_relationships: publicRelationships,
     public_notes: publicNotes,
+    categories,
+    custom_fields: customFields,
   }
 }
 

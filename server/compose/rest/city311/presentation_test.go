@@ -87,17 +87,53 @@ func TestPresentationHTTPContentHelpSanitisationAndValidation(t *testing.T) {
 	require.Equal(t, http.StatusOK, contentVersions.Code, contentVersions.Body.String())
 	require.Contains(t, contentVersions.Body.String(), `"total_count":4`)
 
-	helpUpdate := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/help/public.request.submit", map[string]any{
+	helpCurrent := executeJSON(t, router, http.MethodGet, "/api/v1/admin/help/public.request.submit?language=EN", nil, nil, admin.ID)
+	require.Equal(t, http.StatusOK, helpCurrent.Code, helpCurrent.Body.String())
+	require.Equal(t, `"1"`, helpCurrent.Header().Get("ETag"))
+	require.Contains(t, helpCurrent.Body.String(), `"state":"PUBLISHED"`)
+	helpPreview := executeJSON(t, router, http.MethodPost, "/api/v1/admin/help/public.request.submit/preview", map[string]any{
+		"language": "ES", "body": `<p>Describa el problema.</p><img src=x onerror=bad()>`,
+	}, nil, admin.ID)
+	require.Equal(t, http.StatusOK, helpPreview.Code, helpPreview.Body.String())
+	require.Contains(t, helpPreview.Body.String(), `"state":"DRAFT"`)
+	require.NotContains(t, helpPreview.Body.String(), "onerror")
+	helpMissingVersion := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/help/public.request.submit", map[string]any{
+		"language": "ES", "body": `<p>Describa el problema.</p>`,
+	}, nil, admin.ID)
+	require.Equal(t, http.StatusPreconditionRequired, helpMissingVersion.Code, helpMissingVersion.Body.String())
+	helpDraft := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/help/public.request.submit", map[string]any{
 		"language": "ES", "body": `<p>Describa el problema.</p><img src=x onerror=bad()>`,
 	}, map[string]string{contract.IfMatchHeader: `"1"`}, admin.ID)
-	require.Equal(t, http.StatusOK, helpUpdate.Code, helpUpdate.Body.String())
-	helpRequest := httptest.NewRequest(http.MethodGet, "/api/v1/public/help/public.request.submit", nil)
-	helpRequest.Header.Set("Accept-Language", "es-MX, en;q=0.8")
-	helpResponse := httptest.NewRecorder()
-	router.ServeHTTP(helpResponse, helpRequest.WithContext(auth.SetIdentityToContext(helpRequest.Context(), auth.Anonymous())))
-	require.Equal(t, http.StatusOK, helpResponse.Code, helpResponse.Body.String())
+	require.Equal(t, http.StatusOK, helpDraft.Code, helpDraft.Body.String())
+	require.Equal(t, `"2"`, helpDraft.Header().Get("ETag"))
+	require.Contains(t, helpDraft.Body.String(), `"published":false`)
+
+	helpBeforePublish := executeHelpRequest(t, router, "es-MX, en;q=0.8")
+	require.NotContains(t, helpBeforePublish.Body.String(), "Describa el problema")
+	helpPublished := executeJSON(t, router, http.MethodPost, "/api/v1/admin/help/public.request.submit/publish?language=ES", map[string]any{}, map[string]string{contract.IfMatchHeader: `"2"`}, admin.ID)
+	require.Equal(t, http.StatusOK, helpPublished.Code, helpPublished.Body.String())
+	require.Equal(t, `"3"`, helpPublished.Header().Get("ETag"))
+	require.Contains(t, helpPublished.Body.String(), `"state":"PUBLISHED"`)
+	helpResponse := executeHelpRequest(t, router, "es-MX, en;q=0.8")
 	require.Contains(t, helpResponse.Body.String(), "Describa el problema")
 	require.NotContains(t, helpResponse.Body.String(), "onerror")
+	helpVersions := executeJSON(t, router, http.MethodGet, "/api/v1/admin/help/public.request.submit/versions?language=ES", nil, nil, admin.ID)
+	require.Equal(t, http.StatusOK, helpVersions.Code, helpVersions.Body.String())
+	require.Contains(t, helpVersions.Body.String(), `"total_count":2`)
+
+	helpSecondDraft := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/help/public.request.submit", map[string]any{
+		"language": "ES", "body": `<p>Segundo texto.</p>`,
+	}, map[string]string{contract.IfMatchHeader: `"3"`}, admin.ID)
+	require.Equal(t, http.StatusOK, helpSecondDraft.Code, helpSecondDraft.Body.String())
+	helpStillPublished := executeHelpRequest(t, router, "es")
+	require.Contains(t, helpStillPublished.Body.String(), "Describa el problema")
+	helpRolledBack := executeJSON(t, router, http.MethodPost, "/api/v1/admin/help/public.request.submit/rollback?language=ES", map[string]any{"target_version": 3}, map[string]string{contract.IfMatchHeader: `"4"`}, admin.ID)
+	require.Equal(t, http.StatusOK, helpRolledBack.Code, helpRolledBack.Body.String())
+	require.Equal(t, `"5"`, helpRolledBack.Header().Get("ETag"))
+	require.Contains(t, helpRolledBack.Body.String(), "Describa el problema")
+	helpStale := executeJSON(t, router, http.MethodPost, "/api/v1/admin/help/public.request.submit/publish?language=ES", map[string]any{}, map[string]string{contract.IfMatchHeader: `"4"`}, admin.ID)
+	require.Equal(t, http.StatusConflict, helpStale.Code, helpStale.Body.String())
+	require.Contains(t, helpStale.Body.String(), `"current_version":5`)
 
 	badBody := executeJSON(t, router, http.MethodPatch, "/api/v1/admin/content/HOME", map[string]any{"unknown": true}, map[string]string{contract.IfMatchHeader: `"4"`}, admin.ID)
 	require.Equal(t, http.StatusUnprocessableEntity, badBody.Code, badBody.Body.String())
@@ -120,10 +156,25 @@ func TestPresentationHTTPRejectsAuthenticatedActorsWithoutCityRole(t *testing.T)
 		{http.MethodGet, "/api/v1/admin/content/HOME", nil, nil},
 		{http.MethodPost, "/api/v1/admin/content/HOME/preview", map[string]any{"body": "<p>Preview</p>"}, nil},
 		{http.MethodGet, "/api/v1/admin/content/HOME/versions", nil, nil},
+		{http.MethodGet, "/api/v1/admin/help/public.request.submit?language=EN", nil, nil},
+		{http.MethodPost, "/api/v1/admin/help/public.request.submit/preview", map[string]any{"language": "EN", "body": "<p>Help</p>"}, nil},
 		{http.MethodPatch, "/api/v1/admin/help/public.request.submit", map[string]any{"language": "EN", "body": "<p>Help</p>"}, map[string]string{contract.IfMatchHeader: `"1"`}},
+		{http.MethodPost, "/api/v1/admin/help/public.request.submit/publish?language=EN", map[string]any{}, map[string]string{contract.IfMatchHeader: `"1"`}},
+		{http.MethodGet, "/api/v1/admin/help/public.request.submit/versions?language=EN", nil, nil},
+		{http.MethodPost, "/api/v1/admin/help/public.request.submit/rollback?language=EN", map[string]any{"target_version": 1}, map[string]string{contract.IfMatchHeader: `"1"`}},
 	}
 	for _, test := range tests {
 		response := executeJSON(t, router, test.method, test.path, test.body, test.headers, unknownID)
 		require.Equal(t, http.StatusForbidden, response.Code, test.path+": "+response.Body.String())
 	}
+}
+
+func executeHelpRequest(t *testing.T, router http.Handler, language string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/public/help/public.request.submit", nil)
+	request.Header.Set("Accept-Language", language)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request.WithContext(auth.SetIdentityToContext(request.Context(), auth.Anonymous())))
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	return response
 }

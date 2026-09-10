@@ -123,7 +123,7 @@ func clientSchemas() map[string]map[string]interface{} {
 			"display_name":       stringProperty(1, 120),
 			"phone_numbers":      map[string]interface{}{"type": "array", "max_items": 3, "items_ref": "phone_number"},
 			"addresses":          map[string]interface{}{"type": "array", "max_items": 5, "items_ref": "structured_address", "maximum_primary_items": 1},
-			"primary_category":   map[string]interface{}{"enum_ref": "contact_category"},
+			"primary_category":   activeCategoryCodeProperty(),
 			"preferred_language": map[string]interface{}{"enum_ref": "language"},
 		}),
 		"password_change": object([]string{"current_password", "new_password"}, map[string]interface{}{
@@ -176,10 +176,12 @@ func clientSchemas() map[string]map[string]interface{} {
 			"published":   map[string]interface{}{"type": "boolean"},
 		}),
 		"content_write": object([]string{"body"}, map[string]interface{}{"body": map[string]interface{}{"type": "string", "format": "sanitized_html"}}),
-		"help_content": versionedObject([]string{"help_key", "language", "body"}, map[string]interface{}{
-			"help_key": map[string]interface{}{"type": "string", "enum_source": "help_keys"},
-			"language": map[string]interface{}{"enum_ref": "language"},
-			"body":     map[string]interface{}{"type": "string", "format": "sanitized_html"},
+		"help_content": versionedObject([]string{"help_key", "language", "body", "state", "published"}, map[string]interface{}{
+			"help_key":  map[string]interface{}{"type": "string", "enum_source": "help_keys"},
+			"language":  map[string]interface{}{"enum_ref": "language"},
+			"body":      map[string]interface{}{"type": "string", "format": "sanitized_html"},
+			"state":     map[string]interface{}{"enum": []string{"DRAFT", "PUBLISHED"}},
+			"published": map[string]interface{}{"type": "boolean"},
 		}),
 		"help_write": object([]string{"language", "body"}, map[string]interface{}{
 			"language": map[string]interface{}{"enum_ref": "language"}, "body": map[string]interface{}{"type": "string", "format": "sanitized_html"},
@@ -256,8 +258,8 @@ func clientSchemas() map[string]map[string]interface{} {
 			"department_code": map[string]interface{}{"enum_ref": "department_code"}, "district_codes": arrayEnum("district_code"), "reason": map[string]interface{}{"type": "string", "min_length": 1},
 		}),
 		"rollback": object([]string{"target_version"}, map[string]interface{}{"target_version": map[string]interface{}{"type": "integer", "minimum": 1}}),
-		"category": versionedObject([]string{"code", "active"}, map[string]interface{}{
-			"code": map[string]interface{}{"type": "string"}, "active": map[string]interface{}{"type": "boolean"}, "labels": localizedStringsProperty(),
+		"category": versionedObject([]string{"code", "active", "labels"}, map[string]interface{}{
+			"code": map[string]interface{}{"type": "string", "stable": true, "immutable": true}, "active": map[string]interface{}{"type": "boolean"}, "labels": localizedStringsProperty(),
 		}),
 		"category_write": object([]string{"code", "active", "labels"}, map[string]interface{}{
 			"code": map[string]interface{}{"type": "string"}, "active": map[string]interface{}{"type": "boolean"}, "labels": localizedStringsProperty(),
@@ -396,6 +398,18 @@ func versionedObject(required []string, properties map[string]interface{}) map[s
 
 func arrayEnum(enum string) map[string]interface{} {
 	return map[string]interface{}{"type": "array", "unique_items": true, "items": map[string]interface{}{"enum_ref": enum}}
+}
+
+func activeCategoryCodeProperty() map[string]interface{} {
+	return map[string]interface{}{
+		"type":                    "string",
+		"min_length":              1,
+		"max_length":              64,
+		"pattern":                 "^[A-Z][A-Z0-9_]*$",
+		"must_be_active":          true,
+		"vocabulary_endpoint":     "admin_categories_list",
+		"initial_values_enum_ref": "contact_category",
+	}
 }
 
 func stringArray() map[string]interface{} {

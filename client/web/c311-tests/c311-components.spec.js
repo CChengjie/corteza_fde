@@ -7,8 +7,12 @@ import { formatC311DateTime as mockFormatC311DateTime } from './time-test-helper
 import Portal from '../compose/src/views/C311/Portal.vue'
 import PublicPortal from '../compose/src/views/C311/PublicPortal.vue'
 import Staff from '../admin/src/views/C311/Staff.vue'
+import Extensions from '../admin/src/views/C311/Extensions.vue'
+import Config from '../admin/src/views/C311/Config.vue'
 import composeRoutes from '../compose/src/views/routes'
 import adminRoutes from '../admin/src/views/routes'
+
+const flushPromises = () => new Promise(resolve => setTimeout(resolve, 0))
 
 jest.mock('@cortezaproject/corteza-js', () => ({
   formatC311DateTime: value => mockFormatC311DateTime(value, 'en-US'),
@@ -52,6 +56,9 @@ jest.mock('@cortezaproject/corteza-vue', () => ({
   },
   c311: {
     c311StateForError (error) {
+      if (error?.status === 401 || error?.status === 403) return 'forbidden'
+      if (error?.status === 404) return 'not-found'
+      if (error?.status === 422) return 'validation-error'
       if (error?.status === 503 || error?.retryable) return 'retryable-error'
       return 'terminal-error'
     },
@@ -632,7 +639,53 @@ describe('C311 shared components', () => {
     expect(wrapper.find('[data-c311-action="reassign-request"]').exists()).toBe(false)
     await wrapper.find('[data-c311-action="transition-request"]').trigger('click')
     expect(provider.transitionStaffRequest).not.toHaveBeenCalled()
-    expect(wrapper.find('[data-c311-action-message]').text()).toContain('next staff workflow')
+    expect(wrapper.find('[data-c311-form="triage"]').exists()).toBe(true)
+    expect(wrapper.find('[data-c311-triage-service-type]').text()).toBe('POTHOLE')
+    expect(wrapper.find('[data-c311-triage-department]').text()).toBe('STREETS')
+    await wrapper.find('#c311-triage-reason').setValue('Reviewed the triage fields')
+    await wrapper.find('[data-c311-action="confirm-triage-details"]').setChecked(true)
+    await wrapper.find('[data-c311-form="triage"]').trigger('submit')
+    expect(provider.transitionStaffRequest).toHaveBeenCalledWith('request-fixture-001', { to_status: 'TRIAGED', reason: 'Reviewed the triage fields' }, { expectedVersion: 1 })
+  })
+
+  it('continues the employee status flow from triaged to assigned', async () => {
+    const detail = {
+      request: { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Fixture request', status: 'TRIAGED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 2 },
+      available_actions: ['ASSIGN'], primary_assignee_id: null, collaborator_ids: [], reminders: [], history: [], audit: [], external_work_order: null,
+    }
+    const provider = { getStaffRequest: jest.fn().mockResolvedValue(detail), transitionStaffRequest: jest.fn().mockResolvedValue({ ...detail, request: { ...detail.request, status: 'ASSIGNED', version: 3 }, available_actions: ['START_PROGRESS'] }) }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff.detail', params: { request_id: 'request-fixture-001' } }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_detail', 'staff_request_transition'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
+    })
+    await wrapper.vm.loadDetail()
+    await wrapper.find('[data-c311-action="transition-status"]').trigger('click')
+    expect(wrapper.find('#c311-transition-status').element.value).toBe('ASSIGNED')
+    await wrapper.find('[data-c311-form="transition"]').trigger('submit')
+    expect(provider.transitionStaffRequest).toHaveBeenCalledWith('request-fixture-001', { to_status: 'ASSIGNED' }, { expectedVersion: 2 })
+  })
+
+  it('adds and removes a selected collaborator with the current record version', async () => {
+    const detail = {
+      request: { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Fixture request', status: 'TRIAGED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 2 },
+      available_actions: ['ASSIGN'], primary_assignee_id: null, collaborator_ids: [], reminders: [], history: [], audit: [], external_work_order: null,
+    }
+    const added = { ...detail, request: { ...detail.request, version: 3 }, collaborator_ids: ['staff-fixture-002'] }
+    const removed = { ...detail, request: { ...detail.request, version: 4 }, collaborator_ids: [] }
+    const provider = { getStaffRequest: jest.fn().mockResolvedValue(detail), addStaffCollaborator: jest.fn().mockResolvedValue(added), removeStaffCollaborator: jest.fn().mockResolvedValue(removed) }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff.detail', params: { request_id: 'request-fixture-001' } }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_detail', 'staff_collaborator_add', 'staff_collaborator_remove'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
+    })
+    await wrapper.vm.loadDetail()
+    await wrapper.find('[data-c311-action="manage-collaborators"]').trigger('click')
+    await wrapper.find('#c311-collaborator-id').setValue('staff-fixture-002')
+    await wrapper.find('#c311-collaborator-reason').setValue('Needs specialist review')
+    await wrapper.vm.addCollaborator()
+    await wrapper.vm.$nextTick()
+    expect(provider.addStaffCollaborator).toHaveBeenCalledWith('request-fixture-001', 'staff-fixture-002', { reason: 'Needs specialist review' }, { expectedVersion: 2 })
+    await wrapper.find('[data-c311-action="remove-collaborator-staff-fixture-002"]').trigger('click')
+    expect(provider.removeStaffCollaborator).toHaveBeenCalledWith('request-fixture-001', 'staff-fixture-002', { reason: 'Needs specialist review' }, { expectedVersion: 3 })
   })
 
   it('renders the localized API status value and collaborator entry', async () => {
@@ -674,6 +727,60 @@ describe('C311 shared components', () => {
     expect(wrapper.find('[data-c311-action="transition-request"]').exists()).toBe(false)
   })
 
+  it('keeps reassignment available for assigned and in-progress requests', async () => {
+    const detail = {
+      request: { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Fixture request', status: 'ASSIGNED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 3 },
+      available_actions: ['START_PROGRESS'], primary_assignee_id: 'staff-old', collaborator_ids: [], reminders: [], history: [], audit: [], external_work_order: null,
+    }
+    const provider = { getStaffRequest: jest.fn().mockResolvedValue(detail) }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff.detail', params: { request_id: 'request-fixture-001' } }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_detail', 'staff_request_reassign'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
+    })
+    await wrapper.vm.loadDetail()
+    expect(wrapper.find('[data-c311-action="reassign-request"]').exists()).toBe(true)
+    wrapper.vm.detail.request.status = 'IN_PROGRESS'
+    wrapper.vm.detail.available_actions = ['RESOLVE']
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-c311-action="reassign-request"]').exists()).toBe(true)
+  })
+
+  it('renders reassignment notifications and complete CivicWorks projection and selects reminder channels', async () => {
+    const detail = {
+      request: { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Fixture request', status: 'ASSIGNED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 3 },
+      available_actions: ['START_PROGRESS'], primary_assignee_id: 'staff-new', collaborator_ids: [], reminders: [], history: [], audit: [],
+      assignment_notifications: [
+        { notification_id: 'notification-1', recipient_staff_id: 'staff-old', recipient_role: 'FORMER_PRIMARY_ASSIGNEE', result: 'SENT', occurred_at: '2026-01-15T15:00:00.000Z' },
+        { notification_id: 'notification-2', recipient_staff_id: 'staff-new', recipient_role: 'NEW_PRIMARY_ASSIGNEE', result: 'SENT', occurred_at: '2026-01-15T15:00:00.000Z' },
+      ],
+      external_work_order: { work_order_id: 'cw-001', source_case_id: 'request-fixture-001', service_request_number: 'SR-2026-00001', status: 'ASSIGNED', external_status_url: 'https://civicworks.fixture.invalid/ui/work-orders/cw-001', version: 1, created_at: '2026-01-15T15:00:00.000Z', updated_at: '2026-01-15T15:00:00.000Z' },
+    }
+    const reminder = { reminder_id: 'reminder-email', request_id: 'request-fixture-001', title: 'Email follow-up', due_at: '2026-01-18T15:00:00.000Z', timezone: 'America/New_York', recipient_staff_id: 'staff-new', channel: 'EMAIL', status: 'SCHEDULED' }
+    const provider = { getStaffRequest: jest.fn().mockResolvedValue(detail), createStaffReminder: jest.fn().mockResolvedValue(reminder) }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff.detail', params: { request_id: 'request-fixture-001' } }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_detail', 'staff_reminder_create'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
+    })
+    await wrapper.vm.loadDetail()
+
+    expect(wrapper.findAll('[data-c311-assignment-notification]').length).toBe(2)
+    expect(wrapper.find('[data-c311-work-order-number]').text()).toBe('SR-2026-00001')
+    expect(wrapper.find('[data-c311-work-order-status]').text()).toBe('ASSIGNED')
+    expect(wrapper.find('[data-c311-work-order-url]').attributes('href')).toBe('https://civicworks.fixture.invalid/ui/work-orders/cw-001')
+
+    await wrapper.find('[data-c311-action="create-reminder"]').trigger('click')
+    await wrapper.find('#c311-reminder-channel').setValue('EMAIL')
+    await wrapper.find('#c311-reminder-title').setValue('Email follow-up')
+    await wrapper.find('#c311-reminder-due').setValue('2026-01-18T10:00')
+    await wrapper.find('#c311-reminder-recipient').setValue('staff-new')
+    await wrapper.find('[data-c311-form="reminder"]').trigger('submit')
+    await flushPromises()
+    expect(provider.createStaffReminder.mock.calls[0][1]).toMatchObject({ channel: 'EMAIL' })
+    const reminderItem = wrapper.find('[data-c311-reminder-id="reminder-email"]')
+    expect(reminderItem.find('[data-c311-reminder-recipient]').text()).toContain('staff-new')
+    expect(reminderItem.find('[data-c311-reminder-channel]').text()).toContain('EMAIL')
+  })
+
   it('retries the current detail route after a failed detail load', async () => {
     const detail = { request: { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Fixture request', status: 'SUBMITTED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 1 }, available_actions: [], collaborator_ids: [], reminders: [], history: [], audit: [], external_work_order: null }
     const provider = { getStaffRequest: jest.fn().mockRejectedValueOnce({ status: 503, retryable: true }).mockRejectedValueOnce({ status: 503, retryable: true }).mockResolvedValueOnce(detail) }
@@ -700,12 +807,118 @@ describe('C311 shared components', () => {
       stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
     })
     await wrapper.vm.loadDetail()
-    expect(wrapper.find('[data-c311-action="complete-reminder"]').exists()).toBe(true)
+    expect(wrapper.find('[data-c311-action="complete-reminder-reminder-fixture-001"]').exists()).toBe(true)
     expect(wrapper.find('[data-c311-action="link-constituent"]').exists()).toBe(true)
     expect(wrapper.find('[data-c311-action="unlink-constituent"]').exists()).toBe(true)
     expect(wrapper.find('[data-c311-action="reassign-request"]').exists()).toBe(false)
     expect(wrapper.find('[data-c311-audit]').exists()).toBe(false)
     expect(wrapper.find('[data-c311-audit-unavailable]').exists()).toBe(true)
+  })
+
+  it('supports selecting reminders for snooze, complete and cancel actions', async () => {
+    const reminders = [
+      { reminder_id: 'reminder-1', title: 'First', due_at: '2026-01-16T15:00:00.000Z', status: 'SCHEDULED' },
+      { reminder_id: 'reminder-2', title: 'Second', due_at: '2026-01-16T16:00:00.000Z', status: 'SCHEDULED' },
+      { reminder_id: 'reminder-3', title: 'Third', due_at: '2026-01-16T17:00:00.000Z', status: 'SCHEDULED' },
+    ]
+    const detail = { request: { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Fixture', status: 'SUBMITTED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 1 }, available_actions: ['TRIAGE'], collaborator_ids: [], reminders, history: [], audit: [] }
+    const provider = {
+      getStaffRequest: jest.fn().mockResolvedValue(detail),
+      actionStaffReminder: jest.fn((id, action, input) => Promise.resolve({ ...reminders.find(item => item.reminder_id === id), status: action === 'COMPLETE' ? 'COMPLETED' : action === 'CANCEL' ? 'CANCELLED' : 'SNOOZED', ...(input?.due_at ? { due_at: input.due_at, history: [{ action: 'SNOOZE', previous_due_at: reminders[0].due_at, due_at: input.due_at }] } : {}) })),
+    }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff.detail', params: { request_id: 'request-fixture-001' } }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_detail', 'staff_reminder_action'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
+    })
+    await wrapper.vm.loadDetail()
+    await wrapper.find('[data-c311-action="snooze-reminder-reminder-1"]').trigger('click')
+    await wrapper.find('#c311-reminder-action-due').setValue('2026-01-17T15:00')
+    await wrapper.find('[data-c311-form="reminder-action"]').trigger('submit')
+    expect(provider.actionStaffReminder).toHaveBeenNthCalledWith(1, 'reminder-1', 'SNOOZE', { due_at: expect.stringContaining('2026-01-17T') })
+    await wrapper.find('[data-c311-action="complete-reminder-reminder-2"]').trigger('click')
+    expect(provider.actionStaffReminder).toHaveBeenNthCalledWith(2, 'reminder-2', 'COMPLETE', {})
+    await wrapper.find('[data-c311-action="cancel-reminder-reminder-3"]').trigger('click')
+    expect(provider.actionStaffReminder).toHaveBeenNthCalledWith(3, 'reminder-3', 'CANCEL', {})
+    expect(wrapper.find('[data-c311-reminder-history]').exists()).toBe(true)
+  })
+
+  it('requires a reload before reapplying a version-conflicted staff operation', async () => {
+    const detail = { request: { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Fixture', status: 'TRIAGED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 2 }, available_actions: ['ASSIGN'], collaborator_ids: [], reminders: [], history: [], audit: [] }
+    const serverDetail = { ...detail, request: { ...detail.request, version: 7 } }
+    const provider = { getStaffRequest: jest.fn().mockResolvedValue(serverDetail) }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff.detail', params: { request_id: 'request-fixture-001' } }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_detail', 'staff_request_transition'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
+    })
+    wrapper.vm.detail = detail
+    wrapper.vm.state = 'populated'
+    wrapper.vm.lastAction = jest.fn(() => wrapper.vm.runMutation(() => Promise.resolve({ ...serverDetail, request: { ...serverDetail.request, version: 8 } }), 'updated'))
+    await wrapper.vm.runMutation(() => Promise.reject({ status: 409, message: 'Changed', current_version: 7 }), 'updated')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-c311-current-version]').text()).toContain('7')
+    expect(wrapper.find('[data-c311-action="reapply-action"]').exists()).toBe(false)
+    await wrapper.vm.reloadConflictVersion()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-c311-action="reapply-action"]').exists()).toBe(true)
+    await wrapper.find('[data-c311-action="reapply-action"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.vm.lastAction).toHaveBeenCalledTimes(1)
+    expect(wrapper.vm.detail.request.version).toBe(8)
+    expect(wrapper.vm.actionMessage).toBe('updated')
+  })
+
+  it('shows bulk count, changes, failing request and gated conflict recovery', async () => {
+    const item = { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'Fixture', status: 'SUBMITTED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 1 }
+    const currentItem = { ...item, version: 2 }
+    const provider = {
+      listStaffRequests: jest.fn().mockResolvedValueOnce({ items: [item], total_count: 1, next_page_token: null }).mockResolvedValue({ items: [currentItem], total_count: 1, next_page_token: null }),
+      bulkStaffRequests: jest.fn().mockRejectedValueOnce({ status: 409, message: 'Changed', current_version: 2, failing_request_id: item.request_id }).mockResolvedValue({ updated_count: 1, updated_request_ids: [item.request_id] }),
+    }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff', params: {} }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_queue', 'staff_request_bulk'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
+    })
+    await wrapper.vm.load()
+    wrapper.vm.selectedRequestIds = [item.request_id]
+    wrapper.vm.bulkForm.staff_note = 'Reviewed together'
+    wrapper.vm.openBulkConfirmation()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-c311-bulk-count]').text()).toBe('1')
+    expect(wrapper.find('[data-c311-bulk-changes]').text()).toContain('staff_note: Reviewed together')
+    await wrapper.vm.submitBulk()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-c311-bulk-failing-request]').text()).toContain(item.request_id)
+    expect(wrapper.find('[data-c311-bulk-current-version]').text()).toContain('2')
+    expect(wrapper.find('[data-c311-action="reapply-bulk"]').exists()).toBe(false)
+    await wrapper.vm.reloadBulkConflict()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-c311-action="reapply-bulk"]').exists()).toBe(true)
+    await wrapper.find('[data-c311-action="reapply-bulk"]').trigger('click')
+    await flushPromises()
+    expect(provider.bulkStaffRequests).toHaveBeenCalledTimes(2)
+    expect(provider.bulkStaffRequests.mock.calls[1][0].request_items).toEqual([{ request_id: item.request_id, expected_version: 2 }])
+    expect(provider.bulkStaffRequests.mock.calls[1][1]).toEqual(provider.bulkStaffRequests.mock.calls[0][1])
+    expect(wrapper.vm.bulkMessage).toContain('1')
+  })
+
+  it('submits only currently visible selections and exposes bulk priority editing', async () => {
+    const first = { request_id: 'request-fixture-001', request_number: 'SR-2026-00001', summary: 'First', status: 'SUBMITTED', service_type: 'POTHOLE', owning_department: 'STREETS', version: 1 }
+    const second = { ...first, request_id: 'request-fixture-002', request_number: 'SR-2026-00002', summary: 'Second' }
+    const provider = { listStaffRequests: jest.fn().mockResolvedValue({ items: [first, second], total_count: 2, next_page_token: null }), bulkStaffRequests: jest.fn().mockResolvedValue({ updated_count: 1, updated_request_ids: [first.request_id] }) }
+    const wrapper = mount(Staff, {
+      mocks: { ...mocks, $route: { name: 'c311.staff', params: {} }, $C311: { provider, session: { actor: { actor_id: 'staff-1', capabilities: ['staff_request_queue', 'staff_request_bulk'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-responsive-data': ChildStub },
+    })
+    await wrapper.vm.load()
+    wrapper.vm.selectedRequestIds = [first.request_id, second.request_id]
+    wrapper.vm.items = [first]
+    wrapper.vm.bulkForm.priority = 'HIGH'
+    wrapper.vm.openBulkConfirmation()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('#c311-bulk-priority').exists()).toBe(true)
+    expect(wrapper.find('[data-c311-bulk-count]').text()).toBe('1')
+    await wrapper.vm.submitBulk()
+    expect(provider.bulkStaffRequests.mock.calls[0][0].request_items).toEqual([{ request_id: first.request_id, expected_version: 1 }])
   })
 
   it('renders anonymous public identity navigation and protects private entries', async () => {
@@ -1656,6 +1869,243 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.form.summary).toBe('Keep this summary')
     expect(wrapper.vm.form.description).toBe('Keep this description while the map retries.')
     expect(wrapper.vm.form.requester.email).toBe('resident@example.test')
+  })
+
+  it('updates and cancels calendar events by importing contract-backed ICS', async () => {
+    const provider = {
+      exportCalendar: jest.fn().mockResolvedValue({ body: 'BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:calendar-1\nSUMMARY:Fixture event\nSTATUS:CONFIRMED\nEND:VEVENT\nEND:VCALENDAR\n' }),
+      importCalendar: jest.fn().mockResolvedValue({ operation_id: 'calendar-operation', status: 'PENDING' }),
+      getOperation: jest.fn().mockResolvedValue({ operation_id: 'calendar-operation', kind: 'calendar_import', status: 'SUCCEEDED', result: { summary: { updated: 1 } } }),
+    }
+    const wrapper = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/calendar', query: {} }, $C311: { provider, session: { actor: { capabilities: ['calendar_import', 'calendar_export'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    await wrapper.vm.updateCalendarEvent(wrapper.vm.calendarEvents[0])
+    await wrapper.vm.cancelCalendarEvent(wrapper.vm.calendarEvents[0])
+    expect(provider.importCalendar).toHaveBeenNthCalledWith(1, { ics: expect.stringContaining('UID:calendar-1\r\nSUMMARY:Fixture event (updated)') })
+    expect(provider.importCalendar).toHaveBeenNthCalledWith(2, { ics: expect.stringContaining('STATUS:CANCELLED') })
+    expect(provider.getOperation).toHaveBeenCalledTimes(2)
+    expect(provider.exportCalendar).toHaveBeenCalledTimes(3)
+    const utcBody = wrapper.vm.calendarImportBody({ uid: 'calendar-utc', summary: 'UTC event', dtstart: '20260115T150000Z', dtend: '20260115T160000Z', last_modified: '20260115T140000Z' })
+    expect(utcBody).toContain('DTSTART:20260115T150000Z')
+    expect(utcBody).not.toContain('DTSTART;TZID=')
+  })
+
+  it('observes mail delivery through the contract status endpoint', async () => {
+    const provider = {
+      sendMail: jest.fn().mockResolvedValue({ delivery_id: 'delivery-1', status: 'PENDING', attempts: 1 }),
+      getMailDelivery: jest.fn().mockResolvedValue({ delivery_id: 'delivery-1', status: 'DELIVERED', attempts: 2 }),
+    }
+    const wrapper = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/mail', query: {} }, $C311: { provider, session: { actor: { capabilities: ['mail_send'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    wrapper.vm.mail = { to: 'fixture@example.test', subject: 'Fixture', text: 'Message', template_id: '' }
+    await wrapper.vm.sendMail()
+    await wrapper.vm.refreshMailDelivery()
+    expect(provider.sendMail).toHaveBeenCalledTimes(1)
+    expect(provider.getMailDelivery).toHaveBeenCalledWith('delivery-1')
+    expect(wrapper.vm.delivery).toEqual(expect.objectContaining({ status: 'DELIVERED', attempts: 2 }))
+  })
+
+  it('validates report limits, sends filters, and preserves UTF-8 CSV content', async () => {
+    const provider = {
+      listReportCatalogue: jest.fn().mockResolvedValue({ items: [{ report_key: 'service_requests', name: 'Catalogue', supported_filters: ['status'], supported_grouping: ['status'], supported_sort: ['created_at'] }] }),
+      listReports: jest.fn().mockResolvedValue({ items: [] }),
+      createReport: jest.fn().mockResolvedValue({ report_id: 'report-1', name: 'Fixture report', entity: 'service_requests', columns: ['request_number', 'summary', 'status'], filters: { status: 'SUBMITTED' }, sort: [], version: 1 }),
+      exportReport: jest.fn().mockResolvedValue({ operation_id: 'export-1', status: 'PENDING' }),
+      getOperation: jest.fn().mockResolvedValue({ operation_id: 'export-1', kind: 'report_export', status: 'SUCCEEDED', result: { body: '"summary"\r\n"城市 311 ""fixture"""' } }),
+    }
+    const wrapper = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/reports', query: {} }, $C311: { provider, session: { actor: { capabilities: ['report_catalogue', 'saved_report_create', 'report_export'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    wrapper.vm.reportForm = { name: 'Too many', columnsText: Array.from({ length: 21 }, (_, index) => `column_${index}`).join(','), grouping: '', sortText: '', filtersText: '{}' }
+    expect(wrapper.vm.reportValid).toBe(false)
+    wrapper.vm.reportForm = { name: 'Fixture report', columnsText: 'request_number,summary,status', grouping: '', sortText: '-created_at', filtersText: '{"status":"SUBMITTED"}' }
+    await wrapper.vm.saveReport()
+    await wrapper.vm.exportReport(wrapper.vm.reports[0])
+    expect(provider.createReport).toHaveBeenCalledWith(expect.objectContaining({ filters: { status: 'SUBMITTED' } }))
+    expect(wrapper.vm.csvPreview).toContain('城市 311 ""fixture""')
+  })
+
+  it('executes the workflow OAuth2 action and displays its execution result', async () => {
+    const provider = {
+      executeWorkflowAction: jest.fn().mockResolvedValue({ execution_id: 'execution-1', accepted_at: '2026-01-15T15:00:00.000Z' }),
+      getWorkflowExecution: jest.fn().mockResolvedValue({ execution_id: 'execution-1', outcome: 'SUCCEEDED', succeeded: true }),
+    }
+    const wrapper = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/oauth', query: {} }, $C311: { provider, session: { actor: { scopes: ['workflow.execute'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await wrapper.vm.executeWorkflowOAuthAction()
+    expect(provider.executeWorkflowAction).toHaveBeenCalledWith({ action: 'notify_department', request_id: 'request-fixture-001', payload: {} }, { idempotencyKey: 'workflow-action-request-fixture-001-notify_department' })
+    expect(provider.getWorkflowExecution).toHaveBeenCalledWith('execution-1')
+    expect(wrapper.vm.oauthStatus).toContain('SUCCEEDED')
+  })
+
+  it('hides OAuth navigation without scope and sends complete audit filters', async () => {
+    const provider = {
+      listAuditEvents: jest.fn().mockResolvedValue({ items: [], next_page_token: null }),
+    }
+    const denied = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/audit', query: {} }, $C311: { provider, session: { actor: { capabilities: ['audit_list'], scopes: [] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    expect(denied.vm.navItems.some(item => item.route === '/c311/staff/oauth')).toBe(false)
+
+    const allowed = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/audit', query: {} }, $C311: { provider, session: { actor: { capabilities: ['audit_list'], scopes: ['workflow.execute'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    expect(allowed.vm.navItems.some(item => item.route === '/c311/staff/oauth')).toBe(true)
+    allowed.vm.auditForm = { ...allowed.vm.auditForm, actorType: 'staff', entityId: 'request-fixture-001', entityType: 'service_request', requestId: 'request-fixture-001', sourceChannel: 'STAFF_IN_PERSON', occurredFrom: '2026-01-01T00:00:00.000Z', occurredTo: '2026-01-31T00:00:00.000Z' }
+    await allowed.vm.applyAuditFilters()
+    expect(provider.listAuditEvents).toHaveBeenLastCalledWith({
+      filters: {
+        actor_type: ['staff'],
+        entity_id: ['request-fixture-001'],
+        entity_type: ['service_request'],
+        request_id: ['request-fixture-001'],
+        source_channel: ['STAFF_IN_PERSON'],
+        occurred_from: '2026-01-01T00:00:00.000Z',
+        occurred_to: '2026-01-31T00:00:00.000Z',
+      },
+      page_size: 50,
+    })
+  })
+
+  it('keeps audit filters visible for empty results and maps load errors to C311 states', async () => {
+    const emptyProvider = {
+      listAuditEvents: jest.fn().mockResolvedValue({ items: [], next_page_token: null }),
+    }
+    const empty = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/audit', query: {} }, $C311: { provider: emptyProvider, session: { actor: { capabilities: ['audit_list'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    expect(empty.find('[data-c311-audit-filters]').exists()).toBe(true)
+    expect(empty.find('[data-c311-audit-empty]').exists()).toBe(true)
+
+    const denied = mount(Extensions, {
+      mocks: { ...mocks, $route: { path: '/c311/staff/workflows', query: {} }, $C311: { provider: { listWorkflows: jest.fn().mockRejectedValue({ status: 403, message: 'Forbidden' }) }, session: { actor: { capabilities: ['workflow_list'] } } } },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-data-state': DataStateStub, 'c311-main-nav': ChildStub },
+    })
+    await flushPromises()
+    expect(denied.vm.state).toBe('forbidden')
+  })
+
+  it('covers admin configuration lifecycle, labelled fields, and capability-gated actions', async () => {
+    const branding = { organisation_name: 'City 311', primary_colour: '#112233', accent_colour: '#445566', font_family: 'Arial', logo_url: '', public_header: 'Welcome', public_footer: 'Footer', version: 1, published: true }
+    const content = { content_key: 'HOME', body: 'Home content', version: 1, published: true }
+    const help = { help_key: 'public.request.submit', language: 'EN', body: 'Help content', version: 1, state: 'PUBLISHED', published: true }
+    const category = { code: 'GENERAL', labels: { EN: 'General', ES: 'General', VI: 'General' }, active: true, version: 1, updated_at: '2026-01-15T15:00:00.000Z' }
+    const field = { key: 'ward', labels: { EN: 'Ward' }, entity: 'service_request', field_type: 'SINGLE_CHOICE', required: false, active: true, choice_values: ['NORTH', 'SOUTH'], default: 'NORTH', validation: {}, version: 1, updated_at: '2026-01-15T15:00:00.000Z' }
+    const provider = {
+      getAdminBranding: jest.fn().mockResolvedValue(branding),
+      listBrandingVersions: jest.fn().mockResolvedValue({ items: [{ version: 1, published: true }] }),
+      updateBranding: jest.fn().mockResolvedValue({ ...branding, version: 2, published: false }),
+      previewBranding: jest.fn().mockResolvedValue({ ...branding, organisation_name: 'Preview' }),
+      publishBranding: jest.fn().mockResolvedValue({ ...branding, version: 2, published: true }),
+      rollbackBranding: jest.fn().mockResolvedValue({ ...branding, version: 3, published: true }),
+      getAdminContent: jest.fn().mockResolvedValue(content),
+      listAdminContentVersions: jest.fn().mockResolvedValue({ items: [{ version: 1, published: true }] }),
+      updateAdminContent: jest.fn().mockResolvedValue({ ...content, version: 2, published: false }),
+      previewAdminContent: jest.fn().mockResolvedValue({ ...content, body: 'Preview content' }),
+      publishAdminContent: jest.fn().mockResolvedValue({ ...content, version: 2, published: true }),
+      rollbackAdminContent: jest.fn().mockResolvedValue({ ...content, version: 3, published: true }),
+      getAdminHelp: jest.fn().mockResolvedValue(help),
+      listAdminHelpVersions: jest.fn().mockResolvedValue({ items: [{ version: 1, published: true }] }),
+      updateAdminHelp: jest.fn().mockResolvedValue({ ...help, version: 2, state: 'DRAFT', published: false }),
+      previewAdminHelp: jest.fn().mockResolvedValue({ ...help, body: 'Preview help', state: 'DRAFT', published: false }),
+      publishAdminHelp: jest.fn().mockResolvedValue({ ...help, version: 2, state: 'PUBLISHED', published: true }),
+      rollbackAdminHelp: jest.fn().mockResolvedValue({ ...help, version: 3, state: 'PUBLISHED', published: true }),
+      listAdminCategories: jest.fn().mockResolvedValue({ items: [category] }),
+      updateAdminCategory: jest.fn().mockResolvedValue({ ...category, version: 2 }),
+      createAdminCategory: jest.fn().mockResolvedValue({ ...category, code: 'PARKS' }),
+      listAdminCustomFields: jest.fn().mockResolvedValue({ items: [field] }),
+      updateAdminCustomField: jest.fn().mockResolvedValue({ ...field, version: 2 }),
+      createAdminCustomField: jest.fn().mockResolvedValue({ ...field, key: 'district' }),
+    }
+    const capabilities = [
+      'admin_branding_get', 'admin_branding_update', 'admin_branding_preview', 'admin_branding_publish', 'admin_branding_versions', 'admin_branding_rollback',
+      'admin_content_get', 'admin_content_update', 'admin_content_preview', 'admin_content_publish', 'admin_content_versions', 'admin_content_rollback',
+      'admin_help_get', 'admin_help_update', 'admin_help_preview', 'admin_help_publish', 'admin_help_versions', 'admin_help_rollback',
+      'admin_categories_list', 'admin_categories_create', 'admin_categories_update', 'admin_custom_fields_list', 'admin_custom_fields_create', 'admin_custom_fields_update',
+    ]
+    const runtime = { provider, session: { actor: { actor_id: 'actor-admin', capabilities } }, can: capability => capabilities.includes(capability) }
+    const wrapper = mount(Config, {
+      mocks: { ...mocks, $C311: runtime, $router: { replace: jest.fn() } },
+      stubs: { ...stubs, 'c311-app-shell': AppShellStub, 'c311-main-nav': ChildStub, 'c311-language-selector': ChildStub },
+    })
+    await flushPromises()
+    expect(wrapper.find('#c311-branding-organisation-name').exists()).toBe(true)
+    expect(wrapper.find('#c311-branding-organisation-name').attributes('id')).toBe('c311-branding-organisation-name')
+    await wrapper.vm.previewBranding()
+    await wrapper.vm.saveBranding()
+    await wrapper.vm.publishBranding()
+    await wrapper.vm.rollbackBranding(1)
+    expect(provider.previewBranding).toHaveBeenCalled()
+    expect(provider.updateBranding).toHaveBeenCalledWith(expect.objectContaining({ organisation_name: 'City 311' }), { expectedVersion: 1 })
+
+    await wrapper.vm.selectTab('content')
+    await flushPromises()
+    await wrapper.vm.previewContent()
+    await wrapper.vm.saveContent()
+    await wrapper.vm.publishContent()
+    await wrapper.vm.rollbackContent(1)
+    await wrapper.find('[data-c311-action="edit-help"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('#c311-help-body').exists()).toBe(true)
+    await wrapper.vm.previewHelp()
+    await wrapper.vm.saveHelp()
+    await wrapper.vm.publishHelp()
+    await wrapper.vm.rollbackHelp(1)
+    expect(provider.previewAdminHelp).toHaveBeenCalledWith('admin.branding.publish', expect.objectContaining({ language: 'EN' }))
+
+    await wrapper.vm.selectTab('categories')
+    await flushPromises()
+    expect(wrapper.find('[data-c311-category="GENERAL"] input').attributes('id')).toContain('c311-category-GENERAL')
+    await wrapper.vm.saveCategory(wrapper.vm.categories[0])
+    wrapper.vm.newCategory = { code: 'PARKS', label: 'Parks' }
+    await wrapper.vm.createCategory()
+    expect(provider.updateAdminCategory).toHaveBeenCalledWith('GENERAL', expect.any(Object), { expectedVersion: 1 })
+
+    await wrapper.vm.selectTab('fields')
+    await flushPromises()
+    await wrapper.vm.editField(field)
+    expect(wrapper.find('#c311-field-default').exists()).toBe(true)
+    await wrapper.vm.saveField()
+    expect(provider.updateAdminCustomField).toHaveBeenCalledWith('ward', expect.objectContaining({ default: 'NORTH' }), { expectedVersion: 1 })
+    expect(wrapper.find('[data-c311-action="save-branding"]').exists()).toBe(false)
+  })
+
+  it('preserves admin drafts when a version conflict is reloaded and reapplied', async () => {
+    const conflict = { code: 'VERSION_CONFLICT', currentVersion: 7, message: 'Conflict' }
+    const category = { code: 'GENERAL', labels: { EN: 'General' }, active: true, version: 1, updated_at: '2026-01-15T15:00:00.000Z' }
+    const provider = {
+      getAdminBranding: jest.fn().mockResolvedValue({ organisation_name: 'City 311', version: 1, published: true }),
+      listBrandingVersions: jest.fn().mockResolvedValue({ items: [] }),
+      listAdminCategories: jest.fn().mockResolvedValue({ items: [{ ...category, version: 2 }] }),
+      updateAdminCategory: jest.fn().mockRejectedValueOnce(conflict).mockResolvedValueOnce({ ...category, labels: { EN: 'Edited' }, version: 3 }),
+    }
+    const capabilities = ['admin_branding_get', 'admin_categories_list', 'admin_categories_update']
+    const wrapper = mount(Config, { mocks: { ...mocks, $C311: { provider, session: { actor: { capabilities } }, can: capability => capabilities.includes(capability) }, $router: { replace: jest.fn() } }, stubs: { ...stubs, 'c311-app-shell': AppShellStub, 'c311-main-nav': ChildStub, 'c311-language-selector': ChildStub } })
+    await flushPromises()
+    await wrapper.vm.selectTab('categories')
+    await flushPromises()
+    wrapper.vm.categories[0].labels.EN = 'Edited'
+    await wrapper.vm.saveCategory(wrapper.vm.categories[0])
+    expect(wrapper.vm.conflict.currentVersion).toBe(7)
+    await wrapper.vm.reloadConflict()
+    expect(wrapper.vm.conflict.reloaded).toBe(true)
+    await wrapper.vm.reapplyConflict()
+    expect(provider.updateAdminCategory).toHaveBeenCalledTimes(2)
   })
 
 })

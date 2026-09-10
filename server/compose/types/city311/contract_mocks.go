@@ -70,8 +70,49 @@ func clientMocks() map[string]MockContract {
 		}),
 		"public_help_submit": mock(200, map[string]interface{}{
 			"help_key": "public.request.submit", "language": "EN",
-			"body":    "<p>Describe the issue, choose its type, and provide the location where City service is needed.</p>",
-			"version": 1, "updated_at": "2026-08-25T10:00:00Z",
+			"body":  "<p>Describe the issue, choose its type, and provide the location where City service is needed.</p>",
+			"state": "PUBLISHED", "published": true, "version": 1, "updated_at": "2026-08-25T10:00:00Z",
+		}),
+		"admin_help_current": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "EN", "body": "<p>Describe the issue.</p>",
+			"state": "PUBLISHED", "published": true, "version": 1, "updated_at": "2026-08-25T10:00:00Z",
+		}),
+		"admin_help_preview": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>",
+			"state": "DRAFT", "published": false, "version": 2, "updated_at": "2026-08-25T10:01:00Z",
+		}),
+		"admin_help_draft": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>",
+			"state": "DRAFT", "published": false, "version": 2, "updated_at": "2026-08-25T10:02:00Z",
+		}),
+		"admin_help_published": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>",
+			"state": "PUBLISHED", "published": true, "version": 3, "updated_at": "2026-08-25T10:03:00Z",
+		}),
+		"admin_help_versions": mock(200, map[string]interface{}{
+			"items": []interface{}{
+				map[string]interface{}{"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>", "state": "PUBLISHED", "published": true, "version": 3, "updated_at": "2026-08-25T10:03:00Z"},
+				map[string]interface{}{"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>", "state": "DRAFT", "published": false, "version": 2, "updated_at": "2026-08-25T10:02:00Z"},
+			},
+			"next_page_token": nil, "total_count": 2, "applied_filters": map[string]interface{}{}, "sort": []string{"-version"},
+		}),
+		"admin_help_rolled_back": mock(200, map[string]interface{}{
+			"help_key": "public.request.submit", "language": "ES", "body": "<p>Describa el problema.</p>",
+			"state": "PUBLISHED", "published": true, "version": 5, "updated_at": "2026-08-25T10:05:00Z",
+		}),
+		"admin_help_update_request":   mock(0, map[string]interface{}{"language": "ES", "body": "<p>Describa el problema.</p>"}),
+		"admin_help_rollback_request": mock(0, map[string]interface{}{"target_version": 3}),
+		"admin_help_version_conflict": mock(409, MockVersionConflict(4)),
+		"admin_help_version_required": mock(428, APIError{
+			Error: ErrorExpectedVersionRequired, Message: "If-Match is required for this update.", Retryable: false,
+		}),
+		"admin_help_audit_events": mock(200, map[string]interface{}{
+			"items": []interface{}{
+				map[string]interface{}{"entity_type": "help", "entity_id": "public.request.submit", "event_type": "HELP_UPDATED", "actor_type": "staff", "actor_id": "staff-admin-1", "occurred_at": "2026-08-25T10:02:00Z", "source_channel": "STAFF_IN_PERSON", "before": map[string]interface{}{"version": 1}, "after": map[string]interface{}{"version": 2, "published": false}},
+				map[string]interface{}{"entity_type": "help", "entity_id": "public.request.submit", "event_type": "HELP_PUBLISHED", "actor_type": "staff", "actor_id": "staff-admin-1", "occurred_at": "2026-08-25T10:03:00Z", "source_channel": "STAFF_IN_PERSON", "before": map[string]interface{}{"version": 2}, "after": map[string]interface{}{"version": 3, "published": true}},
+				map[string]interface{}{"entity_type": "help", "entity_id": "public.request.submit", "event_type": "HELP_ROLLED_BACK", "actor_type": "staff", "actor_id": "staff-admin-1", "occurred_at": "2026-08-25T10:05:00Z", "source_channel": "STAFF_IN_PERSON", "before": map[string]interface{}{"version": 4}, "after": map[string]interface{}{"version": 5, "published": true}},
+			},
+			"next_page_token": nil, "total_count": 3, "applied_filters": map[string]interface{}{"entity_type": []string{"help"}}, "sort": []string{"-occurred_at"},
 		}),
 		"identity_configuration_effective": mock(200, map[string]interface{}{
 			"oidc_enabled": true, "saml_enabled": true,
@@ -100,6 +141,29 @@ func clientMocks() map[string]MockContract {
 		"civicworks_duplicate_acknowledged": {HTTPStatus: 204, Body: nil},
 		"civicworks_invalid_signature": mock(401, APIError{
 			Error: ErrorInvalidSignature, Message: "The CivicWorks event signature is invalid.", Retryable: false,
+		}),
+		"admin_category_updated": mock(200, map[string]interface{}{
+			"code": "VETERAN", "active": true, "labels": map[string]string{"EN": "Veteran", "ES": "Veterano", "VI": "Cựu chiến binh"},
+			"version": 4, "updated_at": "2026-08-25T11:04:00Z",
+		}),
+		"admin_category_update_request": mock(0, map[string]interface{}{
+			"code": "VETERAN", "active": true, "labels": map[string]string{"EN": "Veteran", "ES": "Veterano", "VI": "Cựu chiến binh"},
+		}),
+		"admin_category_version_conflict": mock(409, APIError{
+			Error: ErrorVersionConflict, Message: "The category has changed.", Retryable: false, CurrentVersion: uint64Pointer(4),
+		}),
+		"admin_category_version_required": mock(428, APIError{
+			Error: ErrorExpectedVersionRequired, Message: "If-Match is required for this update.", Retryable: false,
+		}),
+		"admin_category_in_use": mock(422, APIError{
+			Error: ErrorValidation, Message: "The request contains invalid fields.", Retryable: false,
+			Errors: []FieldError{{Field: "/active", Code: ValidationConflict}},
+		}),
+		"admin_category_audit_event": mock(200, map[string]interface{}{
+			"items": []interface{}{
+				map[string]interface{}{"entity_type": "contact_category", "entity_id": "VETERAN", "event_type": "CONTACT_CATEGORY_UPDATED", "actor_type": "staff", "actor_id": "staff-manager-1", "occurred_at": "2026-08-25T11:04:00Z", "source_channel": "STAFF_IN_PERSON", "before": map[string]interface{}{"version": 3, "active": true}, "after": map[string]interface{}{"version": 4, "active": true}},
+			},
+			"next_page_token": nil, "total_count": 1, "applied_filters": map[string]interface{}{"entity_type": []string{"contact_category"}}, "sort": []string{"-occurred_at"},
 		}),
 	}
 }
@@ -148,11 +212,28 @@ func linkMocks(mocks map[string]MockContract) {
 		"public_branding":                   "public_branding_get",
 		"public_content_home":               "public_content_get",
 		"public_help_submit":                "public_help_get",
+		"admin_help_current":                "admin_help_get",
+		"admin_help_preview":                "admin_help_preview",
+		"admin_help_draft":                  "admin_help_update",
+		"admin_help_published":              "admin_help_publish",
+		"admin_help_versions":               "admin_help_versions",
+		"admin_help_rolled_back":            "admin_help_rollback",
+		"admin_help_update_request":         "admin_help_update",
+		"admin_help_rollback_request":       "admin_help_rollback",
+		"admin_help_version_conflict":       "admin_help_update",
+		"admin_help_version_required":       "admin_help_publish",
+		"admin_help_audit_events":           "audit_list",
 		"identity_configuration_effective":  "identity_configuration_get",
 		"staff_queue":                       "staff_request_queue",
 		"civicworks_event_acknowledged":     "civicworks_event_callback",
 		"civicworks_duplicate_acknowledged": "civicworks_event_callback",
 		"civicworks_invalid_signature":      "civicworks_event_callback",
+		"admin_category_updated":            "admin_categories_update",
+		"admin_category_update_request":     "admin_categories_update",
+		"admin_category_version_conflict":   "admin_categories_update",
+		"admin_category_version_required":   "admin_categories_update",
+		"admin_category_in_use":             "admin_categories_update",
+		"admin_category_audit_event":        "audit_list",
 	}
 	for name, item := range mocks {
 		endpoint, present := endpointByMock[name]
@@ -161,10 +242,12 @@ func linkMocks(mocks map[string]MockContract) {
 		}
 		item.Endpoint = endpoint
 		item.Role = "response"
-		if name == "civicworks_completed_event" {
+		if name == "civicworks_completed_event" || name == "admin_help_update_request" || name == "admin_help_rollback_request" || name == "admin_category_update_request" {
 			item.Role = "request"
 			item.HTTPStatus = 0
 		}
 		mocks[name] = item
 	}
 }
+
+func uint64Pointer(value uint64) *uint64 { return &value }

@@ -28,6 +28,13 @@ class Fe10MatrixTests(unittest.TestCase):
         self.assertIn('width: 100%;', source)
         self.assertIn('.c311-mail label {', source)
 
+    def test_calendar_surface_has_a_narrow_viewport_constraint(self):
+        source = Path(__file__).parents[2].joinpath("client/web/admin/src/views/C311/Extensions.vue").read_text(encoding="utf-8")
+        self.assertIn('class="c311-calendar"', source)
+        self.assertIn('.c311-calendar-controls {', source)
+        self.assertIn("input[type='file']", source)
+        self.assertIn('overflow-wrap: anywhere;', source)
+
     def test_sonar_excludes_browser_harness_and_static_bootstrap_duplicates(self):
         properties = Path(__file__).parents[2].joinpath("sonar-project.properties").read_text(encoding="utf-8")
         self.assertIn("tools/c311-browser/fe10_matrix.py", properties)

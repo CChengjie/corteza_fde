@@ -460,25 +460,29 @@
         </section>
         <section
           v-else-if="mode === 'calendar'"
+          class="c311-calendar"
           data-c311-calendar
         >
-          <h2>{{ t('calendar.title', 'Calendar') }}</h2><label
-            for="c311-calendar-import"
-            class="sr-only"
-          >{{ t('calendar.import', 'Import ICS') }}</label><input
-            id="c311-calendar-import"
-            type="file"
-            accept="text/calendar,.ics"
-            data-c311-action="calendar-import"
-            @change="importCalendar"
-          ><button
-            v-if="can('calendar_export')"
-            class="btn btn-primary ml-2"
-            data-c311-action="calendar-export"
-            @click="exportCalendar"
-          >
-            {{ t('calendar.export', 'Export ICS') }}
-          </button>
+          <h2>{{ t('calendar.title', 'Calendar') }}</h2>
+          <div class="c311-calendar-controls">
+            <label
+              for="c311-calendar-import"
+              class="sr-only"
+            >{{ t('calendar.import', 'Import ICS') }}</label><input
+              id="c311-calendar-import"
+              type="file"
+              accept="text/calendar,.ics"
+              data-c311-action="calendar-import"
+              @change="importCalendar"
+            ><button
+              v-if="can('calendar_export')"
+              class="btn btn-primary"
+              data-c311-action="calendar-export"
+              @click="exportCalendar"
+            >
+              {{ t('calendar.export', 'Export ICS') }}
+            </button>
+          </div>
           <ul data-c311-calendar-events>
             <li
               v-for="event in calendarEvents"
@@ -954,5 +958,38 @@ export default {
   overflow-x: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.c311-calendar,
+.c311-calendar * {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.c311-calendar-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.c311-calendar-controls input[type='file'] {
+  flex: 1 1 15rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.c311-calendar-controls .btn {
+  flex: 0 1 auto;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.c311-calendar-events,
+.c311-calendar-events li {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 </style>

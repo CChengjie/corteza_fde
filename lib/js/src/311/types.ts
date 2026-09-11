@@ -207,6 +207,10 @@ export interface HelpWrite { language: Language, body: string }
 export interface ContentObject {
   content_key: PublicContentKey
   body: string
+  /** True only when the provider received backend-sanitized HTML. */
+  sanitized?: boolean
+  /** Internal adapter marker for the contract's sanitized_html format. */
+  sanitized_html?: boolean
   state: 'DRAFT' | 'PUBLISHED'
   published: boolean
   version: number
@@ -217,6 +221,10 @@ export interface HelpContent {
   help_key: HelpKey
   language: Language
   body: string
+  /** True only when the provider received backend-sanitized HTML. */
+  sanitized?: boolean
+  /** Internal adapter marker for the contract's sanitized_html format. */
+  sanitized_html?: boolean
   state: 'DRAFT' | 'PUBLISHED'
   published: boolean
   version: number
@@ -718,7 +726,7 @@ export interface MailCompose {
   template_id?: string | null
   attachments?: PortalAttachment[]
 }
-export interface MailPreview { subject: string, text: string, html: string }
+export interface MailPreview { subject: string, text: string, html: string, sanitized?: boolean, sanitized_html?: boolean }
 export interface MailDelivery { delivery_id: string, status: 'PENDING' | 'DELIVERED' | 'TERMINAL_FAILURE', attempts: number, updated_at: ISODateTime, error: C311ErrorPayload | null }
 /** Mock-only template editing until a contract-backed template operation exists. */
 export interface MailTemplate { template_id: string, name: string, subject: string, text: string, html: string, version: number, updated_at: ISODateTime }

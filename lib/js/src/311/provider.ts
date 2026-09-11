@@ -366,6 +366,16 @@ export class C311HttpProvider implements C311Provider {
     return this.transport.request<T>(request)
   }
 
+  private markSanitizedContent<T extends ContentObject | HelpContent> (value: T): T {
+    if (!value || typeof value !== 'object' || typeof value.body !== 'string') return value
+    if (value.sanitized === false || value.sanitized_html === false) return value
+    return { ...value, sanitized: true, sanitized_html: true }
+  }
+
+  private markSanitizedContentPage<T extends ContentObject | HelpContent> (page: PageResponse<T>): PageResponse<T> {
+    return { ...page, items: (page.items || []).map(item => this.markSanitizedContent(item)) }
+  }
+
   private listQuery (query: ListQuery = {}): C311TransportRequest['query'] {
     const { page_token, page_size, filters, sort } = query
     return {
@@ -456,19 +466,19 @@ export class C311HttpProvider implements C311Provider {
   publishBranding (options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'POST', path: '/api/v1/admin/branding/publish', body: {}, ...this.requestOptions(options) }) }
   listBrandingVersions (query: ListQuery = {}): Promise<PageResponse<Branding>> { return this.request({ method: 'GET', path: '/api/v1/admin/branding/versions', query: this.listQuery(query) }) }
   rollbackBranding (input: RollbackInput, options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'POST', path: '/api/v1/admin/branding/rollback', body: input, ...this.requestOptions(options) }) }
-  getAdminContent (contentKey: PublicContentKey): Promise<ContentObject> { return this.request({ method: 'GET', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}` }) }
-  listAdminContent (query: ListQuery = {}): Promise<PageResponse<ContentObject>> { return this.request({ method: 'GET', path: '/api/v1/admin/content', query: this.listQuery(query) }) }
-  updateAdminContent (contentKey: PublicContentKey, input: ContentWrite, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request({ method: 'PATCH', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}`, body: input, ...this.requestOptions(options) }) }
-  previewAdminContent (contentKey: PublicContentKey, input: ContentWrite): Promise<ContentObject> { return this.request({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/preview`, body: input }) }
-  publishAdminContent (contentKey: PublicContentKey, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/publish`, body: {}, ...this.requestOptions(options) }) }
-  listAdminContentVersions (contentKey: PublicContentKey, query: ListQuery = {}): Promise<PageResponse<ContentObject>> { return this.request({ method: 'GET', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/versions`, query: this.listQuery(query) }) }
-  rollbackAdminContent (contentKey: PublicContentKey, input: RollbackInput, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/rollback`, body: input, ...this.requestOptions(options) }) }
-  getAdminHelp (helpKey: HelpKey, language: Language = 'EN'): Promise<HelpContent> { return this.request({ method: 'GET', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}`, query: { language } }) }
-  updateAdminHelp (helpKey: HelpKey, input: HelpWrite, options: C311RequestOptions = {}): Promise<HelpContent> { return this.request({ method: 'PATCH', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}`, body: input, ...this.requestOptions(options) }) }
-  previewAdminHelp (helpKey: HelpKey, input: HelpWrite): Promise<HelpContent> { return this.request({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/preview`, body: input }) }
-  publishAdminHelp (helpKey: HelpKey, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { return this.request({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/publish`, query: { language }, body: {}, ...this.requestOptions(options) }) }
-  listAdminHelpVersions (helpKey: HelpKey, query: ListQuery & { language?: Language } = {}): Promise<PageResponse<HelpContent>> { return this.request({ method: 'GET', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/versions`, query: this.listQuery(query) }) }
-  rollbackAdminHelp (helpKey: HelpKey, input: RollbackInput, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { return this.request({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/rollback`, query: { language }, body: input, ...this.requestOptions(options) }) }
+  getAdminContent (contentKey: PublicContentKey): Promise<ContentObject> { return this.request<ContentObject>({ method: 'GET', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}` }).then(value => this.markSanitizedContent(value)) }
+  listAdminContent (query: ListQuery = {}): Promise<PageResponse<ContentObject>> { return this.request<PageResponse<ContentObject>>({ method: 'GET', path: '/api/v1/admin/content', query: this.listQuery(query) }).then(value => this.markSanitizedContentPage(value)) }
+  updateAdminContent (contentKey: PublicContentKey, input: ContentWrite, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request<ContentObject>({ method: 'PATCH', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}`, body: input, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  previewAdminContent (contentKey: PublicContentKey, input: ContentWrite): Promise<ContentObject> { return this.request<ContentObject>({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/preview`, body: input }).then(value => this.markSanitizedContent(value)) }
+  publishAdminContent (contentKey: PublicContentKey, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request<ContentObject>({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/publish`, body: {}, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  listAdminContentVersions (contentKey: PublicContentKey, query: ListQuery = {}): Promise<PageResponse<ContentObject>> { return this.request<PageResponse<ContentObject>>({ method: 'GET', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/versions`, query: this.listQuery(query) }).then(value => this.markSanitizedContentPage(value)) }
+  rollbackAdminContent (contentKey: PublicContentKey, input: RollbackInput, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request<ContentObject>({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/rollback`, body: input, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  getAdminHelp (helpKey: HelpKey, language: Language = 'EN'): Promise<HelpContent> { return this.request<HelpContent>({ method: 'GET', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}`, query: { language } }).then(value => this.markSanitizedContent(value)) }
+  updateAdminHelp (helpKey: HelpKey, input: HelpWrite, options: C311RequestOptions = {}): Promise<HelpContent> { return this.request<HelpContent>({ method: 'PATCH', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}`, body: input, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  previewAdminHelp (helpKey: HelpKey, input: HelpWrite): Promise<HelpContent> { return this.request<HelpContent>({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/preview`, body: input }).then(value => this.markSanitizedContent(value)) }
+  publishAdminHelp (helpKey: HelpKey, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { return this.request<HelpContent>({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/publish`, query: { language }, body: {}, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  listAdminHelpVersions (helpKey: HelpKey, query: ListQuery & { language?: Language } = {}): Promise<PageResponse<HelpContent>> { return this.request<PageResponse<HelpContent>>({ method: 'GET', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/versions`, query: this.listQuery(query) }).then(value => this.markSanitizedContentPage(value)) }
+  rollbackAdminHelp (helpKey: HelpKey, input: RollbackInput, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { return this.request<HelpContent>({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/rollback`, query: { language }, body: input, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
   listAdminCategories (query: ListQuery = {}): Promise<PageResponse<Category>> { return this.request({ method: 'GET', path: '/api/v1/admin/contact-categories', query: this.listQuery(query) }) }
   createAdminCategory (input: CategoryWrite): Promise<Category> { return this.request({ method: 'POST', path: '/api/v1/admin/contact-categories', body: input }) }
   updateAdminCategory (categoryCode: string, input: CategoryWrite, options: C311RequestOptions = {}): Promise<Category> { return this.request({ method: 'PATCH', path: `/api/v1/admin/contact-categories/${encodeURIComponent(categoryCode)}`, body: input, ...this.requestOptions(options) }) }
@@ -477,11 +487,11 @@ export class C311HttpProvider implements C311Provider {
   updateAdminCustomField (fieldKey: string, input: CustomFieldDefinition, options: C311RequestOptions = {}): Promise<CustomFieldDefinition> { return this.request({ method: 'PATCH', path: `/api/v1/admin/custom-fields/${encodeURIComponent(fieldKey)}`, body: input, ...this.requestOptions(options) }) }
 
   getPublicContent (contentKey: PublicContentKey): Promise<ContentObject> {
-    return this.request({ method: 'GET', path: `/api/v1/public/content/${encodeURIComponent(contentKey)}` })
+    return this.request<ContentObject>({ method: 'GET', path: `/api/v1/public/content/${encodeURIComponent(contentKey)}` }).then(value => this.markSanitizedContent(value))
   }
 
   getPublicHelp (helpKey: HelpKey, language?: Language): Promise<HelpContent> {
-    return this.request({ method: 'GET', path: `/api/v1/public/help/${encodeURIComponent(helpKey)}`, query: language ? { language } : undefined })
+    return this.request<HelpContent>({ method: 'GET', path: `/api/v1/public/help/${encodeURIComponent(helpKey)}`, query: language ? { language } : undefined }).then(value => this.markSanitizedContent(value))
   }
 
   getProfile (): Promise<Constituent> {

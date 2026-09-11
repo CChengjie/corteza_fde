@@ -3,6 +3,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$repo_root/tools/c311-browser/process-tree.sh"
 compose_port="${C311_COMPOSE_PORT:-18081}"
 admin_port="${C311_ADMIN_PORT:-18082}"
 artifact_dir="${C311_ARTIFACT_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/c311-fe01.XXXXXX")}"
@@ -14,7 +15,8 @@ fi
 mkdir -p "$artifact_dir"
 chmod 700 "$artifact_dir"
 cleanup () {
-  kill "${compose_pid:-}" "${admin_pid:-}" 2>/dev/null || true
+  terminate_process_tree "${compose_pid:-}"
+  terminate_process_tree "${admin_pid:-}"
 }
 trap cleanup EXIT INT TERM
 

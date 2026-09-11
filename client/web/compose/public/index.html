@@ -11,7 +11,15 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <link rel="icon" id="favicon" href="">
-    <link rel="stylesheet" type="text/css" href="<%= BASE_URL %>custom.css">
+    <script>
+      if (window.C311Mode !== 'mock') {
+        const stylesheet = document.createElement('link')
+        stylesheet.rel = 'stylesheet'
+        stylesheet.type = 'text/css'
+        stylesheet.href = '<%= BASE_URL %>custom.css'
+        document.head.appendChild(stylesheet)
+      }
+    </script>
     <link rel="preload" href="<%= BASE_URL %>config.js" as="script" />
     <title><%= FLAVOUR %></title>
   </head>
@@ -30,6 +38,13 @@
     <script src="<%= BASE_URL %>config.js" type="text/javascript"></script>
 
     <!-- contains cdns that will be injected at the head of the page -->
-    <script src="<%= BASE_URL %>code-snippets.js" type="text/javascript"></script>
+    <script>
+      if (window.C311Mode !== 'mock') {
+        const codeSnippets = document.createElement('script')
+        codeSnippets.src = '<%= BASE_URL %>code-snippets.js'
+        codeSnippets.type = 'text/javascript'
+        document.body.appendChild(codeSnippets)
+      }
+    </script>
   </body>
 </html>

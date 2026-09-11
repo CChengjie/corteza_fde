@@ -120,6 +120,13 @@ export default {
   display: none;
 }
 
+.c311-responsive-data__cards article,
+.c311-responsive-data__cards dt,
+.c311-responsive-data__cards dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .c311-responsive-data__table {
   overflow-x: auto;
   max-width: 100%;

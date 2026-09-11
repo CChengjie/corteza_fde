@@ -35,12 +35,16 @@ class Fe10MatrixTests(unittest.TestCase):
         self.assertIn("input[type='file']", source)
         self.assertIn('overflow-wrap: anywhere;', source)
 
-    def test_extension_forms_cancel_bootstrap_row_overflow(self):
+    def test_extension_forms_use_a_bounded_responsive_row(self):
         source = Path(__file__).parents[2].joinpath("client/web/admin/src/views/C311/Extensions.vue").read_text(encoding="utf-8")
-        self.assertIn('[data-c311-workflows] .form-row,', source)
+        self.assertIn('class="c311-extension-row', source)
+        self.assertIn('.c311-extension-row {', source)
+        self.assertIn('display: flex;', source)
+        self.assertIn('flex-wrap: wrap;', source)
+        self.assertNotIn('class="form-row', source)
         self.assertIn('margin-left: 0;', source)
         self.assertIn('margin-right: 0;', source)
-        self.assertIn('[data-c311-workflows] .form-group,', source)
+        self.assertIn('overflow-x: hidden;', source)
 
     def test_sonar_excludes_browser_harness_and_static_bootstrap_duplicates(self):
         properties = Path(__file__).parents[2].joinpath("sonar-project.properties").read_text(encoding="utf-8")

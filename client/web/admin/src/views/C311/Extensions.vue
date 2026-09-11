@@ -115,7 +115,7 @@
             </button>
           </div>
           <div
-            class="form-row border rounded p-3 mb-3"
+            class="c311-extension-row border rounded p-3 mb-3"
             data-c311-workflow-editor
           >
             <div class="form-group col-md-4">
@@ -243,7 +243,7 @@
               {{ t('report.sort', 'Sort') }}: {{ item.supported_sort.join(', ') || '—' }}
             </li>
           </ul>
-          <div class="form-row">
+          <div class="c311-extension-row">
             <div class="form-group col-md-3">
               <label for="c311-report-name">{{ t('field.name', 'Name') }}</label><input
                 id="c311-report-name"
@@ -566,7 +566,7 @@
         >
           <h2>{{ t('audit.title', 'Audit and data export') }}</h2>
           <div
-            class="form-row"
+            class="c311-extension-row"
             data-c311-audit-filters
           >
             <div class="form-group col-md-3">
@@ -677,7 +677,7 @@
           </button>
           <div
             v-if="can('contact_email_export')"
-            class="form-row mt-3"
+            class="c311-extension-row mt-3"
             data-c311-contact-email-export
           >
             <div class="form-group col-md-8">
@@ -698,7 +698,7 @@
             </div>
           </div>
           <div
-            class="form-row mt-3"
+            class="c311-extension-row mt-3"
             data-c311-data-export-form
           >
             <div class="form-group col-md-3">
@@ -999,20 +999,29 @@ export default {
 [data-c311-audit] {
   max-width: 100%;
   min-width: 0;
+  overflow-x: hidden;
 }
 
-[data-c311-workflows] .form-row,
-[data-c311-reports] .form-row,
-[data-c311-audit] .form-row {
+.c311-extension-row {
+  display: flex;
+  flex-wrap: wrap;
   margin-left: 0;
   margin-right: 0;
   max-width: 100%;
 }
 
-[data-c311-workflows] .form-group,
-[data-c311-reports] .form-group,
-[data-c311-audit] .form-group {
+.c311-extension-row > .form-group {
   max-width: 100%;
   min-width: 0;
+}
+
+.c311-extension-row .form-control,
+.c311-extension-row .btn {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.c311-extension-row .btn {
+  white-space: normal;
 }
 </style>

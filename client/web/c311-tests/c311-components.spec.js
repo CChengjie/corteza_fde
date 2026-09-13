@@ -6,6 +6,9 @@ import { components, mixins, c311I18n } from './c311-components'
 import { formatC311DateTime as mockFormatC311DateTime } from './time-test-helper'
 import Portal from '../compose/src/views/C311/Portal.vue'
 import PublicPortal from '../compose/src/views/C311/PublicPortal.vue'
+import AdminWorkspace from '../compose/src/views/C311/AdminWorkspace.vue'
+import OperationsWorkspace from '../compose/src/views/C311/OperationsWorkspace.vue'
+import StaffWorkspace from '../compose/src/views/C311/StaffWorkspace.vue'
 import Staff from '../admin/src/views/C311/Staff.vue'
 import Extensions from '../admin/src/views/C311/Extensions.vue'
 import Config from '../admin/src/views/C311/Config.vue'
@@ -113,6 +116,31 @@ const RouterLinkStub = {
 const AppShellStub = { template: '<main><slot name="nav" /><slot /></main>' }
 const DataStateStub = { template: '<section><slot name="populated" /></section>' }
 const ChildStub = { template: '<span><slot /></span>' }
+
+const workspaceStubs = {
+  'c311-app-shell': AppShellStub,
+  'c311-data-state': DataStateStub,
+  'c311-error-summary': ChildStub,
+  'c311-main-nav': ChildStub,
+}
+
+const adminProvider = () => ({
+  getIdentityConfiguration: jest.fn().mockResolvedValue({ version: 1 }),
+  listIntegrations: jest.fn().mockResolvedValue({ items: [] }),
+  getAdminBranding: jest.fn().mockResolvedValue({ organisation_name: 'City', primary_colour: '#000000', accent_colour: '#ffffff', version: 2 }),
+  listAdminContent: jest.fn().mockResolvedValue({ items: [{ content_key: 'HOME', body: '<p>Home</p>', version: 3 }] }),
+  listAdminCategories: jest.fn().mockResolvedValue({ items: [] }),
+  listAdminCustomFields: jest.fn().mockResolvedValue({ items: [] }),
+  listWorkflows: jest.fn().mockResolvedValue({ items: [] }),
+  listWorkflowExecutions: jest.fn().mockResolvedValue({ items: [] }),
+  getAdminHelp: jest.fn().mockResolvedValue({ body: '<p>Existing help</p>', version: 4 }),
+  rollbackBranding: jest.fn().mockResolvedValue({}),
+  rollbackAdminContent: jest.fn().mockResolvedValue({}),
+  rollbackAdminHelp: jest.fn().mockResolvedValue({}),
+  previewBranding: jest.fn().mockResolvedValue({ organisation_name: 'Preview', primary_colour: '#111111', accent_colour: '#222222', font_family: 'Inter', public_header: 'Preview header' }),
+  previewAdminContent: jest.fn().mockResolvedValue({ body: '<p>Content preview</p>' }),
+  previewAdminHelp: jest.fn().mockResolvedValue({ body: '<p>Help preview</p>' }),
+})
 
 describe('C311 shared components', () => {
   afterEach(() => {
@@ -2164,6 +2192,54 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.conflict.reloaded).toBe(true)
     await wrapper.vm.reapplyConflict()
     expect(provider.updateAdminCategory).toHaveBeenCalledTimes(2)
+  })
+
+  it('loads existing help, renders sanitized previews, and sends rollback target versions from the compose admin workspace', async () => {
+    const provider = adminProvider()
+    const wrapper = mount(AdminWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    await flushPromises()
+    expect(provider.getAdminHelp).toHaveBeenCalledWith('public.request.submit', 'EN')
+    expect(wrapper.vm.help.body).toBe('<p>Existing help</p>')
+    await wrapper.vm.previewBranding()
+    await wrapper.vm.previewContent()
+    await wrapper.vm.previewHelp()
+    expect(wrapper.text()).toContain('Preview header')
+    expect(wrapper.text()).toContain('Content preview')
+    expect(wrapper.text()).toContain('Help preview')
+    await wrapper.vm.rollbackBranding(1)
+    await wrapper.vm.rollbackContent(2)
+    await wrapper.vm.rollbackHelp(3)
+    expect(provider.rollbackBranding).toHaveBeenCalledWith({ target_version: 1 }, { expectedVersion: 2 })
+    expect(provider.rollbackAdminContent).toHaveBeenCalledWith('HOME', { target_version: 2 }, { expectedVersion: 3 })
+    expect(provider.rollbackAdminHelp).toHaveBeenCalledWith('public.request.submit', { target_version: 3 }, 'EN', { expectedVersion: 4 })
+  })
+
+  it('keeps accessible operations data available when a separate section is forbidden and refreshes after saving', async () => {
+    const provider = {
+      listWorkflows: jest.fn().mockResolvedValue({ items: [{ workflow_id: 'workflow-1', name: 'Initial', trigger: 'SERVICE_REQUEST_CREATED', active: false, version: 1 }] }),
+      listWorkflowExecutions: jest.fn().mockResolvedValue({ items: [] }),
+      listReports: jest.fn().mockRejectedValue({ code: 'FORBIDDEN' }),
+      createWorkflow: jest.fn().mockResolvedValue({ workflow_id: 'workflow-2' }),
+    }
+    const wrapper = mount(OperationsWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    expect(wrapper.vm.workflows).toHaveLength(1)
+    expect(wrapper.vm.reportError).toBe(true)
+    wrapper.vm.workflowJSON = JSON.stringify({ workflow_id: 'workflow-2', name: 'Saved', trigger: 'SERVICE_REQUEST_CREATED', active: false, conditions: [], actions: [] })
+    await wrapper.vm.saveWorkflow()
+    expect(provider.listWorkflows).toHaveBeenCalledTimes(2)
+  })
+
+  it('requires a snooze time locally and displays protected request detail fields for staff', async () => {
+    const provider = { actionStaffReminder: jest.fn() }
+    const wrapper = mount(StaffWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await wrapper.vm.reminderAction({ reminder_id: 'reminder-1' }, 'SNOOZE')
+    expect(provider.actionStaffReminder).not.toHaveBeenCalled()
+    expect(wrapper.vm.formErrors[0].code).toBe('REQUIRED')
+    await wrapper.setData({ detail: { request: { request_number: 'SR-1', summary: 'Pothole', status: 'TRIAGED', owning_department: 'STREETS', primary_requester: { display_name: 'Resident', constituent_id: 'constituent-1' }, location: { address: { line1: '1 Main Street' } } }, collaborator_ids: [], reminders: [], history: [], audit: [] } })
+    expect(wrapper.text()).toContain('Resident')
+    expect(wrapper.text()).toContain('1 Main Street')
   })
 
 })

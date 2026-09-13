@@ -53,7 +53,7 @@
           <form class="col-md-6 mb-3" @submit.prevent="createReminder">
             <h3 class="h5">Create reminder</h3>
             <label for="c311-reminder-title">Title</label><input id="c311-reminder-title" v-model.trim="reminderForm.title" class="form-control">
-            <label class="mt-2" for="c311-reminder-due">Due at</label><input id="c311-reminder-due" v-model="reminderForm.due_at" class="form-control" type="datetime-local">
+            <label class="mt-2" for="c311-reminder-due">Due at</label><input id="c311-reminder-due" v-model="reminderForm.due_at" class="form-control" type="datetime-local" required>
             <label class="mt-2" for="c311-reminder-recipient">Recipient staff ID</label><input id="c311-reminder-recipient" v-model.trim="reminderForm.recipient_staff_id" class="form-control">
             <button class="btn btn-outline-primary mt-2" type="submit" :disabled="busy">Create reminder</button>
           </form>
@@ -115,7 +115,12 @@ export default {
     reassign () { return this.run(() => this.provider.reassignStaffRequest(this.detail.request.request_id, this.assignmentForm, { expectedVersion: this.detail.request.version }), 'Request reassigned.') },
     addNote () { return this.run(() => this.provider.createStaffNote(this.detail.request.request_id, this.noteForm), 'Note added.') },
     createReminder () {
-      const input = { ...this.reminderForm, due_at: new Date(this.reminderForm.due_at).toISOString() }
+      const dueAt = new Date(this.reminderForm.due_at)
+      if (!this.reminderForm.due_at || Number.isNaN(dueAt.getTime())) {
+        this.setError({ code: 'INVALID_VALUE', message: 'Choose a valid reminder due date and time.' })
+        return
+      }
+      const input = { ...this.reminderForm, due_at: dueAt.toISOString() }
       return this.run(() => this.provider.createStaffReminder(this.detail.request.request_id, input), 'Reminder created.')
     },
     addCollaborator () { return this.run(() => this.provider.addStaffCollaborator(this.detail.request.request_id, this.collaboratorForm.staff_id, { reason: this.collaboratorForm.reason }, { expectedVersion: this.detail.request.version }), 'Collaborator added.') },
@@ -124,7 +129,7 @@ export default {
     overrideOrigin () { return this.run(() => this.provider.overrideStaffOrigin(this.detail.request.request_id, this.originForm, { expectedVersion: this.detail.request.version }), 'Origin classification updated.') },
     setDuplicateGroup () { return this.run(() => this.provider.confirmStaffDuplicateGroup(this.detail.request.request_id, this.duplicateForm, { expectedVersion: this.detail.request.version }), 'Same-issue group confirmed.') },
     removeDuplicateGroup () { return this.run(() => this.provider.removeStaffDuplicateGroup(this.detail.request.request_id, { reason: this.duplicateForm.reason || 'Removed from group' }, { expectedVersion: this.detail.request.version }), 'Same-issue group removed.') },
-    reminderAction (reminder, action) { if (action === 'SNOOZE' && !this.reminderSnoozeAt) { this.setError({ code: 'REQUIRED', message: 'Choose a snooze time before snoozing a reminder.' }); return } const input = action === 'SNOOZE' ? { due_at: new Date(this.reminderSnoozeAt).toISOString() } : {}; return this.run(() => this.provider.actionStaffReminder(reminder.reminder_id, action, input), `Reminder ${action.toLowerCase()}d.`) },
+    reminderAction (reminder, action) { const dueAt = new Date(this.reminderSnoozeAt); if (action === 'SNOOZE' && !this.reminderSnoozeAt) { this.setError({ code: 'REQUIRED', message: 'Choose a snooze time before snoozing a reminder.' }); return } if (action === 'SNOOZE' && Number.isNaN(dueAt.getTime())) { this.setError({ code: 'INVALID_VALUE', message: 'Choose a valid snooze date and time.' }); return } const input = action === 'SNOOZE' ? { due_at: dueAt.toISOString() } : {}; return this.run(() => this.provider.actionStaffReminder(reminder.reminder_id, action, input), `Reminder ${action.toLowerCase()}d.`) },
     async downloadAttachment (attachment) { const value = await this.provider.downloadAttachment(attachment.attachment_id); const blob = new Blob([value.body], { type: value.content_type || attachment.media_type }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = attachment.filename; link.click(); URL.revokeObjectURL(link.href) },
     closeSelected () {
       const input = { action: 'CLOSE', changes: { status: 'CLOSED' }, request_items: [{ request_id: this.detail.request.request_id, expected_version: this.detail.request.version }] }

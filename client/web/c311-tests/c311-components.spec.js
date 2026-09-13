@@ -2250,12 +2250,15 @@ describe('C311 shared components', () => {
     expect(provider.sendMail).toHaveBeenCalledWith(expectedMail)
   })
 
-  it('requires a snooze time locally and displays protected request detail fields for staff', async () => {
-    const provider = { actionStaffReminder: jest.fn() }
+  it('validates reminder dates locally and displays protected request detail fields for staff', async () => {
+    const provider = { actionStaffReminder: jest.fn(), createStaffReminder: jest.fn() }
     const wrapper = mount(StaffWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
     await wrapper.vm.reminderAction({ reminder_id: 'reminder-1' }, 'SNOOZE')
     expect(provider.actionStaffReminder).not.toHaveBeenCalled()
     expect(wrapper.vm.formErrors[0].code).toBe('REQUIRED')
+    await wrapper.vm.createReminder()
+    expect(provider.createStaffReminder).not.toHaveBeenCalled()
+    expect(wrapper.vm.formErrors[0].code).toBe('INVALID_VALUE')
     await wrapper.setData({ state: 'populated', detail: { request: { request_number: 'SR-1', summary: 'Pothole', status: 'TRIAGED', owning_department: 'STREETS', primary_requester: { display_name: 'Resident', constituent_id: 'constituent-1' }, location: { address: { line1: '1 Main Street' } } }, collaborator_ids: [], reminders: [], history: [], audit: [] } })
     expect(wrapper.text()).toContain('Resident')
     expect(wrapper.text()).toContain('1 Main Street')

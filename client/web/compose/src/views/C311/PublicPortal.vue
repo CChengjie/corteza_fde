@@ -130,7 +130,9 @@
         </form>
         <section v-if="canManageAccount" class="mt-4" data-c311-account-disposition aria-labelledby="c311-account-disposition-heading">
           <h2 id="c311-account-disposition-heading">{{ t('account.disposition.title', 'Delete account') }}</h2>
-          <p class="text-muted">{{ t('account.disposition.description', 'This permanently deletes sign-in access and anonymizes personal profile data. Type DELETE to confirm.') }}</p>
+          <p class="text-muted">{{ t('account.disposition.description', 'Delete sign-in access or anonymize personal profile data. Type the selected action to confirm.') }}</p>
+          <label for="c311-account-disposition-mode">{{ t('account.disposition.modeLabel', 'Account action') }}</label>
+          <select id="c311-account-disposition-mode" v-model="forms.account.disposition_mode" class="form-control"><option value="DELETE">DELETE</option><option value="ANONYMIZE">ANONYMIZE</option></select>
           <label class="mt-2" for="c311-account-disposition-confirm">{{ t('account.disposition.confirmLabel', 'Type the action name to confirm') }}</label>
           <input id="c311-account-disposition-confirm" v-model.trim="accountDispositionConfirmation" class="form-control" autocomplete="off" :aria-invalid="hasError('confirmation') ? 'true' : 'false'">
           <button class="btn btn-outline-danger mt-2" type="button" data-c311-action="account-disposition" :disabled="busy.accountDisposition" @click="updateAccountDisposition">{{ busy.accountDisposition ? t('action.working', 'Working…') : t('account.disposition.submit', 'Confirm account action') }}</button>
@@ -336,7 +338,7 @@ export default {
       forgot: { email: '' },
       reset: { password: '' },
       emailReplacement: { token: '' },
-      account: { display_name: '', preferred_language: 'EN', login_identifier: '', current_password: '', new_password: '', replacement_email: '', phone_numbers: [], addresses: [], primary_category: 'RESIDENT' },
+      account: { display_name: '', preferred_language: 'EN', login_identifier: '', current_password: '', new_password: '', replacement_email: '', disposition_mode: 'DELETE', phone_numbers: [], addresses: [], primary_category: 'RESIDENT' },
     },
   }),
   computed: {
@@ -499,6 +501,7 @@ export default {
       this.linkState = 'idle'
       this.accountDispositionResult = null
       if (this.page === 'email-replacement-confirm') this.forms.emailReplacement.token = String(this.$route?.query?.token || '')
+      this.forms.account.disposition_mode = 'DELETE'
       this.accountDispositionConfirmation = ''
     },
     normalizeField (field) { return normalizeFieldPath(field) },
@@ -878,12 +881,12 @@ export default {
     async updateAccountDisposition () {
       return this.runBusy('accountDisposition', async () => {
         this.formErrors = []
-        if (this.accountDispositionConfirmation !== 'DELETE') {
-          this.formErrors = [{ field: 'confirmation', code: 'INVALID_VALUE', message: this.t('error.accountDispositionConfirmation', 'Type DELETE to confirm.') }]
+        if (this.accountDispositionConfirmation !== this.forms.account.disposition_mode) {
+          this.formErrors = [{ field: 'confirmation', code: 'INVALID_VALUE', message: this.t('error.accountDispositionConfirmation', 'Type ' + this.forms.account.disposition_mode + ' to confirm.') }]
           return
         }
         try {
-          const result = await this.provider?.deleteOrAnonymizeAccount?.({ mode: 'DELETE', confirmation: this.accountDispositionConfirmation })
+          const result = await this.provider?.deleteOrAnonymizeAccount?.({ mode: this.forms.account.disposition_mode, confirmation: this.accountDispositionConfirmation })
           this.accountDispositionResult = result
           this.c311ClearDirtyDraft?.()
           this.$C311?.clearSession?.()

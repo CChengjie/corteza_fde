@@ -315,6 +315,8 @@ export interface C311Provider {
 
   geocode (input: GeocodeRequest): Promise<GeocodeResponse>
   listStaffRequests (query?: RequestListQuery): Promise<PageResponse<RequestQueueItem>>
+  searchStaffConstituents (query?: ListQuery): Promise<PageResponse<Constituent>>
+  getStaffConstituent (constituentID: string): Promise<Constituent>
   getStaffRequest (requestID: string): Promise<StaffServiceRequestDetail>
   transitionStaffRequest (requestID: string, input: RequestTransition, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   reassignStaffRequest (requestID: string, input: Reassignment, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
@@ -624,6 +626,14 @@ export class C311HttpProvider implements C311Provider {
 
   listStaffRequests (query: RequestListQuery = {}): Promise<PageResponse<RequestQueueItem>> {
     return this.request({ method: 'GET', path: '/api/v1/staff/service-requests', query: this.requestListQuery(query) })
+  }
+
+  searchStaffConstituents (query: ListQuery = {}): Promise<PageResponse<Constituent>> {
+    return this.request({ method: 'GET', path: '/api/v1/staff/constituents', query: this.listQuery(query) })
+  }
+
+  getStaffConstituent (constituentID: string): Promise<Constituent> {
+    return this.request({ method: 'GET', path: `/api/v1/staff/constituents/${encodeURIComponent(constituentID)}` })
   }
 
   getStaffRequest (requestID: string): Promise<StaffServiceRequestDetail> {

@@ -1693,6 +1693,37 @@ export class MockC311Provider implements C311Provider {
     return copy(result)
   }
 
+  async searchStaffConstituents (query: ListQuery = {}): Promise<PageResponse<Constituent>> {
+    this.requireCapability('staff_constituent_search')
+    const candidates = [this.profile, ...this.fixtures.requests.map(request => request.primary_requester)]
+    const constituents = Array.from(new Map(candidates.map(item => [item.constituent_id, item])).values())
+    const values = (value: unknown): string[] => Array.isArray(value) ? value.map(item => String(item).trim().toLowerCase()).filter(Boolean) : [String(value).trim().toLowerCase()].filter(Boolean)
+    const matches = (candidate: Constituent, filter: string, raw: unknown): boolean => {
+      const expected = values(raw)
+      if (!expected.length) return true
+      const haystack = filter === 'query'
+        ? [candidate.constituent_id, candidate.display_name, ...candidate.emails]
+        : filter === 'constituent_id' ? [candidate.constituent_id]
+          : filter === 'display_name' ? [candidate.display_name]
+            : filter === 'email' ? candidate.emails
+              : filter === 'phone' ? candidate.phone_numbers.map(phone => phone.value)
+                : filter === 'primary_category' ? [candidate.primary_category]
+                  : filter === 'preferred_language' ? [candidate.preferred_language]
+                    : filter === 'email_opt_out' ? [String(candidate.email_opt_out)] : []
+      return expected.some(value => haystack.some(item => item.toLowerCase().includes(value)))
+    }
+    const items = constituents.filter(candidate => Object.entries(query.filters || {}).every(([filter, value]) => matches(candidate, filter, value)))
+    return this.page(items, query)
+  }
+
+  async getStaffConstituent (constituentID: string): Promise<Constituent> {
+    this.requireCapability('staff_constituent_detail')
+    const candidates = [this.profile, ...this.fixtures.requests.map(request => request.primary_requester)]
+    const constituent = candidates.find(item => item.constituent_id === constituentID)
+    if (!constituent) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+    return copy(constituent)
+  }
+
   async listStaffRequests (query: RequestListQuery = {}): Promise<PageResponse<RequestQueueItem>> {
     this.requireStaffCapability('staff_request_queue')
     this.failIfNeeded(['forbidden', 'not-found', 'validation', 'retryable', 'version-conflict', 'terminal'])

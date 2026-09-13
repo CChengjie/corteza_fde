@@ -9,6 +9,7 @@ import PublicPortal from '../compose/src/views/C311/PublicPortal.vue'
 import AdminWorkspace from '../compose/src/views/C311/AdminWorkspace.vue'
 import OperationsWorkspace from '../compose/src/views/C311/OperationsWorkspace.vue'
 import StaffWorkspace from '../compose/src/views/C311/StaffWorkspace.vue'
+import ConstituentWorkspace from '../compose/src/views/C311/ConstituentWorkspace.vue'
 import Staff from '../admin/src/views/C311/Staff.vue'
 import Extensions from '../admin/src/views/C311/Extensions.vue'
 import Config from '../admin/src/views/C311/Config.vue'
@@ -2261,6 +2262,22 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.formErrors[0].code).toBe('INVALID_VALUE')
     await wrapper.setData({ state: 'populated', detail: { request: { request_number: 'SR-1', summary: 'Pothole', status: 'TRIAGED', owning_department: 'STREETS', primary_requester: { display_name: 'Resident', constituent_id: 'constituent-1' }, location: { address: { line1: '1 Main Street' } } }, collaborator_ids: [], reminders: [], history: [], audit: [] } })
     expect(wrapper.text()).toContain('Resident')
+    expect(wrapper.text()).toContain('1 Main Street')
+  })
+
+  it('searches and opens staff constituent records through the provider', async () => {
+    const constituent = { constituent_id: 'constituent-1', display_name: 'Alex Example', emails: ['alex@example.test'], phone_numbers: [{ label: 'MOBILE', value: '555-0100' }], addresses: [{ line1: '1 Main Street', city: 'City', region: 'ST', postal_code: '12345', country: 'US' }], primary_category: 'RESIDENT', preferred_language: 'EN', email_opt_out: false }
+    const provider = { searchStaffConstituents: jest.fn().mockResolvedValue({ items: [constituent] }), getStaffConstituent: jest.fn().mockResolvedValue(constituent) }
+    const wrapper = mount(ConstituentWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    expect(provider.searchStaffConstituents).toHaveBeenCalledWith({ page_size: 50, filters: {} })
+    await wrapper.setData({ query: 'Alex' })
+    await wrapper.vm.search()
+    expect(provider.searchStaffConstituents).toHaveBeenLastCalledWith({ page_size: 50, filters: { query: ['Alex'] } })
+    await wrapper.find('tbody button').trigger('click')
+    await flushPromises()
+    expect(provider.getStaffConstituent).toHaveBeenCalledWith('constituent-1')
+    expect(wrapper.text()).toContain('555-0100')
     expect(wrapper.text()).toContain('1 Main Street')
   })
 

@@ -1055,6 +1055,23 @@ describe('City 311 frontend contract', () => {
     expect(requests[2]).to.deep.include({ method: 'POST', path: '/api/v1/staff/service-requests/request-fixture-001/notes' })
   })
 
+  it('maps staff constituent search and detail operations to the frozen contract', async () => {
+    const requests: C311TransportRequest[] = []
+    const provider = new C311HttpProvider({ request: async <T> (request: C311TransportRequest): Promise<T> => { requests.push(request); return {} as T } })
+    await provider.searchStaffConstituents({ page_size: 50, filters: { query: ['Alex'] } })
+    await provider.getStaffConstituent('constituent/1')
+    expect(requests[0]).to.deep.include({ method: 'GET', path: '/api/v1/staff/constituents', query: { page_size: 50, filters: { query: ['Alex'] } } })
+    expect(requests[1]).to.deep.include({ method: 'GET', path: '/api/v1/staff/constituents/constituent%2F1' })
+  })
+
+  it('enforces staff constituent search and detail capabilities in the mock provider', async () => {
+    const agent = new MockC311Provider({ role: 'service_agent' })
+    const page = await agent.searchStaffConstituents({ filters: { query: ['fixture'] } })
+    expect(page.items.some(item => item.constituent_id === 'constituent-fixture-001')).to.equal(true)
+    expect((await agent.getStaffConstituent('constituent-fixture-001')).display_name).to.equal('Alex Example')
+    await expectError(() => new MockC311Provider({ role: 'constituent' }).searchStaffConstituents(), 'FORBIDDEN')
+  })
+
   it('enforces relationship capabilities, primary uniqueness, and append-only notes in the mock', async () => {
     const input = { constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT' as const, portal_visible: true, notify_status: true }
     await expectError(() => new MockC311Provider({ role: 'public_visitor' }).linkStaffConstituent('request-fixture-001', input, { expectedVersion: 1 }), 'UNAUTHENTICATED')

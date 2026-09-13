@@ -90,7 +90,7 @@ export default {
   }),
   computed: {
     provider () { return this.$C311?.provider },
-    navItems () { return [{ route: '/c311/staff/requests', label: 'Requests' }, { route: '/c311/staff/submit', label: 'Create request' }, { route: '/c311', label: 'Public portal' }] },
+    navItems () { return [{ route: '/c311/staff/requests', label: 'Requests' }, { route: '/c311/staff/constituents', label: 'Constituents' }, { route: '/c311/staff/submit', label: 'Create request' }, { route: '/c311', label: 'Public portal' }] },
     fieldTargets () { return { form: 'c311-transition-status', assignee_id: 'c311-assignee', body: 'c311-staff-note', title: 'c311-reminder-title', due_at: 'c311-reminder-due', recipient_staff_id: 'c311-reminder-recipient' } },
   },
   created () { this.loadQueue() },

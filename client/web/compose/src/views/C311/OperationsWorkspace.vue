@@ -38,7 +38,7 @@ const plainTextFromHTML = (value) => {
 export default {
   name: 'C311OperationsWorkspace', components: { C311AppShell, C311ErrorSummary, C311MainNav },
   data: () => ({ busy: false, message: '', formErrors: [], result: '', workflows: [], executions: [], reports: [], workflowError: false, reportError: false, workflowJSON: emptyWorkflow(), reportJSON: emptyReport(), selectedWorkflow: null, selectedReport: null, workflowTestRequestID: '', calendarICS: '', calendarDownload: '', mail: { to: '', subject: '', html: '' } }),
-  computed: { provider () { return this.$C311?.provider }, navItems () { return [{ route: '/c311/staff/requests', label: 'Requests' }, { route: '/c311/operations', label: 'Operations' }, { route: '/c311/admin', label: 'Administration' }, { route: '/c311', label: 'Public portal' }] } },
+  computed: { provider () { return this.$C311?.provider }, navItems () { return [{ route: '/c311/staff/requests', label: 'Requests' }, { route: '/c311/staff/constituents', label: 'Constituents' }, { route: '/c311/operations', label: 'Operations' }, { route: '/c311/admin', label: 'Administration' }, { route: '/c311', label: 'Public portal' }] } },
   created () { this.load() },
   methods: {
     fail (error) { this.formErrors = [{ field: 'form', code: error?.code || error?.error || 'OPERATION_FAILED', message: error?.message || 'The operation could not be completed.' }] },

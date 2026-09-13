@@ -83,6 +83,10 @@ import type {
   WorkflowActionAccepted,
   DataExportQuery,
   ContactEmailExportRequest,
+  EmailReplacementRequest,
+  EmailReplacementAcknowledgement,
+  EmailReplacementConfirm,
+  EmailReplacementResult,
 } from './types'
 
 export interface C311RequestOptions {
@@ -243,8 +247,9 @@ export interface C311Provider {
   confirmPasswordReset (input: PasswordResetConfirm): Promise<PasswordResetResponse>
   changeLoginIdentifier (input: LoginIdentifierChange): Promise<Session>
   changePassword (input: PasswordChange): Promise<void>
-  /** Frontend mock-only until the backend publishes an account disposition operation. */
   deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult>
+  requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement>
+  confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult>
   startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect>
   confirmAccountLink (): Promise<Session>
   completeFederatedSignIn (provider: IdentityProvider, query?: Record<string, string>): Promise<FederatedSignInResult>
@@ -434,14 +439,22 @@ export class C311HttpProvider implements C311Provider {
     return this.request({ method: 'POST', path: '/api/v1/account/password', body: input })
   }
 
-  deleteOrAnonymizeAccount (_input: AccountDispositionRequest): Promise<AccountDispositionResult> {
-    // No canonical account deletion/anonymization operation exists yet. Keep HTTP
-    // mode explicit and side-effect free until the backend contract is published.
-    return Promise.reject(new C311ApiError({
-      error: 'OPERATION_FAILED',
-      message: 'Account deletion or anonymization is not available in HTTP mode.',
-      retryable: false,
-    }, 501))
+  async deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult> {
+    // The server performs a privacy-preserving deletion/anonymization transaction.
+    // Confirmation is deliberately a UI guard; the published DELETE operation has no body.
+    if (input.mode !== 'DELETE' || input.confirmation !== 'DELETE') {
+      throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'Type DELETE to confirm account deletion.', retryable: false }, 422)
+    }
+    await this.request<void>({ method: 'DELETE', path: '/api/v1/account' })
+    return { status: 'DELETED', message: 'Account deleted and personal profile data anonymized.' }
+  }
+
+  requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement> {
+    return this.request({ method: 'POST', path: '/api/v1/account/email-replacement', body: input })
+  }
+
+  confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult> {
+    return this.request({ method: 'POST', path: '/api/v1/auth/email-replacement/confirm', body: input })
   }
 
   startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect> {
@@ -583,12 +596,8 @@ export class C311HttpProvider implements C311Provider {
       : { request_detail: null }
   }
 
-  createPortalNote (_requestID: string, _input: RequestNote): Promise<RequestNote> {
-    return Promise.reject(new C311ApiError({
-      error: 'OPERATION_FAILED',
-      message: 'Public voter notes are not available in HTTP mode.',
-      retryable: false,
-    }, 501))
+  createPortalNote (requestID: string, input: RequestNote): Promise<RequestNote> {
+    return this.request({ method: 'POST', path: `/api/v1/portal/service-requests/${encodeURIComponent(requestID)}/notes`, body: input })
   }
 
   geocode (input: GeocodeRequest): Promise<GeocodeResponse> {

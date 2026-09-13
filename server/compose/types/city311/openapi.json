@@ -1356,6 +1356,7 @@
           "portal_draft_update",
           "portal_link_anonymous_request",
           "portal_my_requests",
+          "portal_note_create",
           "portal_reopen_request",
           "profile_get",
           "profile_update",
@@ -1697,6 +1698,7 @@
           "portal_draft_update",
           "portal_link_anonymous_request",
           "portal_my_requests",
+          "portal_note_create",
           "portal_reopen_request",
           "portal_service_request_submit",
           "profile_get",
@@ -18723,6 +18725,194 @@
         },
         "x-city311-direction": "provided_by_crm",
         "x-city311-required-capability": "portal_link_anonymous_request"
+      }
+    },
+    "/api/v1/portal/service-requests/{request_id}/notes": {
+      "post": {
+        "operationId": "portal_note_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "request": {
+                  "value": {
+                    "body": "xxxxxx",
+                    "portal_visible": false
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/request_note"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "success": {
+                    "value": {
+                      "body": "xxxxxx",
+                      "portal_visible": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/request_note"
+                }
+              }
+            },
+            "description": "success",
+            "x-city311-example": {
+              "body": {
+                "body": "xxxxxx",
+                "portal_visible": false
+              },
+              "status": 201
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "UNAUTHENTICATED",
+                      "message": "unauthenticated.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "UNAUTHENTICATED",
+            "x-city311-example": {
+              "body": {
+                "error": "UNAUTHENTICATED",
+                "message": "unauthenticated.",
+                "retryable": false
+              },
+              "status": 401
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "FORBIDDEN",
+                      "message": "forbidden.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "FORBIDDEN",
+            "x-city311-example": {
+              "body": {
+                "error": "FORBIDDEN",
+                "message": "forbidden.",
+                "retryable": false
+              },
+              "status": 403
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "NOT_FOUND",
+                      "message": "not found.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "NOT FOUND",
+            "x-city311-example": {
+              "body": {
+                "error": "NOT_FOUND",
+                "message": "not found.",
+                "retryable": false
+              },
+              "status": 404
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "validation_error": {
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "validation error.",
+                      "retryable": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            },
+            "description": "VALIDATION ERROR",
+            "x-city311-example": {
+              "body": {
+                "error": "VALIDATION_ERROR",
+                "message": "validation error.",
+                "retryable": false
+              },
+              "status": 422
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "portal note create",
+        "tags": [
+          "portal"
+        ],
+        "x-city311-authentication": {
+          "mode": "session_cookie",
+          "actor_class": "constituent",
+          "alternatives": [
+            {
+              "resource_relationship": "linked_request_constituent"
+            }
+          ]
+        },
+        "x-city311-direction": "provided_by_crm",
+        "x-city311-required-capability": "portal_note_create"
       }
     },
     "/api/v1/portal/service-requests/{request_id}/reopen": {

@@ -447,17 +447,31 @@ export interface RequestNote {
   created_at?: ISODateTime
 }
 
-/** Frontend mock-only account disposition until a backend operation is published. */
-export type AccountDispositionMode = 'DELETE' | 'ANONYMIZE'
-
 export interface AccountDispositionRequest {
-  mode: AccountDispositionMode
+  mode: 'DELETE' | 'ANONYMIZE'
   confirmation: string
 }
 
 export interface AccountDispositionResult {
   status: 'DELETED' | 'ANONYMIZED'
   message: string
+}
+
+export interface EmailReplacementRequest {
+  email: string
+}
+
+export interface EmailReplacementAcknowledgement {
+  accepted: boolean
+  message?: string
+}
+
+export interface EmailReplacementConfirm {
+  token: string
+}
+
+export interface EmailReplacementResult {
+  verified_email: string
 }
 
 export interface PublicServiceRequestDetail {

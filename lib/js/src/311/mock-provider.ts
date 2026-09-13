@@ -88,6 +88,10 @@ import type {
   WorkflowActionAccepted,
   DataExportQuery,
   ContactEmailExportRequest,
+  EmailReplacementRequest,
+  EmailReplacementAcknowledgement,
+  EmailReplacementConfirm,
+  EmailReplacementResult,
 } from './types'
 import { validatePortalAttachment, type C311Provider, type C311RequestOptions, type PortalAttachmentUpload, type ReportExportOptions } from './provider'
 
@@ -522,6 +526,7 @@ export class MockC311Provider implements C311Provider {
   private resetTokenSerial = 0
   private activeResetToken: string | null = null
   private resetTokenUsed = false
+  private activeEmailReplacementToken: string | null = null
   private pendingAccountLinkProvider: IdentityProvider | null = null
   private pendingAccountLinkExpiresAt: string | null = null
   private pendingAccountLinkConsumed = false
@@ -1226,6 +1231,23 @@ export class MockC311Provider implements C311Provider {
       status: input.mode === 'DELETE' ? 'DELETED' : 'ANONYMIZED',
       message: input.mode === 'DELETE' ? 'Account deleted.' : 'Account anonymized.',
     }
+  }
+
+  async requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement> {
+    this.requireCapability('email_replacement_request')
+    if (!/^\S+@\S+\.\S+$/.test(input?.email || '')) this.failScenario('validation')
+    this.activeEmailReplacementToken = `email-replacement-${input.email}`
+    return { accepted: true, message: 'Verification instructions have been sent.' }
+  }
+
+  async confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult> {
+    if (!input?.token || input.token !== this.activeEmailReplacementToken) this.failScenario('invalid-reset-token')
+    const token = this.activeEmailReplacementToken
+    if (!token) throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'The verification token is invalid.', retryable: false }, 422)
+    const verifiedEmail = token.replace('email-replacement-', '')
+    this.profile = { ...this.profile, emails: [verifiedEmail] }
+    this.activeEmailReplacementToken = null
+    return { verified_email: verifiedEmail }
   }
 
   async startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect> {

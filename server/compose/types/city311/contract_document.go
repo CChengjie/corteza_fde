@@ -46,6 +46,7 @@ type EndpointContract struct {
 	RequiredHeaders             []string                          `json:"required_headers,omitempty"`
 	PathParameters              map[string]map[string]interface{} `json:"path_parameters,omitempty"`
 	RequestSchema               string                            `json:"request_schema,omitempty"`
+	RequestMediaType            string                            `json:"request_media_type,omitempty"`
 	ResponseSchema              string                            `json:"response_schema,omitempty"`
 	EntityResponseSchemas       map[string]string                 `json:"entity_response_schemas,omitempty"`
 	SuccessStatuses             map[string]int                    `json:"success_statuses"`
@@ -95,23 +96,28 @@ func NewContractDocument() ContractDocument {
 			Stability:             "frozen",
 			EffectiveAt:           "merge_to_2024.9.x",
 			FirstPublishedVersion: "1.0.0",
-			SupportedMajor:        2,
+			SupportedMajor:        3,
 			MajorVersionRule:      "after first publication, any consumer-incompatible contract revision increments the major version",
 		},
 		Maintainer: "Developer 1 - backend, integrations, and runtime",
 		Provisions: []string{
 			"4.3.1", "4.3.2", "6.6.3", "7.2.3", "7.3.5", "7.6.5", "7.6.6", "8.3.3",
 			"9.1.1", "9.2.1", "9.3.1", "9.3.6", "9.3.7", "9.4.1", "9.4.2", "9.4.3", "9.5.1", "9.6.1", "9.6.2", "9.7.2",
-			"10.1.1", "10.1.2", "10.1.4", "10.2.2", "10.2.3", "10.2.4", "10.5.2", "10.5.4", "10.7.2",
-			"11.2.2", "11.2.3", "11.2.4", "11.3.4", "11.4.3", "11.4.4",
+			"10.1.1", "10.1.2", "10.1.4", "10.2.2", "10.2.3", "10.2.4", "10.2.5", "10.5.2", "10.5.4", "10.7.2",
+			"11.1.1", "11.1.2", "11.1.3", "11.2.2", "11.2.3", "11.2.4", "11.3.4", "11.4.3", "11.4.4",
 			"11.6.1", "11.6.2", "11.6.3", "11.6.4", "11.6.5", "11.6.6",
-			"11.7.1", "11.7.2", "11.7.3", "11.7.4", "12.1.3", "12.3.1", "15.1.1", "15.2.1", "15.2.3",
+			"11.7.1", "11.7.2", "11.7.3", "11.7.4", "12.1.3", "12.3.1", "13.2.2", "15.1.1", "15.2.1", "15.2.3",
 		},
 		Decisions: []ContractDecision{
 			{
 				ID:         "CW-COMPLETION-NORMALISATION",
-				Provisions: []string{"10.1.2", "10.2.2", "10.2.3", "10.2.4"},
+				Provisions: []string{"10.1.2", "10.2.2", "10.2.3", "10.2.4", "10.2.5", "11.1.1", "11.1.2", "11.1.3"},
 				Decision:   "CivicWorks ASSIGNED to COMPLETED is applied atomically as CRM ASSIGNED to IN_PROGRESS to RESOLVED; the CRM lifecycle is not widened",
+			},
+			{
+				ID:         "CIVICWORKS-CALLBACK-BOUNDARY",
+				Provisions: []string{"6.6.3", "10.2.3", "11.1.1", "11.1.2", "13.2.2", "13.2.3"},
+				Decision:   "the CRM constructs an absolute callback URL from server-only CIVICWORKS_CALLBACK_BASE_URL; the separate fixture control token and control routes are never supplied to or proxied through product or browser code",
 			},
 			{
 				ID:         "PUBLIC-LOOKUP-PROJECTION",
@@ -274,7 +280,7 @@ func contractSchemas() map[string]map[string]interface{} {
 			"emails":             map[string]interface{}{"type": "array", "min_items_for_portal_account": 1, "items": map[string]interface{}{"type": "string", "format": "email"}, "verified_login_case_insensitive_unique": true},
 			"phone_numbers":      map[string]interface{}{"type": "array", "max_items": 3, "items_ref": "phone_number"},
 			"addresses":          map[string]interface{}{"type": "array", "max_items": 5, "items_ref": "structured_address", "maximum_primary_items": 1},
-			"primary_category":   map[string]interface{}{"enum_ref": "contact_category", "must_be_active": true},
+			"primary_category":   activeCategoryCodeProperty(),
 			"preferred_language": map[string]interface{}{"enum_ref": "language", "default": "EN"},
 			"email_opt_out":      map[string]interface{}{"type": "boolean", "default": false},
 			"custom_fields":      map[string]interface{}{"type": "object", "additional_properties": true},

@@ -107,6 +107,8 @@ export default (Vue: VueConstructor, app: string | Partial<Options>, ...namespac
     postProcess = ['pseudo']
   }
 
+  const isC311Mock = typeof window !== 'undefined' && window.C311Mode === 'mock'
+
   const options: InitOptions = {
     debug: devMode,
 
@@ -127,13 +129,17 @@ export default (Vue: VueConstructor, app: string | Partial<Options>, ...namespac
       caches: devMode ? [] : ['localStorage', 'cookie'],
     },
 
-    backend: {
-      // @ts-ignore
-      backend: http,
-      backendOption: {
-        loadPath: `${opt.baseURL}/locale/{{lng}}/${opt.app}`,
-      },
-    },
+    ...(isC311Mock
+      ? { resources: { en: {} } }
+      : {
+          backend: {
+            // @ts-ignore
+            backend: http,
+            backendOption: {
+              loadPath: `${opt.baseURL}/locale/{{lng}}/${opt.app}`,
+            },
+          },
+        }),
   }
 
   i18next

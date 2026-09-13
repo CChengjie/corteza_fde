@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,7 +113,7 @@ func TestFederatedSignInHTTPContractAndSecureCookies(t *testing.T) {
 	require.Equal(t, "/api/v1/auth", flowCookie.Path)
 	require.True(t, flowCookie.HttpOnly)
 	require.True(t, flowCookie.Secure)
-	require.Equal(t, http.SameSiteLaxMode, flowCookie.SameSite)
+	require.Equal(t, http.SameSiteNoneMode, flowCookie.SameSite)
 
 	callbackPath := "/api/v1/auth/oidc/callback?state=" + url.QueryEscape(provider.start.State) + "&code=fixture-code"
 	callback := executeJSON(t, router, http.MethodGet, callbackPath, nil, map[string]string{"Cookie": flowCookie.Name + "=" + flowCookie.Value}, 0)
@@ -136,6 +138,37 @@ func TestFederatedSignInHTTPContractAndSecureCookies(t *testing.T) {
 	current := executeJSON(t, router, http.MethodGet, "/api/v1/session", nil, map[string]string{"Cookie": sessionCookie.Name + "=" + sessionCookie.Value}, 0)
 	require.Equal(t, http.StatusOK, current.Code)
 	require.Contains(t, current.Body.String(), `"display_name":"REST Federated Resident"`)
+}
+
+func TestFederatedSAMLHTTPPostCallback(t *testing.T) {
+	router, _, provider := testFederationRouter(t)
+	provider.claims = city311Service.FederatedClaims{
+		Subject: "rest-staff-subject", Email: "rest-staff@example.invalid", EmailVerified: true,
+		DisplayName: "REST Federated Agent", ActorType: "staff", DepartmentCodes: []string{"STREETS"},
+		DistrictCodes: []string{"NORTH"}, Roles: []string{"service_agent"},
+	}
+	started := executeJSON(t, router, http.MethodGet, "/api/v1/auth/saml/start?client=staff", nil, nil, 0)
+	require.Equal(t, http.StatusOK, started.Code, started.Body.String())
+	flowCookie := started.Result().Cookies()[0]
+
+	form := url.Values{"RelayState": {provider.start.State}, "SAMLResponse": {"signed-assertion"}}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/saml/callback", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(flowCookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	require.Contains(t, response.Body.String(), `"authenticated":true`)
+	require.Equal(t, "signed-assertion", provider.callback.SAMLResponse)
+	require.Equal(t, provider.start.State, form.Get("RelayState"))
+
+	wrongMethod := executeJSON(t, router, http.MethodGet, "/api/v1/auth/saml/callback", nil, nil, 0)
+	require.Equal(t, http.StatusMethodNotAllowed, wrongMethod.Code)
+	oidcPost := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oidc/callback", strings.NewReader(form.Encode()))
+	oidcPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	oidcResponse := httptest.NewRecorder()
+	router.ServeHTTP(oidcResponse, oidcPost)
+	require.Equal(t, http.StatusMethodNotAllowed, oidcResponse.Code)
 }
 
 func TestFederatedCallbackFailuresAreRecoverableAndClearFlow(t *testing.T) {

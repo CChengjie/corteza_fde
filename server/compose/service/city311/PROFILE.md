@@ -17,8 +17,8 @@ Implemented or directly verified provisions:
 - 6.7.2(c): an authenticated constituent's language selection persists to the
   account. The accepted vocabulary is EN, ES, VI (6.7.1).
 - 7.11.3, 9.1.1 and 9.1.2(a): maintain the five editable profile fields with
-  the published cardinalities and validation. This is not the separate verified
-  email replacement flow in 9.1.2(b).
+  the published cardinalities and validation. The separate verified email
+  replacement flow in 9.1.2(b) is documented in `EMAIL_REPLACEMENT.md`.
 - 9.1.3: updates do not rewrite historical request snapshots or prior audit
   values.
 - 9.7.1–9.7.2: successful effective changes write an immutable audit event with
@@ -51,7 +51,8 @@ Profile PATCH supports only:
 - `display_name`: 1–120 Unicode characters, trimmed on save;
 - `phone_numbers`: zero to three objects, MOBILE/HOME/WORK labels and E.164 values;
 - `addresses`: zero to five structured addresses, at most one primary;
-- `primary_category`: the existing published contact-category vocabulary;
+- `primary_category`: a stable code from the current active administrator-managed
+  contact-category vocabulary;
 - `preferred_language`: EN, ES or VI.
 
 Omitted fields retain their current values. Empty arrays explicitly clear a
@@ -65,6 +66,11 @@ value as `If-Match` on PATCH. Missing/malformed preconditions return 428
 with `current_version`, without writes or extra audits. Reload after a conflict
 before resubmitting. Even an equivalent body with a stale version is rejected.
 The existing contract does not require pagination or an idempotency key here.
+Assignment and category deactivation take the same database-visible category
+lock. A newly created active code is immediately assignable; an unknown or
+inactive code returns `422 VALIDATION_ERROR` at `/primary_category`. Whichever
+of assignment or deactivation acquires the lock first determines the valid
+outcome, so an inactive category cannot commit while remaining in use.
 
 Example authenticated request:
 
@@ -155,8 +161,9 @@ PostgreSQL contention, clean/migrated container startup and retained-volume
 restart, browser persistence, responsive and accessibility acceptance remain
 required integration work, not claims of this isolated backend delivery.
 
-Remaining work includes linked request access, drafts, constituent notes/reopen,
-verified email replacement, category administration, and account deletion.
+Remaining work listed for this profile unit includes linked request access,
+drafts, constituent notes/reopen, and category administration; verified email
+replacement is implemented as the separate flow in `EMAIL_REPLACEMENT.md`.
 CivicWorks, broader mail flows, federation, calendar and exports are additional
 backend candidates, but need their own transactional models/fixture acceptance
 and coordination of shared schema/route ownership before parallel PRs.

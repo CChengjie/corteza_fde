@@ -26,15 +26,23 @@ export function createC311Provider (api: C311ProviderConstructors): C311Provider
   if (configured) return typeof configured === 'function' ? new configured() : configured
 
   if (window.C311Mode === 'mock' && api.MockC311Provider) {
-    return new api.MockC311Provider({
+    const provider = new api.MockC311Provider({
       role: window.C311MockRole,
       scenario: window.C311MockScenario,
       sessionVariant: window.C311MockSession || 'current',
     })
+    // Exposed only in explicit browser Mock mode so fixture gates can assert
+    // provider write counts without inspecting or invoking HTTP behavior.
+    ;(window as Window & { __C311MockProvider?: C311Provider }).__C311MockProvider = provider
+    return provider
   }
 
   if (api.C311HttpProvider && api.C311FetchTransport) {
-    return new api.C311HttpProvider(new api.C311FetchTransport({ baseURL: window.CortezaAPI || '' }))
+    // CortezaAPI conventionally ends in /api, while City311 endpoints are
+    // rooted at /api/v1. Use the origin so the transport cannot produce
+    // /api/api/v1 requests in same-origin deployments.
+    const baseURL = (window.C311API || window.CortezaAPI || '').replace(/\/api\/?$/, '')
+    return new api.C311HttpProvider(new api.C311FetchTransport({ baseURL }))
   }
 
   return undefined
@@ -128,6 +136,8 @@ declare global {
     C311MockRole?: string
     C311MockScenario?: string
     C311MockSession?: 'current' | 'expired'
+    __C311MockProvider?: C311Provider
     CortezaAPI?: string
+    C311API?: string
   }
 }

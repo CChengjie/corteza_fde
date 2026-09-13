@@ -49,6 +49,10 @@ func clientSchemas() map[string]map[string]interface{} {
 			"authorization_url":          map[string]interface{}{"type": "string", "format": "uri"},
 			"link_confirmation_required": map[string]interface{}{"type": "boolean", "default": false},
 		}),
+		"federated_saml_callback": object([]string{"RelayState", "SAMLResponse"}, map[string]interface{}{
+			"RelayState":   map[string]interface{}{"type": "string", "min_length": 1},
+			"SAMLResponse": map[string]interface{}{"type": "string", "min_length": 1, "write_only": true},
+		}),
 		"operation": object([]string{"operation_id", "kind", "status", "created_at", "updated_at"}, map[string]interface{}{
 			"operation_id": map[string]interface{}{"type": "string"},
 			"kind":         map[string]interface{}{"type": "string"},
@@ -119,7 +123,7 @@ func clientSchemas() map[string]map[string]interface{} {
 			"display_name":       stringProperty(1, 120),
 			"phone_numbers":      map[string]interface{}{"type": "array", "max_items": 3, "items_ref": "phone_number"},
 			"addresses":          map[string]interface{}{"type": "array", "max_items": 5, "items_ref": "structured_address", "maximum_primary_items": 1},
-			"primary_category":   map[string]interface{}{"enum_ref": "contact_category"},
+			"primary_category":   activeCategoryCodeProperty(),
 			"preferred_language": map[string]interface{}{"enum_ref": "language"},
 		}),
 		"password_change": object([]string{"current_password", "new_password"}, map[string]interface{}{
@@ -129,6 +133,18 @@ func clientSchemas() map[string]map[string]interface{} {
 		"login_identifier_change": object([]string{"current_password", "login_identifier"}, map[string]interface{}{
 			"current_password": map[string]interface{}{"type": "string"},
 			"login_identifier": map[string]interface{}{"type": "string", "min_length": 3, "max_length": 64, "pattern": "^[a-z0-9._-]+$"},
+		}),
+		"email_replacement_request": object([]string{"email"}, map[string]interface{}{
+			"email": map[string]interface{}{"type": "string", "format": "email", "max_length": 254},
+		}),
+		"email_replacement_acknowledgement": object([]string{"accepted"}, map[string]interface{}{
+			"accepted": map[string]interface{}{"const": true},
+		}),
+		"email_replacement_confirm": object([]string{"token"}, map[string]interface{}{
+			"token": map[string]interface{}{"type": "string", "min_length": 1, "max_length": 512, "write_only": true},
+		}),
+		"email_replacement_result": object([]string{"verified_email"}, map[string]interface{}{
+			"verified_email": map[string]interface{}{"type": "string", "format": "email", "max_length": 254},
 		}),
 		"language_preference": object([]string{"language"}, map[string]interface{}{
 			"language": map[string]interface{}{"enum_ref": "language"},
@@ -160,10 +176,12 @@ func clientSchemas() map[string]map[string]interface{} {
 			"published":   map[string]interface{}{"type": "boolean"},
 		}),
 		"content_write": object([]string{"body"}, map[string]interface{}{"body": map[string]interface{}{"type": "string", "format": "sanitized_html"}}),
-		"help_content": versionedObject([]string{"help_key", "language", "body"}, map[string]interface{}{
-			"help_key": map[string]interface{}{"type": "string", "enum_source": "help_keys"},
-			"language": map[string]interface{}{"enum_ref": "language"},
-			"body":     map[string]interface{}{"type": "string", "format": "sanitized_html"},
+		"help_content": versionedObject([]string{"help_key", "language", "body", "state", "published"}, map[string]interface{}{
+			"help_key":  map[string]interface{}{"type": "string", "enum_source": "help_keys"},
+			"language":  map[string]interface{}{"enum_ref": "language"},
+			"body":      map[string]interface{}{"type": "string", "format": "sanitized_html"},
+			"state":     map[string]interface{}{"enum": []string{"DRAFT", "PUBLISHED"}},
+			"published": map[string]interface{}{"type": "boolean"},
 		}),
 		"help_write": object([]string{"language", "body"}, map[string]interface{}{
 			"language": map[string]interface{}{"enum_ref": "language"}, "body": map[string]interface{}{"type": "string", "format": "sanitized_html"},
@@ -240,8 +258,8 @@ func clientSchemas() map[string]map[string]interface{} {
 			"department_code": map[string]interface{}{"enum_ref": "department_code"}, "district_codes": arrayEnum("district_code"), "reason": map[string]interface{}{"type": "string", "min_length": 1},
 		}),
 		"rollback": object([]string{"target_version"}, map[string]interface{}{"target_version": map[string]interface{}{"type": "integer", "minimum": 1}}),
-		"category": versionedObject([]string{"code", "active"}, map[string]interface{}{
-			"code": map[string]interface{}{"type": "string"}, "active": map[string]interface{}{"type": "boolean"}, "labels": localizedStringsProperty(),
+		"category": versionedObject([]string{"code", "active", "labels"}, map[string]interface{}{
+			"code": map[string]interface{}{"type": "string", "stable": true, "immutable": true}, "active": map[string]interface{}{"type": "boolean"}, "labels": localizedStringsProperty(),
 		}),
 		"category_write": object([]string{"code", "active", "labels"}, map[string]interface{}{
 			"code": map[string]interface{}{"type": "string"}, "active": map[string]interface{}{"type": "boolean"}, "labels": localizedStringsProperty(),
@@ -323,10 +341,12 @@ func clientSchemas() map[string]map[string]interface{} {
 		"civicworks_work_order_create": object([]string{"source_case_id", "service_request_number", "service_type", "summary", "department_code", "callback_url"}, map[string]interface{}{
 			"source_case_id": map[string]interface{}{"type": "string"}, "service_request_number": requestNumberProperty(), "service_type": map[string]interface{}{"enum_ref": "service_type"},
 			"summary": stringProperty(5, 160), "department_code": map[string]interface{}{"enum_ref": "department_code"}, "location": map[string]interface{}{"schema_ref": "location_input"},
-			"callback_url": map[string]interface{}{"const": "/integrations/civicworks/events"},
+			"callback_url": map[string]interface{}{"type": "string", "format": "uri", "pattern": "^https?://"},
 		}),
-		"civicworks_work_order": object([]string{"work_order_id", "source_case_id", "service_request_number", "status", "external_status_url", "version", "created_at", "updated_at"}, map[string]interface{}{
+		"civicworks_work_order": object([]string{"work_order_id", "source_case_id", "service_request_number", "service_type", "summary", "department_code", "fulfilment_source", "status", "external_status_url", "version", "created_at", "updated_at"}, map[string]interface{}{
 			"work_order_id": map[string]interface{}{"type": "string"}, "source_case_id": map[string]interface{}{"type": "string"}, "service_request_number": requestNumberProperty(),
+			"service_type": map[string]interface{}{"enum_ref": "service_type"}, "summary": stringProperty(1, 160), "department_code": map[string]interface{}{"enum_ref": "department_code"},
+			"fulfilment_source": map[string]interface{}{"const": "CIVICWORKS"}, "location": map[string]interface{}{"schema_ref": "location_input"},
 			"status": map[string]interface{}{"enum_ref": "civicworks_status"}, "external_status_url": map[string]interface{}{"type": "string", "format": "uri"},
 			"version": map[string]interface{}{"type": "integer", "minimum": 1}, "created_at": timestampProperty(), "updated_at": timestampProperty(),
 		}),
@@ -378,6 +398,18 @@ func versionedObject(required []string, properties map[string]interface{}) map[s
 
 func arrayEnum(enum string) map[string]interface{} {
 	return map[string]interface{}{"type": "array", "unique_items": true, "items": map[string]interface{}{"enum_ref": enum}}
+}
+
+func activeCategoryCodeProperty() map[string]interface{} {
+	return map[string]interface{}{
+		"type":                    "string",
+		"min_length":              1,
+		"max_length":              64,
+		"pattern":                 "^[A-Z][A-Z0-9_]*$",
+		"must_be_active":          true,
+		"vocabulary_endpoint":     "admin_categories_list",
+		"initial_values_enum_ref": "contact_category",
+	}
 }
 
 func stringArray() map[string]interface{} {

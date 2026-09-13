@@ -103,8 +103,11 @@ func openAPIOperation(contract ContractDocument, name string, endpoint EndpointC
 		operation["parameters"] = parameters
 	}
 	if endpoint.RequestSchema != "" {
-		contentType := "application/json"
-		if name == "portal_attachment_upload" {
+		contentType := endpoint.RequestMediaType
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		if name == "portal_attachment_upload" && endpoint.RequestMediaType == "" {
 			contentType = "multipart/form-data"
 		}
 		examples := map[string]interface{}{

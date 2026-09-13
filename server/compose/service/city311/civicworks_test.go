@@ -40,6 +40,8 @@ func (client *civicWorksStub) CreateWorkOrder(_ context.Context, input contract.
 	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
 	return &contract.CivicWorksWorkOrder{
 		WorkOrderID: workOrderID, SourceCaseID: input.SourceCaseID, ServiceRequestNumber: input.ServiceRequestNumber,
+		ServiceType: input.ServiceType, Summary: input.Summary, DepartmentCode: input.DepartmentCode,
+		FulfilmentSource: "CIVICWORKS", Location: input.Location,
 		Status: contract.CivicWorksStatusAssigned, ExternalStatusURL: "https://civicworks.example.invalid/ui/work-orders/" + workOrderID,
 		Version: 1, CreatedAt: now, UpdatedAt: now,
 	}, nil
@@ -74,8 +76,11 @@ func TestCivicWorksAssignmentIsAtomicAndIdempotent(t *testing.T) {
 	require.Equal(t, "WO-000034", detail.ExternalWorkOrder.WorkOrderID)
 	require.Equal(t, 1, client.calls)
 	require.Equal(t, civicWorksIdempotencyKey(request.ID), client.keys[0])
-	require.Equal(t, civicWorksCallbackPath, client.inputs[0].CallbackURL)
+	require.Equal(t, "https://city311.example.test/integrations/civicworks/events", client.inputs[0].CallbackURL)
 	require.Equal(t, "city311-case-"+detail.Request.RequestID, client.inputs[0].SourceCaseID)
+	require.Equal(t, "100 Example Street, Buffalo, NY 14201", client.inputs[0].Location["address"])
+	require.Equal(t, 42.8865, client.inputs[0].Location["latitude"])
+	require.Equal(t, -78.8784, client.inputs[0].Location["longitude"])
 
 	replayed, err := svc.Transition(ctx, agent, request.ID, 3, contract.RequestTransition{ToStatus: contract.ServiceRequestStatusAssigned})
 	require.NoError(t, err)
@@ -199,6 +204,8 @@ func TestCivicWorksHTTPClientRetriesWithStableContractHeaders(t *testing.T) {
 		now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
 		writeJSONFixture(t, w, http.StatusCreated, contract.CivicWorksWorkOrder{
 			WorkOrderID: "WO-41", SourceCaseID: input.SourceCaseID, ServiceRequestNumber: input.ServiceRequestNumber,
+			ServiceType: input.ServiceType, Summary: input.Summary, DepartmentCode: input.DepartmentCode,
+			FulfilmentSource: "CIVICWORKS", Location: input.Location,
 			Status: contract.CivicWorksStatusAssigned, ExternalStatusURL: fixtureURL(r, "/ui/work-orders/WO-41"),
 			Version: 1, CreatedAt: now, UpdatedAt: now,
 		})
@@ -210,7 +217,8 @@ func TestCivicWorksHTTPClientRetriesWithStableContractHeaders(t *testing.T) {
 	require.NoError(t, err)
 	input := contract.CivicWorksWorkOrderCreate{
 		SourceCaseID: "case-41", ServiceRequestNumber: "SR-2026-00041", ServiceType: contract.ServiceTypePothole,
-		Summary: "Pothole blocking lane", DepartmentCode: contract.DepartmentStreets, CallbackURL: civicWorksCallbackPath,
+		Summary: "Pothole blocking lane", DepartmentCode: contract.DepartmentStreets,
+		CallbackURL: "https://city311.example.test/integrations/civicworks/events",
 	}
 	result, err := client.CreateWorkOrder(context.Background(), input, "stable-key")
 	require.NoError(t, err)
@@ -357,6 +365,7 @@ func TestCivicWorksEnvironmentHelpers(t *testing.T) {
 	t.Setenv("CIVICWORKS_API_TOKEN", "token")
 	t.Setenv("CIVICWORKS_WEBHOOK_SECRET", "secret")
 	t.Setenv("BENCHMARK_RUN_ID", "run")
+	t.Setenv("CIVICWORKS_CALLBACK_BASE_URL", "https://city311.example.test")
 	client, secret, err := NewCivicWorksFromEnvironment(&http.Client{})
 	require.NoError(t, err)
 	require.NotNil(t, client)

@@ -7,13 +7,23 @@ import type {
   AccountRegistrationAcknowledgement,
   BinaryAttachment,
   Branding,
+  BrandingWrite,
+  Category,
+  CategoryWrite,
   C311EndpointResponse,
   ContentObject,
+  ContentWrite,
+  CustomFieldDefinition,
   DraftWrite,
   GeocodeRequest,
   GeocodeResponse,
   FederatedRedirect,
   HelpContent,
+  HelpWrite,
+  IdentityConfiguration,
+  IdentityConfigurationWrite,
+  IntegrationConnection,
+  IntegrationConnectionWrite,
   LanguagePreference,
   LoginIdentifierChange,
   ListQuery,
@@ -34,6 +44,7 @@ import type {
   RequestQueueItem,
   RequestSummary,
   ReopenRequestResponse,
+  RollbackInput,
   ConstituentLink,
   ConstituentUnlink,
   RequestNote,
@@ -55,6 +66,31 @@ import type {
   DuplicateGroupChange,
   WorkflowDefinition,
   RequestTransition,
+  BulkRequest,
+  BulkResult,
+  CivicWorksEvent,
+  CivicWorksEventResult,
+  WorkflowTestInput,
+  WorkflowExecution,
+  CalendarExport,
+  CalendarImport,
+  MailCompose,
+  MailPreview,
+  MailDelivery,
+  MailTemplate,
+  ReportCatalogueItem,
+  ReportShare,
+  AuditEvent,
+  AuditFilters,
+  ExportResponse,
+  WorkflowActionRequest,
+  WorkflowActionAccepted,
+  DataExportQuery,
+  ContactEmailExportRequest,
+  EmailReplacementRequest,
+  EmailReplacementAcknowledgement,
+  EmailReplacementConfirm,
+  EmailReplacementResult,
 } from './types'
 
 export interface C311RequestOptions {
@@ -215,12 +251,45 @@ export interface C311Provider {
   confirmPasswordReset (input: PasswordResetConfirm): Promise<PasswordResetResponse>
   changeLoginIdentifier (input: LoginIdentifierChange): Promise<Session>
   changePassword (input: PasswordChange): Promise<void>
-  /** Frontend mock-only until the backend publishes an account disposition operation. */
   deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult>
+  requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement>
+  confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult>
   startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect>
   confirmAccountLink (): Promise<Session>
   completeFederatedSignIn (provider: IdentityProvider, query?: Record<string, string>): Promise<FederatedSignInResult>
   getBranding (): Promise<Branding>
+  getIdentityConfiguration (): Promise<IdentityConfiguration>
+  updateIdentityConfiguration (input: IdentityConfigurationWrite, options?: C311RequestOptions): Promise<IdentityConfiguration>
+  listIntegrations (query?: ListQuery): Promise<PageResponse<IntegrationConnection>>
+  getIntegration (integrationID: string): Promise<IntegrationConnection>
+  updateIntegration (integrationID: string, input: IntegrationConnectionWrite, options?: C311RequestOptions): Promise<IntegrationConnection>
+  rotateIntegrationSecret (integrationID: string, options?: C311RequestOptions): Promise<IntegrationConnection>
+  revokeIntegration (integrationID: string, options?: C311RequestOptions): Promise<IntegrationConnection>
+  getAdminBranding (): Promise<Branding>
+  updateBranding (input: BrandingWrite, options?: C311RequestOptions): Promise<Branding>
+  previewBranding (input: BrandingWrite): Promise<Branding>
+  publishBranding (options?: C311RequestOptions): Promise<Branding>
+  listBrandingVersions (query?: ListQuery): Promise<PageResponse<Branding>>
+  rollbackBranding (input: RollbackInput, options?: C311RequestOptions): Promise<Branding>
+  getAdminContent (contentKey: PublicContentKey): Promise<ContentObject>
+  listAdminContent (query?: ListQuery): Promise<PageResponse<ContentObject>>
+  updateAdminContent (contentKey: PublicContentKey, input: ContentWrite, options?: C311RequestOptions): Promise<ContentObject>
+  previewAdminContent (contentKey: PublicContentKey, input: ContentWrite): Promise<ContentObject>
+  publishAdminContent (contentKey: PublicContentKey, options?: C311RequestOptions): Promise<ContentObject>
+  listAdminContentVersions (contentKey: PublicContentKey, query?: ListQuery): Promise<PageResponse<ContentObject>>
+  rollbackAdminContent (contentKey: PublicContentKey, input: RollbackInput, options?: C311RequestOptions): Promise<ContentObject>
+  getAdminHelp (helpKey: HelpKey, language?: Language): Promise<HelpContent>
+  updateAdminHelp (helpKey: HelpKey, input: HelpWrite, options?: C311RequestOptions): Promise<HelpContent>
+  previewAdminHelp (helpKey: HelpKey, input: HelpWrite): Promise<HelpContent>
+  publishAdminHelp (helpKey: HelpKey, language?: Language, options?: C311RequestOptions): Promise<HelpContent>
+  listAdminHelpVersions (helpKey: HelpKey, query?: ListQuery & { language?: Language }): Promise<PageResponse<HelpContent>>
+  rollbackAdminHelp (helpKey: HelpKey, input: RollbackInput, language?: Language, options?: C311RequestOptions): Promise<HelpContent>
+  listAdminCategories (query?: ListQuery): Promise<PageResponse<Category>>
+  createAdminCategory (input: CategoryWrite): Promise<Category>
+  updateAdminCategory (categoryCode: string, input: CategoryWrite, options?: C311RequestOptions): Promise<Category>
+  listAdminCustomFields (query?: ListQuery): Promise<PageResponse<CustomFieldDefinition>>
+  createAdminCustomField (input: CustomFieldDefinition): Promise<CustomFieldDefinition>
+  updateAdminCustomField (fieldKey: string, input: CustomFieldDefinition, options?: C311RequestOptions): Promise<CustomFieldDefinition>
   getPublicContent (contentKey: PublicContentKey): Promise<ContentObject>
   getPublicHelp (helpKey: HelpKey, language?: Language): Promise<HelpContent>
   getProfile (): Promise<Constituent>
@@ -242,7 +311,6 @@ export interface C311Provider {
   linkAnonymousRequest (input: AnonymousStatusLookupRequest): Promise<ServiceRequest>
   reopenPortalRequest (requestID: string, reason: string, options?: C311RequestOptions): Promise<ReopenRequestResponse>
   getPublicStatus (input: AnonymousStatusLookupRequest): Promise<AnonymousStatusLookupResponse>
-  /** Mock-only public voter note append until a portal note operation is published. */
   createPortalNote (requestID: string, input: RequestNote): Promise<RequestNote>
 
   geocode (input: GeocodeRequest): Promise<GeocodeResponse>
@@ -262,6 +330,8 @@ export interface C311Provider {
   linkStaffConstituent (requestID: string, input: ConstituentLink, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   unlinkStaffConstituent (requestID: string, constituentID: string, input: ConstituentUnlink, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   createStaffNote (requestID: string, input: RequestNote): Promise<RequestNote>
+  bulkStaffRequests (input: BulkRequest, options?: C311RequestOptions): Promise<BulkResult>
+  processCivicWorksEvent (input: CivicWorksEvent, eventId: string, signature: string): Promise<CivicWorksEventResult>
 
   listReports (query?: ListQuery): Promise<PageResponse<ReportDefinition>>
   getReport (reportID: string): Promise<ReportDefinition>
@@ -274,6 +344,27 @@ export interface C311Provider {
   getWorkflow (workflowID: string): Promise<WorkflowDefinition>
   createWorkflow (input: WorkflowDefinition): Promise<WorkflowDefinition>
   updateWorkflow (workflowID: string, input: WorkflowDefinition, options?: C311RequestOptions): Promise<WorkflowDefinition>
+  activateWorkflow (workflowID: string, options?: C311RequestOptions): Promise<WorkflowDefinition>
+  deactivateWorkflow (workflowID: string, options?: C311RequestOptions): Promise<WorkflowDefinition>
+  testWorkflow (workflowID: string, input: WorkflowTestInput): Promise<Operation>
+  listWorkflowExecutions (query?: ListQuery): Promise<PageResponse<WorkflowExecution>>
+  getWorkflowExecution (executionID: string): Promise<WorkflowExecution>
+  executeWorkflowAction (input: WorkflowActionRequest, options?: C311RequestOptions): Promise<WorkflowActionAccepted>
+  importCalendar (input: CalendarImport): Promise<Operation>
+  exportCalendar (): Promise<CalendarExport>
+  previewMail (input: MailCompose): Promise<MailPreview>
+  sendMail (input: MailCompose, options?: C311RequestOptions): Promise<MailDelivery>
+  getMailDelivery (deliveryID: string): Promise<MailDelivery>
+  /** Mock-only until a mail-template contract operation is published. */
+  listMailTemplates?: () => Promise<MailTemplate[]>
+  /** Mock-only until a mail-template contract operation is published. */
+  updateMailTemplate?: (templateID: string, input: Pick<MailTemplate, 'name' | 'subject' | 'text' | 'html'>) => Promise<MailTemplate>
+  listReportCatalogue (query?: ListQuery): Promise<PageResponse<ReportCatalogueItem>>
+  shareReport (reportID: string, input: ReportShare, options?: C311RequestOptions): Promise<ReportDefinition>
+  listAuditEvents (query?: ListQuery & { filters?: AuditFilters }): Promise<PageResponse<AuditEvent>>
+  exportAuditEvents (filters: AuditFilters): Promise<Operation>
+  exportContactEmails (input: ContactEmailExportRequest): Promise<Operation>
+  exportData (entity: 'audit-events' | 'constituents' | 'follow-up-actions' | 'service-requests', query?: DataExportQuery): Promise<ExportResponse>
 }
 
 export class C311HttpProvider implements C311Provider {
@@ -288,6 +379,16 @@ export class C311HttpProvider implements C311Provider {
 
   private request<T> (request: C311TransportRequest): Promise<T> {
     return this.transport.request<T>(request)
+  }
+
+  private markSanitizedContent<T extends ContentObject | HelpContent> (value: T): T {
+    if (!value || typeof value !== 'object' || typeof value.body !== 'string') return value
+    if (value.sanitized === false || value.sanitized_html === false) return value
+    return { ...value, sanitized: true, sanitized_html: true }
+  }
+
+  private markSanitizedContentPage<T extends ContentObject | HelpContent> (page: PageResponse<T>): PageResponse<T> {
+    return { ...page, items: (page.items || []).map(item => this.markSanitizedContent(item)) }
   }
 
   private listQuery (query: ListQuery = {}): C311TransportRequest['query'] {
@@ -348,14 +449,22 @@ export class C311HttpProvider implements C311Provider {
     return this.request({ method: 'POST', path: '/api/v1/account/password', body: input })
   }
 
-  deleteOrAnonymizeAccount (_input: AccountDispositionRequest): Promise<AccountDispositionResult> {
-    // No canonical account deletion/anonymization operation exists yet. Keep HTTP
-    // mode explicit and side-effect free until the backend contract is published.
-    return Promise.reject(new C311ApiError({
-      error: 'OPERATION_FAILED',
-      message: 'Account deletion or anonymization is not available in HTTP mode.',
-      retryable: false,
-    }, 501))
+  async deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult> {
+    // The server performs a privacy-preserving deletion/anonymization transaction.
+    // Confirmation is deliberately a UI guard; the published DELETE operation has no body.
+    if (input.mode !== 'DELETE' || input.confirmation !== 'DELETE') {
+      throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'Type DELETE to confirm account deletion.', retryable: false }, 422)
+    }
+    await this.request<void>({ method: 'DELETE', path: '/api/v1/account' })
+    return { status: 'DELETED', message: 'Account deleted and personal profile data anonymized.' }
+  }
+
+  requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement> {
+    return this.request({ method: 'POST', path: '/api/v1/account/email-replacement', body: input })
+  }
+
+  confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult> {
+    return this.request({ method: 'POST', path: '/api/v1/auth/email-replacement/confirm', body: input })
   }
 
   startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect> {
@@ -374,12 +483,46 @@ export class C311HttpProvider implements C311Provider {
     return this.request({ method: 'GET', path: '/api/v1/public/branding' })
   }
 
+  getIdentityConfiguration (): Promise<IdentityConfiguration> { return this.request({ method: 'GET', path: '/api/v1/admin/identity' }) }
+  updateIdentityConfiguration (input: IdentityConfigurationWrite, options: C311RequestOptions = {}): Promise<IdentityConfiguration> { return this.request({ method: 'PATCH', path: '/api/v1/admin/identity', body: input, ...this.requestOptions(options) }) }
+  listIntegrations (query: ListQuery = {}): Promise<PageResponse<IntegrationConnection>> { return this.request({ method: 'GET', path: '/api/v1/admin/integrations', query: this.listQuery(query) }) }
+  getIntegration (integrationID: string): Promise<IntegrationConnection> { return this.request({ method: 'GET', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}` }) }
+  updateIntegration (integrationID: string, input: IntegrationConnectionWrite, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'PATCH', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}`, body: input, ...this.requestOptions(options) }) }
+  rotateIntegrationSecret (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'POST', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}/rotate`, body: {}, ...this.requestOptions(options) }) }
+  revokeIntegration (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'POST', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}/revoke`, body: {}, ...this.requestOptions(options) }) }
+
+  updateBranding (input: BrandingWrite, options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'PATCH', path: '/api/v1/admin/branding', body: input, ...this.requestOptions(options) }) }
+  getAdminBranding (): Promise<Branding> { return this.request({ method: 'GET', path: '/api/v1/admin/branding' }) }
+  previewBranding (input: BrandingWrite): Promise<Branding> { return this.request({ method: 'POST', path: '/api/v1/admin/branding/preview', body: input }) }
+  publishBranding (options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'POST', path: '/api/v1/admin/branding/publish', body: {}, ...this.requestOptions(options) }) }
+  listBrandingVersions (query: ListQuery = {}): Promise<PageResponse<Branding>> { return this.request({ method: 'GET', path: '/api/v1/admin/branding/versions', query: this.listQuery(query) }) }
+  rollbackBranding (input: RollbackInput, options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'POST', path: '/api/v1/admin/branding/rollback', body: input, ...this.requestOptions(options) }) }
+  getAdminContent (contentKey: PublicContentKey): Promise<ContentObject> { return this.request<ContentObject>({ method: 'GET', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}` }).then(value => this.markSanitizedContent(value)) }
+  listAdminContent (query: ListQuery = {}): Promise<PageResponse<ContentObject>> { return this.request<PageResponse<ContentObject>>({ method: 'GET', path: '/api/v1/admin/content', query: this.listQuery(query) }).then(value => this.markSanitizedContentPage(value)) }
+  updateAdminContent (contentKey: PublicContentKey, input: ContentWrite, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request<ContentObject>({ method: 'PATCH', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}`, body: input, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  previewAdminContent (contentKey: PublicContentKey, input: ContentWrite): Promise<ContentObject> { return this.request<ContentObject>({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/preview`, body: input }).then(value => this.markSanitizedContent(value)) }
+  publishAdminContent (contentKey: PublicContentKey, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request<ContentObject>({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/publish`, body: {}, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  listAdminContentVersions (contentKey: PublicContentKey, query: ListQuery = {}): Promise<PageResponse<ContentObject>> { return this.request<PageResponse<ContentObject>>({ method: 'GET', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/versions`, query: this.listQuery(query) }).then(value => this.markSanitizedContentPage(value)) }
+  rollbackAdminContent (contentKey: PublicContentKey, input: RollbackInput, options: C311RequestOptions = {}): Promise<ContentObject> { return this.request<ContentObject>({ method: 'POST', path: `/api/v1/admin/content/${encodeURIComponent(contentKey)}/rollback`, body: input, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  getAdminHelp (helpKey: HelpKey, language: Language = 'EN'): Promise<HelpContent> { return this.request<HelpContent>({ method: 'GET', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}`, query: { language } }).then(value => this.markSanitizedContent(value)) }
+  updateAdminHelp (helpKey: HelpKey, input: HelpWrite, options: C311RequestOptions = {}): Promise<HelpContent> { return this.request<HelpContent>({ method: 'PATCH', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}`, body: input, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  previewAdminHelp (helpKey: HelpKey, input: HelpWrite): Promise<HelpContent> { return this.request<HelpContent>({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/preview`, body: input }).then(value => this.markSanitizedContent(value)) }
+  publishAdminHelp (helpKey: HelpKey, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { return this.request<HelpContent>({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/publish`, query: { language }, body: {}, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  listAdminHelpVersions (helpKey: HelpKey, query: ListQuery & { language?: Language } = {}): Promise<PageResponse<HelpContent>> { return this.request<PageResponse<HelpContent>>({ method: 'GET', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/versions`, query: this.listQuery(query) }).then(value => this.markSanitizedContentPage(value)) }
+  rollbackAdminHelp (helpKey: HelpKey, input: RollbackInput, language: Language = 'EN', options: C311RequestOptions = {}): Promise<HelpContent> { return this.request<HelpContent>({ method: 'POST', path: `/api/v1/admin/help/${encodeURIComponent(helpKey)}/rollback`, query: { language }, body: input, ...this.requestOptions(options) }).then(value => this.markSanitizedContent(value)) }
+  listAdminCategories (query: ListQuery = {}): Promise<PageResponse<Category>> { return this.request({ method: 'GET', path: '/api/v1/admin/contact-categories', query: this.listQuery(query) }) }
+  createAdminCategory (input: CategoryWrite): Promise<Category> { return this.request({ method: 'POST', path: '/api/v1/admin/contact-categories', body: input }) }
+  updateAdminCategory (categoryCode: string, input: CategoryWrite, options: C311RequestOptions = {}): Promise<Category> { return this.request({ method: 'PATCH', path: `/api/v1/admin/contact-categories/${encodeURIComponent(categoryCode)}`, body: input, ...this.requestOptions(options) }) }
+  listAdminCustomFields (query: ListQuery = {}): Promise<PageResponse<CustomFieldDefinition>> { return this.request({ method: 'GET', path: '/api/v1/admin/custom-fields', query: this.listQuery(query) }) }
+  createAdminCustomField (input: CustomFieldDefinition): Promise<CustomFieldDefinition> { return this.request({ method: 'POST', path: '/api/v1/admin/custom-fields', body: input }) }
+  updateAdminCustomField (fieldKey: string, input: CustomFieldDefinition, options: C311RequestOptions = {}): Promise<CustomFieldDefinition> { return this.request({ method: 'PATCH', path: `/api/v1/admin/custom-fields/${encodeURIComponent(fieldKey)}`, body: input, ...this.requestOptions(options) }) }
+
   getPublicContent (contentKey: PublicContentKey): Promise<ContentObject> {
-    return this.request({ method: 'GET', path: `/api/v1/public/content/${encodeURIComponent(contentKey)}` })
+    return this.request<ContentObject>({ method: 'GET', path: `/api/v1/public/content/${encodeURIComponent(contentKey)}` }).then(value => this.markSanitizedContent(value))
   }
 
   getPublicHelp (helpKey: HelpKey, language?: Language): Promise<HelpContent> {
-    return this.request({ method: 'GET', path: `/api/v1/public/help/${encodeURIComponent(helpKey)}`, query: language ? { language } : undefined })
+    return this.request<HelpContent>({ method: 'GET', path: `/api/v1/public/help/${encodeURIComponent(helpKey)}`, query: language ? { language } : undefined }).then(value => this.markSanitizedContent(value))
   }
 
   getProfile (): Promise<Constituent> {
@@ -471,12 +614,8 @@ export class C311HttpProvider implements C311Provider {
       : { request_detail: null }
   }
 
-  createPortalNote (_requestID: string, _input: RequestNote): Promise<RequestNote> {
-    return Promise.reject(new C311ApiError({
-      error: 'OPERATION_FAILED',
-      message: 'Public voter notes are not available in HTTP mode.',
-      retryable: false,
-    }, 501))
+  createPortalNote (requestID: string, input: RequestNote): Promise<RequestNote> {
+    return this.request({ method: 'POST', path: `/api/v1/portal/service-requests/${encodeURIComponent(requestID)}/notes`, body: input })
   }
 
   geocode (input: GeocodeRequest): Promise<GeocodeResponse> {
@@ -546,6 +685,15 @@ export class C311HttpProvider implements C311Provider {
     return this.request({ method: 'POST', path: `/api/v1/staff/service-requests/${encodeURIComponent(requestID)}/notes`, body: input })
   }
 
+  bulkStaffRequests (input: BulkRequest, options: C311RequestOptions = {}): Promise<BulkResult> {
+    return this.request({ method: 'POST', path: '/api/v1/staff/service-requests/bulk', body: input, ...this.requestOptions(options, false) })
+  }
+
+  processCivicWorksEvent (input: CivicWorksEvent, eventId: string, signature: string): Promise<CivicWorksEventResult> {
+    return this.request<CivicWorksEventResult | undefined>({ method: 'POST', path: '/integrations/civicworks/events', body: input, headers: { 'Content-Type': 'application/json', 'X-CivicWorks-Event-Id': eventId, 'X-CivicWorks-Signature': signature }, acceptedStatuses: [204] })
+      .then(result => result || { acknowledged: true })
+  }
+
   listReports (query: ListQuery = {}): Promise<PageResponse<ReportDefinition>> {
     return this.request({ method: 'GET', path: '/api/v1/staff/reports', query: this.listQuery(query) })
   }
@@ -605,6 +753,24 @@ export class C311HttpProvider implements C311Provider {
   updateWorkflow (workflowID: string, input: WorkflowDefinition, options: C311RequestOptions = {}): Promise<WorkflowDefinition> {
     return this.request({ method: 'PATCH', path: `/api/v1/admin/workflows/${encodeURIComponent(workflowID)}`, body: input, ...this.requestOptions(options) })
   }
+
+  activateWorkflow (workflowID: string, options: C311RequestOptions = {}): Promise<WorkflowDefinition> { return this.request({ method: 'POST', path: `/api/v1/admin/workflows/${encodeURIComponent(workflowID)}/activate`, body: {}, ...this.requestOptions(options) }) }
+  deactivateWorkflow (workflowID: string, options: C311RequestOptions = {}): Promise<WorkflowDefinition> { return this.request({ method: 'POST', path: `/api/v1/admin/workflows/${encodeURIComponent(workflowID)}/deactivate`, body: {}, ...this.requestOptions(options) }) }
+  testWorkflow (workflowID: string, input: WorkflowTestInput): Promise<Operation> { return this.request({ method: 'POST', path: `/api/v1/admin/workflows/${encodeURIComponent(workflowID)}/test`, body: input }) }
+  listWorkflowExecutions (query: ListQuery = {}): Promise<PageResponse<WorkflowExecution>> { return this.request({ method: 'GET', path: '/api/v1/admin/workflow-executions', query: this.listQuery(query) }) }
+  getWorkflowExecution (executionID: string): Promise<WorkflowExecution> { return this.request({ method: 'GET', path: `/api/v1/admin/workflow-executions/${encodeURIComponent(executionID)}` }) }
+  executeWorkflowAction (input: WorkflowActionRequest, options: C311RequestOptions = {}): Promise<WorkflowActionAccepted> { return this.request({ method: 'POST', path: '/api/v1/actions', body: input, ...this.requestOptions(options, false) }) }
+  importCalendar (input: CalendarImport): Promise<Operation> { return this.request({ method: 'POST', path: '/api/v1/staff/calendar/import', body: input }) }
+  exportCalendar (): Promise<CalendarExport> { return this.request({ method: 'GET', path: '/api/v1/staff/calendar/export' }) }
+  previewMail (input: MailCompose): Promise<MailPreview> { return this.request({ method: 'POST', path: '/api/v1/staff/mail/preview', body: input }) }
+  sendMail (input: MailCompose, options: C311RequestOptions = {}): Promise<MailDelivery> { return this.request({ method: 'POST', path: '/api/v1/staff/mail', body: input, ...this.requestOptions(options, false) }) }
+  getMailDelivery (deliveryID: string): Promise<MailDelivery> { return this.request({ method: 'GET', path: `/api/v1/staff/mail/${encodeURIComponent(deliveryID)}` }) }
+  listReportCatalogue (query: ListQuery = {}): Promise<PageResponse<ReportCatalogueItem>> { return this.request({ method: 'GET', path: '/api/v1/staff/reports/catalogue', query: this.listQuery(query) }) }
+  shareReport (reportID: string, input: ReportShare, options: C311RequestOptions = {}): Promise<ReportDefinition> { return this.request({ method: 'POST', path: `/api/v1/staff/reports/${encodeURIComponent(reportID)}/share`, body: input, ...this.requestOptions(options) }) }
+  listAuditEvents (query: ListQuery & { filters?: AuditFilters } = {}): Promise<PageResponse<AuditEvent>> { return this.request({ method: 'GET', path: '/api/v1/staff/audit-events', query: this.listQuery(query) }) }
+  exportAuditEvents (filters: AuditFilters): Promise<Operation> { return this.request({ method: 'POST', path: '/api/v1/staff/audit-events/export', body: { filters } }) }
+  exportContactEmails (input: ContactEmailExportRequest): Promise<Operation> { return this.request({ method: 'POST', path: '/api/v1/staff/contact-email-export', body: input }) }
+  exportData (entity: 'audit-events' | 'constituents' | 'follow-up-actions' | 'service-requests', query: DataExportQuery = {}): Promise<ExportResponse> { return this.request({ method: 'GET', path: `/api/v1/export/${encodeURIComponent(entity)}`, query: { ...this.listQuery(query), ...(query.updated_since ? { updated_since: query.updated_since } : {}) } }) }
 }
 
 export type C311TransportResult<T> = C311EndpointResponse<T>

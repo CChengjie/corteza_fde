@@ -64,6 +64,7 @@ type (
 		dataExportLimits    map[uint64]dataExportLimit
 		civicWorksClient    CivicWorksClient
 		civicWorksSecret    string
+		civicWorksCallback  string
 		civicWorksConfig    error
 		workflowHTTP        WorkflowHTTPClient
 		workflowConfig      error
@@ -149,6 +150,9 @@ func New(s store.Storer) *Service {
 	}
 	svc.integrationKey = integrationEncryptionKey()
 	svc.civicWorksClient, svc.civicWorksSecret, svc.civicWorksConfig = NewCivicWorksFromEnvironment(nil)
+	if svc.civicWorksConfig == nil {
+		svc.civicWorksCallback, svc.civicWorksConfig = civicWorksCallbackURLFromEnvironment()
+	}
 	svc.workflowHTTP, svc.workflowConfig = NewWorkflowHTTPClientFromEnvironment(nil)
 	svc.mappingService, svc.mappingConfig = NewMappingFromEnvironment(nil)
 	return svc

@@ -46,7 +46,7 @@ func scopedReadFilterProperties(endpoint string) map[string]interface{} {
 		for _, name := range []string{"constituent_id", "query", "display_name", "email", "phone"} {
 			properties[name] = scopedReadStringList(nil)
 		}
-		properties["primary_category"] = scopedReadStringList(map[string]interface{}{"enum_ref": "contact_category"})
+		properties["primary_category"] = scopedReadStringList(activeCategoryCodeProperty())
 		properties["preferred_language"] = scopedReadStringList(map[string]interface{}{"enum_ref": "language"})
 		properties["email_opt_out"] = scopedReadStringList(map[string]interface{}{"enum": []string{"true", "false"}})
 		properties["department"] = scopedReadStringList(map[string]interface{}{"enum_ref": "department_code"})

@@ -97,9 +97,12 @@ func (svc *Service) CreateContactCategory(ctx context.Context, actor contract.Ac
 	return categoryFromRevision(revision), nil
 }
 
-func (svc *Service) UpdateContactCategory(ctx context.Context, actor contract.Actor, code string, input contract.CategoryWrite) (*contract.Category, error) {
+func (svc *Service) UpdateContactCategory(ctx context.Context, actor contract.Actor, code string, expectedVersion uint64, input contract.CategoryWrite) (*contract.Category, error) {
 	if !canManageContactCategories(actor) {
 		return nil, apiError(http.StatusForbidden, contract.ErrorForbidden, "A department manager or platform administrator role is required.")
+	}
+	if expectedVersion == 0 {
+		return nil, expectedVersionRequired()
 	}
 	code = strings.TrimSpace(code)
 	input.Code = strings.TrimSpace(input.Code)
@@ -114,15 +117,75 @@ func (svc *Service) UpdateContactCategory(ctx context.Context, actor contract.Ac
 	}
 	svc.presentationMu.Lock()
 	defer svc.presentationMu.Unlock()
-	current, err := svc.latestConfigurationRevision(ctx, svc.store, configurationContactCategory, code, "", false)
-	if err != nil {
-		return nil, apiError(http.StatusNotFound, contract.ErrorNotFound, "The contact category was not found.")
-	}
-	revision, err := svc.createConfigurationRevision(ctx, actor, current, configurationContactCategory, code, "", input, true, "CONTACT_CATEGORY_UPDATED")
+	var revision *composeTypes.City311ConfigurationRevision
+	err := store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+		if err := store.LockCity311ConfigurationResource(ctx, tx, configurationContactCategory, code); err != nil {
+			return err
+		}
+		current, err := svc.latestConfigurationRevision(ctx, tx, configurationContactCategory, code, "", false)
+		if err != nil {
+			return apiError(http.StatusNotFound, contract.ErrorNotFound, "The contact category was not found.")
+		}
+		if uint64(current.Version) != expectedVersion {
+			return categoryVersionConflict(current.Version)
+		}
+		currentCategory := categoryFromRevision(current)
+		if currentCategory.Active && !input.Active {
+			used, err := contactCategoryInUse(ctx, tx, code)
+			if err != nil {
+				return err
+			}
+			if used {
+				return validationError(contract.FieldError{Field: "/active", Code: contract.ValidationConflict})
+			}
+		}
+		revision, err = svc.createConfigurationRevisionInStore(ctx, tx, actor, current, configurationContactCategory, code, "", input, true, "CONTACT_CATEGORY_UPDATED")
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 	return categoryFromRevision(revision), nil
+}
+
+func activeContactCategory(ctx context.Context, st store.Storer, code string) (bool, error) {
+	revisions, _, err := store.SearchCity311ConfigurationRevisions(ctx, st, composeTypes.City311ConfigurationRevisionFilter{
+		ResourceType: configurationContactCategory,
+		ResourceKey:  code,
+	})
+	if err != nil {
+		return false, err
+	}
+	var current *composeTypes.City311ConfigurationRevision
+	for _, revision := range revisions {
+		if revision.ResourceType != configurationContactCategory || revision.ResourceKey != code {
+			continue
+		}
+		if current == nil || revision.Version > current.Version {
+			current = revision
+		}
+	}
+	return current != nil && categoryFromRevision(current).Active, nil
+}
+
+func contactCategoryInUse(ctx context.Context, st store.Storer, code string) (bool, error) {
+	constituents, _, err := store.SearchCity311Constituents(ctx, st, composeTypes.City311ConstituentFilter{})
+	if err != nil {
+		return false, err
+	}
+	for _, constituent := range constituents {
+		if value, ok := constituent.Profile["primary_category"].(string); ok && value == code {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func categoryVersionConflict(version int) *ServiceError {
+	current := uint64(version)
+	return &ServiceError{Status: http.StatusConflict, Payload: contract.APIError{
+		Error: contract.ErrorVersionConflict, Message: "The category has changed.", Retryable: false, CurrentVersion: &current,
+	}}
 }
 
 func (svc *Service) ListCustomFields(ctx context.Context, actor contract.Actor, query ConfigurationListQuery) (*contract.CustomFieldDefinitionList, error) {

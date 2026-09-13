@@ -36,7 +36,7 @@ jobs:
       - name: "Install Python browser test dependencies"
         run: |
           python3 -m pip install --require-hashes --only-binary=:all: -r tools/c311-browser/requirements.txt
-          python3 -m playwright install --with-deps chromium
+          python3 -m playwright install --with-deps chromium firefox webkit
       - name: "Build and install current C311 packages"
         run: tools/ci/install-local-c311-packages.sh
       - name: "lib/js unit, types and build"
@@ -87,6 +87,15 @@ jobs:
         run: tools/c311-browser/run-fe06.sh
         env:
           C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe06-gate
+      - name: "FE-07 staff operations browser matrix"
+        run: tools/c311-browser/run-fe07.sh
+        env:
+          C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe07-gate
+      - name: "FE-10 frontend quality browser matrix"
+        run: tools/c311-browser/run-fe10.sh
+        env:
+          C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe10-gate
+          C311_BROWSER: all
       - name: "Upload C311 gate evidence"
         if: always()
         uses: actions/upload-artifact@v4
@@ -127,6 +136,20 @@ jobs:
         with:
           name: c311-fe06-gate
           path: ${{ runner.temp }}/c311-fe06-gate
+          if-no-files-found: ignore
+      - name: "Upload FE-07 gate evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c311-fe07-gate
+          path: ${{ runner.temp }}/c311-fe07-gate
+          if-no-files-found: ignore
+      - name: "Upload FE-10 quality evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c311-fe10-gate
+          path: ${{ runner.temp }}/c311-fe10-gate
           if-no-files-found: ignore
 
   lib-test:
@@ -202,11 +225,20 @@ jobs:
         working-directory: server
         run: make test.integration
 
+  city311-runtime:
+    name: "City 311 production runtime"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v3
+      - name: "Build source image and verify production readiness"
+        run: tools/ci/test-city311-runtime.sh
+
   notify:
     if: failure()
     name: "Send matrix testing notification"
     runs-on: ubuntu-22.04
-    needs: [ server-test, client-web-test, lib-test ]
+    needs: [ server-test, city311-runtime, client-web-test, lib-test ]
     steps:
       - name: "Send message via Matrix on failed tests"
         if: ${{ !env.ACT && failure() }}

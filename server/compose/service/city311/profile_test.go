@@ -298,6 +298,88 @@ func TestProfileUnavailableAndMissingRecords(t *testing.T) {
 	requireIdentityError(t, err, 404, contract.ErrorNotFound)
 	// Unsupported adapters fail closed rather than silently skipping locking.
 	require.EqualError(t, store.LockCity311LocalAccount(ctx, struct{ store.Storer }{st}, resolved.Record.UserID), "store does not support City 311 account locking")
+	require.EqualError(t, store.LockCity311ConfigurationResource(ctx, struct{ store.Storer }{st}, configurationContactCategory, "RESIDENT"), "store does not support City 311 configuration resource locking")
+}
+
+func TestProfileCategoryAssignmentsUseActiveManagedVocabulary(t *testing.T) {
+	identity, st, resolved, _ := testProfileService(t)
+	ctx := context.Background()
+	configuration := New(st)
+	manager := seededAssignmentActor(t, ctx, configuration, st, "department-manager@city311.example.invalid")
+
+	created, err := configuration.CreateContactCategory(ctx, manager, contract.CategoryWrite{
+		Code: "COMMUNITY_GROUP", Active: true, Labels: map[string]string{"EN": "Community group"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), created.Version)
+
+	assigned, err := updateTestProfile(t, identity, ctx, resolved, decodeProfilePatch(t, `{"primary_category":"COMMUNITY_GROUP"}`))
+	require.NoError(t, err)
+	require.Equal(t, contract.ContactCategory("COMMUNITY_GROUP"), assigned.PrimaryCategory)
+
+	_, err = configuration.UpdateContactCategory(ctx, manager, "COMMUNITY_GROUP", 1, contract.CategoryWrite{
+		Code: "COMMUNITY_GROUP", Active: false, Labels: map[string]string{"EN": "Community group"},
+	})
+	requireValidationCode(t, err, "/active", contract.ValidationConflict)
+
+	_, err = updateTestProfile(t, identity, ctx, resolved, decodeProfilePatch(t, `{"primary_category":"RESIDENT"}`))
+	require.NoError(t, err)
+	deactivated, err := configuration.UpdateContactCategory(ctx, manager, "COMMUNITY_GROUP", 1, contract.CategoryWrite{
+		Code: "COMMUNITY_GROUP", Active: false, Labels: map[string]string{"EN": "Community group"},
+	})
+	require.NoError(t, err)
+	require.False(t, deactivated.Active)
+
+	_, err = updateTestProfile(t, identity, ctx, resolved, decodeProfilePatch(t, `{"primary_category":"COMMUNITY_GROUP"}`))
+	assignment := requireIdentityError(t, err, 422, contract.ErrorValidation)
+	require.Contains(t, assignment.Payload.Errors, contract.FieldError{Field: "/primary_category", Code: contract.ValidationInvalidValue})
+}
+
+func TestProfileCategoryAssignmentAndDeactivationRemainConsistent(t *testing.T) {
+	identity, st, resolved, _ := testProfileService(t)
+	ctx := context.Background()
+	configuration := New(st)
+	manager := seededAssignmentActor(t, ctx, configuration, st, "department-manager@city311.example.invalid")
+	_, err := configuration.CreateContactCategory(ctx, manager, contract.CategoryWrite{
+		Code: "RACE_CATEGORY", Active: true, Labels: map[string]string{"EN": "Race category"},
+	})
+	require.NoError(t, err)
+	profile, err := identity.GetProfileSnapshot(ctx, resolved)
+	require.NoError(t, err)
+
+	start := make(chan struct{})
+	assignmentResult := make(chan error, 1)
+	deactivationResult := make(chan error, 1)
+	go func() {
+		<-start
+		category := contract.ContactCategory("RACE_CATEGORY")
+		_, err := identity.UpdateProfile(ctx, resolved, profile.Version, contract.ProfileUpdate{PrimaryCategory: &category})
+		assignmentResult <- err
+	}()
+	go func() {
+		<-start
+		_, err := configuration.UpdateContactCategory(ctx, manager, "RACE_CATEGORY", 1, contract.CategoryWrite{
+			Code: "RACE_CATEGORY", Active: false, Labels: map[string]string{"EN": "Race category"},
+		})
+		deactivationResult <- err
+	}()
+	close(start)
+	assignmentErr, deactivationErr := <-assignmentResult, <-deactivationResult
+	require.NotEqual(t, assignmentErr == nil, deactivationErr == nil, "exactly one competing operation must commit")
+
+	active, err := activeContactCategory(ctx, st, "RACE_CATEGORY")
+	require.NoError(t, err)
+	current, err := identity.GetProfile(ctx, resolved)
+	require.NoError(t, err)
+	require.False(t, !active && current.PrimaryCategory == contract.ContactCategory("RACE_CATEGORY"), "inactive category must never remain assigned")
+	if assignmentErr == nil {
+		require.True(t, active)
+		requireValidationCode(t, deactivationErr, "/active", contract.ValidationConflict)
+	} else {
+		require.False(t, active)
+		assignment := requireIdentityError(t, assignmentErr, 422, contract.ErrorValidation)
+		require.Contains(t, assignment.Payload.Errors, contract.FieldError{Field: "/primary_category", Code: contract.ValidationInvalidValue})
+	}
 }
 
 func TestProfileVersionPreconditionsAcrossServiceInstances(t *testing.T) {

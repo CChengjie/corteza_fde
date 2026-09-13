@@ -52,4 +52,4 @@ Vue.use(plugins.UIHooks(), {
 
 Vue.use(plugins.Settings, { api: Vue.prototype.$SystemAPI })
 
-Vue.use(VueNativeSock, websocket.endpoint(), websocket.config)
+if (window.C311Mode !== 'mock') Vue.use(VueNativeSock, websocket.endpoint(), websocket.config)

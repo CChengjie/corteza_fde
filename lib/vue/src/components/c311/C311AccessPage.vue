@@ -43,7 +43,14 @@ export default {
     },
     goBack () {
       const returnTo = this.$route?.query?.returnTo
-      if (returnTo) return this.$router.replace(decodeURIComponent(returnTo))
+      if (returnTo) {
+        try {
+          const decoded = decodeURIComponent(String(returnTo))
+          if (/^\/c311(?:\/|$)/.test(decoded)) return this.$router.replace(decoded)
+        } catch (_error) {
+          // Ignore malformed return paths and fall back to browser history.
+        }
+      }
       return this.$router.back()
     },
   },

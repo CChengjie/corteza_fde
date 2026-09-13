@@ -405,12 +405,47 @@ func (svc *Service) PublicHelp(ctx context.Context, helpKey string, preferredLan
 		if !validLanguage(language) {
 			continue
 		}
-		revision, err := svc.latestConfigurationRevision(ctx, svc.store, configurationHelp, helpKey, string(language), false)
+		revision, err := svc.latestConfigurationRevision(ctx, svc.store, configurationHelp, helpKey, string(language), true)
 		if err == nil {
 			return helpFromRevision(revision), nil
 		}
 	}
 	return nil, apiError(http.StatusNotFound, contract.ErrorNotFound, "The contextual help content was not found.")
+}
+
+func (svc *Service) AdminHelp(ctx context.Context, actor contract.Actor, helpKey string, language contract.Language) (*contract.HelpContent, error) {
+	if err := requirePlatformAdministrator(actor); err != nil {
+		return nil, err
+	}
+	if err := validateHelpSelection(helpKey, language); err != nil {
+		return nil, err
+	}
+	revision, err := svc.currentHelpRevision(ctx, helpKey, language, true)
+	if err != nil {
+		return nil, presentationLookupError(err, "The contextual help content was not found.")
+	}
+	return helpFromRevision(revision), nil
+}
+
+func (svc *Service) PreviewHelp(ctx context.Context, actor contract.Actor, helpKey string, input contract.HelpWrite) (*contract.HelpContent, error) {
+	if err := requirePlatformAdministrator(actor); err != nil {
+		return nil, err
+	}
+	if err := validateHelpSelection(helpKey, input.Language); err != nil {
+		return nil, err
+	}
+	body, err := validatePresentationHTML(input.Body, "/body")
+	if err != nil {
+		return nil, err
+	}
+	current, err := svc.currentHelpRevision(ctx, helpKey, input.Language, true)
+	if err != nil {
+		return nil, presentationLookupError(err, "The contextual help content was not found.")
+	}
+	return &contract.HelpContent{
+		HelpKey: helpKey, Language: input.Language, Body: body, State: "DRAFT", Published: false,
+		Version: uint64(current.Version + 1), UpdatedAt: svc.now(),
+	}, nil
 }
 
 func (svc *Service) UpdateHelp(ctx context.Context, actor contract.Actor, helpKey string, expectedVersion uint64, input contract.HelpWrite) (*contract.HelpContent, error) {
@@ -420,11 +455,8 @@ func (svc *Service) UpdateHelp(ctx context.Context, actor contract.Actor, helpKe
 	if expectedVersion == 0 {
 		return nil, expectedVersionRequired()
 	}
-	if err := validateHelpKey(helpKey); err != nil {
+	if err := validateHelpSelection(helpKey, input.Language); err != nil {
 		return nil, err
-	}
-	if !validLanguage(input.Language) {
-		return nil, validationError(contract.FieldError{Field: "/language", Code: contract.ValidationInvalidValue})
 	}
 	body, err := validatePresentationHTML(input.Body, "/body")
 	if err != nil {
@@ -432,25 +464,133 @@ func (svc *Service) UpdateHelp(ctx context.Context, actor contract.Actor, helpKe
 	}
 	svc.presentationMu.Lock()
 	defer svc.presentationMu.Unlock()
-	current, err := svc.latestConfigurationRevision(ctx, svc.store, configurationHelp, helpKey, string(input.Language), false)
-	if err != nil {
-		current, err = svc.latestConfigurationRevision(ctx, svc.store, configurationHelp, helpKey, string(contract.LanguageEN), false)
-	}
+	current, err := svc.currentHelpRevision(ctx, helpKey, input.Language, true)
 	if err != nil {
 		return nil, presentationLookupError(err, "The contextual help content was not found.")
 	}
 	if uint64(current.Version) != expectedVersion {
 		return nil, versionConflict(current.Version)
 	}
-	value := contract.HelpContent{HelpKey: helpKey, Language: input.Language, Body: body}
-	revision, err := svc.createConfigurationRevision(ctx, actor, current, configurationHelp, helpKey, string(input.Language), value, true, "HELP_UPDATED")
+	value := contract.HelpContent{HelpKey: helpKey, Language: input.Language, Body: body, State: "DRAFT", Published: false}
+	revision, err := svc.createConfigurationRevision(ctx, actor, current, configurationHelp, helpKey, string(input.Language), value, false, "HELP_UPDATED")
 	if err != nil {
 		return nil, err
 	}
 	return helpFromRevision(revision), nil
 }
 
+func (svc *Service) PublishHelp(ctx context.Context, actor contract.Actor, helpKey string, language contract.Language, expectedVersion uint64) (*contract.HelpContent, error) {
+	return svc.publishHelpRevision(ctx, actor, helpKey, language, expectedVersion, 0)
+}
+
+func (svc *Service) RollbackHelp(ctx context.Context, actor contract.Actor, helpKey string, language contract.Language, expectedVersion, targetVersion uint64) (*contract.HelpContent, error) {
+	if targetVersion == 0 {
+		return nil, validationError(contract.FieldError{Field: "/target_version", Code: contract.ValidationOutOfRange})
+	}
+	return svc.publishHelpRevision(ctx, actor, helpKey, language, expectedVersion, targetVersion)
+}
+
+func (svc *Service) publishHelpRevision(ctx context.Context, actor contract.Actor, helpKey string, language contract.Language, expectedVersion, targetVersion uint64) (*contract.HelpContent, error) {
+	if err := requirePlatformAdministrator(actor); err != nil {
+		return nil, err
+	}
+	if expectedVersion == 0 {
+		return nil, expectedVersionRequired()
+	}
+	if err := validateHelpSelection(helpKey, language); err != nil {
+		return nil, err
+	}
+	svc.presentationMu.Lock()
+	defer svc.presentationMu.Unlock()
+	set, err := svc.helpRevisions(ctx, helpKey, language)
+	if err != nil || len(set) == 0 {
+		return nil, presentationLookupError(err, "The contextual help content was not found.")
+	}
+	current := set[len(set)-1]
+	if uint64(current.Version) != expectedVersion {
+		return nil, versionConflict(current.Version)
+	}
+	source := current
+	eventType := "HELP_PUBLISHED"
+	if targetVersion != 0 {
+		source = nil
+		for _, item := range set {
+			if item.Published && uint64(item.Version) == targetVersion {
+				source = item
+				break
+			}
+		}
+		if source == nil {
+			return nil, validationError(contract.FieldError{Field: "/target_version", Code: contract.ValidationInvalidValue})
+		}
+		eventType = "HELP_ROLLED_BACK"
+	}
+	value := *helpFromRevision(source)
+	revision, err := svc.createConfigurationRevision(ctx, actor, current, configurationHelp, helpKey, string(language), value, true, eventType)
+	if err != nil {
+		return nil, err
+	}
+	return helpFromRevision(revision), nil
+}
+
+func (svc *Service) HelpVersions(ctx context.Context, actor contract.Actor, helpKey string, language contract.Language, query PresentationListQuery) (*contract.HelpList, error) {
+	if err := requirePlatformAdministrator(actor); err != nil {
+		return nil, err
+	}
+	if err := validateHelpSelection(helpKey, language); err != nil {
+		return nil, err
+	}
+	set, err := svc.helpRevisions(ctx, helpKey, language)
+	if err != nil {
+		return nil, err
+	}
+	start, end, next, err := presentationPage(query, len(set), "help:"+helpKey+":"+string(language))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]contract.HelpContent, 0, end-start)
+	for index := len(set) - 1 - start; index >= len(set)-end; index-- {
+		items = append(items, *helpFromRevision(set[index]))
+	}
+	return &contract.HelpList{
+		Items: items, NextPageToken: next, TotalCount: len(set),
+		AppliedFilters: map[string]any{"language": []string{string(language)}}, Sort: []string{presentationListSort},
+	}, nil
+}
+
+func (svc *Service) helpRevisions(ctx context.Context, helpKey string, language contract.Language) (composeTypes.City311ConfigurationRevisionSet, error) {
+	set, err := svc.configurationRevisions(ctx, svc.store, configurationHelp, helpKey)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make(composeTypes.City311ConfigurationRevisionSet, 0, len(set))
+	for _, item := range set {
+		if item.Language == string(language) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered, nil
+}
+
+func (svc *Service) currentHelpRevision(ctx context.Context, helpKey string, language contract.Language, englishFallback bool) (*composeTypes.City311ConfigurationRevision, error) {
+	revision, err := svc.latestConfigurationRevision(ctx, svc.store, configurationHelp, helpKey, string(language), false)
+	if err != nil && englishFallback && language != contract.LanguageEN {
+		return svc.latestConfigurationRevision(ctx, svc.store, configurationHelp, helpKey, string(contract.LanguageEN), false)
+	}
+	return revision, err
+}
+
 func (svc *Service) createConfigurationRevision(ctx context.Context, actor contract.Actor, current *composeTypes.City311ConfigurationRevision, resourceType, resourceKey, language string, value any, published bool, eventType string) (*composeTypes.City311ConfigurationRevision, error) {
+	var revision *composeTypes.City311ConfigurationRevision
+	err := store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+		var err error
+		revision, err = svc.createConfigurationRevisionInStore(ctx, tx, actor, current, resourceType, resourceKey, language, value, published, eventType)
+		return err
+	})
+	return revision, err
+}
+
+func (svc *Service) createConfigurationRevisionInStore(ctx context.Context, st store.Storer, actor contract.Actor, current *composeTypes.City311ConfigurationRevision, resourceType, resourceKey, language string, value any, published bool, eventType string) (*composeTypes.City311ConfigurationRevision, error) {
 	payload, err := mapFrom(value)
 	if err != nil {
 		return nil, err
@@ -463,21 +603,21 @@ func (svc *Service) createConfigurationRevision(ctx context.Context, actor contr
 		ID: svc.nextID(), ResourceType: resourceType, ResourceKey: resourceKey, Language: language,
 		Payload: payload, Version: current.Version + 1, Published: published, CreatedAt: now,
 	}
-	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
-		if err := store.CreateCity311ConfigurationRevision(ctx, tx, revision); err != nil {
-			return err
-		}
-		before := cloneMap(current.Payload)
-		after := cloneMap(revision.Payload)
-		after["version"] = revision.Version
-		after["published"] = revision.Published
-		return store.CreateCity311AuditEvent(ctx, tx, &composeTypes.City311AuditEvent{
-			ID: svc.nextID(), EntityType: strings.ToLower(resourceType), EntityID: resourceKey, EventType: eventType,
-			ActorType: contract.AuditActorStaff, ActorID: actor.ID, SourceChannel: contract.SourceChannelStaffInPerson,
-			Before: before, After: after, CreatedAt: now,
-		})
-	})
-	return revision, err
+	if err := store.CreateCity311ConfigurationRevision(ctx, st, revision); err != nil {
+		return nil, err
+	}
+	before := cloneMap(current.Payload)
+	after := cloneMap(revision.Payload)
+	after["version"] = revision.Version
+	after["published"] = revision.Published
+	if err := store.CreateCity311AuditEvent(ctx, st, &composeTypes.City311AuditEvent{
+		ID: svc.nextID(), EntityType: strings.ToLower(resourceType), EntityID: resourceKey, EventType: eventType,
+		ActorType: contract.AuditActorStaff, ActorID: actor.ID, SourceChannel: contract.SourceChannelStaffInPerson,
+		Before: before, After: after, CreatedAt: now,
+	}); err != nil {
+		return nil, err
+	}
+	return revision, nil
 }
 
 func (svc *Service) configurationRevisions(ctx context.Context, st store.Storer, resourceType, resourceKey string) (composeTypes.City311ConfigurationRevisionSet, error) {
@@ -537,6 +677,11 @@ func contentFromRevision(revision *composeTypes.City311ConfigurationRevision) *c
 func helpFromRevision(revision *composeTypes.City311ConfigurationRevision) *contract.HelpContent {
 	value := &contract.HelpContent{HelpKey: revision.ResourceKey, Language: contract.Language(revision.Language)}
 	decodeConfigurationPayload(revision.Payload, value)
+	value.Published = revision.Published
+	value.State = "DRAFT"
+	if revision.Published {
+		value.State = "PUBLISHED"
+	}
 	value.Version = uint64(revision.Version)
 	value.UpdatedAt = revision.CreatedAt
 	return value
@@ -683,6 +828,16 @@ func validateContentKey(value string) (string, error) {
 func validateHelpKey(value string) error {
 	if _, ok := initialHelpContent[strings.TrimSpace(value)]; !ok {
 		return validationError(contract.FieldError{Field: "/path/help_key", Code: contract.ValidationInvalidValue})
+	}
+	return nil
+}
+
+func validateHelpSelection(helpKey string, language contract.Language) error {
+	if err := validateHelpKey(helpKey); err != nil {
+		return err
+	}
+	if !validLanguage(language) {
+		return validationError(contract.FieldError{Field: "/language", Code: contract.ValidationInvalidValue})
 	}
 	return nil
 }

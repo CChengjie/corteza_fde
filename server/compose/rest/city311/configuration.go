@@ -38,6 +38,10 @@ func (h *handler) adminContactCategoryCreate(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *handler) adminContactCategoryUpdate(w http.ResponseWriter, r *http.Request) {
+	version, ok := requiredVersion(w, r)
+	if !ok {
+		return
+	}
 	input := contract.CategoryWrite{}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -47,7 +51,7 @@ func (h *handler) adminContactCategoryUpdate(w http.ResponseWriter, r *http.Requ
 		writeResult(w, 0, nil, err)
 		return
 	}
-	result, err := h.service.UpdateContactCategory(r.Context(), actor, chi.URLParam(r, "category_code"), input)
+	result, err := h.service.UpdateContactCategory(r.Context(), actor, chi.URLParam(r, "category_code"), version, input)
 	writePresentationResult(w, http.StatusOK, result, err)
 }
 

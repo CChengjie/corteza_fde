@@ -33,6 +33,11 @@ func TestAccountDeletionAnonymisesIdentityAndPreservesRequests(t *testing.T) {
 		CreatedAt: now, ExpiresAt: now.Add(time.Hour),
 	}
 	require.NoError(t, store.CreateCity311PasswordResetToken(ctx, st, token))
+	emailToken := &composeTypes.City311EmailReplacementToken{
+		ID: svc.nextID(), TokenHash: "email-replacement-token-hash", UserID: userID,
+		PendingEmail: "replacement@example.invalid", CreatedAt: now, ExpiresAt: now.Add(time.Hour),
+	}
+	require.NoError(t, store.CreateCity311EmailReplacementToken(ctx, st, emailToken))
 	pending := &composeTypes.City311IdentityNotification{
 		ID: svc.nextID(), UserID: userID, Kind: passwordResetKind, Recipient: "constituent1@city311.example.invalid",
 		DeliveryKey: "password-reset:pending", Payload: composeTypes.City311JSON{"token_id": "pending"},
@@ -88,6 +93,12 @@ func TestAccountDeletionAnonymisesIdentityAndPreservesRequests(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, tokens)
 	for _, token := range tokens {
+		require.NotNil(t, token.UsedAt)
+	}
+	emailTokens, _, err := store.SearchCity311EmailReplacementTokens(ctx, st, composeTypes.City311EmailReplacementTokenFilter{UserID: userID})
+	require.NoError(t, err)
+	require.NotEmpty(t, emailTokens)
+	for _, token := range emailTokens {
 		require.NotNil(t, token.UsedAt)
 	}
 	notifications, _, err := store.SearchCity311IdentityNotifications(ctx, st, composeTypes.City311IdentityNotificationFilter{UserID: userID})

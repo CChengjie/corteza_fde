@@ -367,6 +367,8 @@ type HelpContent struct {
 	HelpKey   string    `json:"help_key"`
 	Language  Language  `json:"language"`
 	Body      string    `json:"body"`
+	State     string    `json:"state"`
+	Published bool      `json:"published"`
 	Version   uint64    `json:"version"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -374,6 +376,14 @@ type HelpContent struct {
 type HelpWrite struct {
 	Language Language `json:"language"`
 	Body     string   `json:"body"`
+}
+
+type HelpList struct {
+	Items          []HelpContent  `json:"items"`
+	NextPageToken  *string        `json:"next_page_token"`
+	TotalCount     int            `json:"total_count"`
+	AppliedFilters map[string]any `json:"applied_filters"`
+	Sort           []string       `json:"sort"`
 }
 
 // Category is an administrator-managed contact-category vocabulary item.
@@ -606,6 +616,22 @@ type PasswordChange struct {
 type LoginIdentifierChange struct {
 	CurrentPassword string `json:"current_password"`
 	LoginIdentifier string `json:"login_identifier"`
+}
+
+type EmailReplacementRequest struct {
+	Email string `json:"email"`
+}
+
+type EmailReplacementAcknowledgement struct {
+	Accepted bool `json:"accepted"`
+}
+
+type EmailReplacementConfirm struct {
+	Token string `json:"token"`
+}
+
+type EmailReplacementResult struct {
+	VerifiedEmail string `json:"verified_email"`
 }
 
 // FederatedRedirect describes the provider authorization hand-off. Account

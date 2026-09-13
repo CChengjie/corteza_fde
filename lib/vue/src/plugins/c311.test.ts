@@ -44,7 +44,7 @@ describe('C311 provider selection and runtime', () => {
       async getSession (): Promise<any> { return { authenticated: true } }
     }
     class FetchTransport {
-      constructor (value: any) { expect(value.baseURL).to.equal('/api') }
+      constructor (value: any) { expect(value.baseURL).to.equal('') }
     }
 
     const browserWindow = (globalThis as any).window
@@ -54,12 +54,19 @@ describe('C311 provider selection and runtime', () => {
     browserWindow.C311MockSession = 'expired'
     const mock = createC311Provider({ MockC311Provider: MockProvider as any, C311HttpProvider: HttpProvider as any, C311FetchTransport: FetchTransport as any })
     expect(mock).to.be.instanceOf(MockProvider)
+    expect((browserWindow as any).__C311MockProvider).to.equal(mock)
     expect(options).to.deep.equal([{ role: 'service_agent', scenario: 'empty', sessionVariant: 'expired' }])
 
     browserWindow.C311Mode = 'http'
     browserWindow.CortezaAPI = '/api'
     const http = createC311Provider({ C311HttpProvider: HttpProvider as any, C311FetchTransport: FetchTransport as any })
     expect(http).to.be.instanceOf(HttpProvider)
+
+    browserWindow.C311API = 'https://city311.example.test'
+    class C311APITransport {
+      constructor (value: any) { expect(value.baseURL).to.equal('https://city311.example.test') }
+    }
+    expect(createC311Provider({ C311HttpProvider: HttpProvider as any, C311FetchTransport: C311APITransport as any })).to.be.instanceOf(HttpProvider)
   })
 
   it('supports cached, forced and expired sessions while exposing capabilities and scopes', async () => {

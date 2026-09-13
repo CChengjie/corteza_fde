@@ -6,7 +6,9 @@ readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly repository_root="$(cd "${script_dir}/.." && pwd)"
 readonly project_name="${CITY311_ACCEPTANCE_PROJECT:-city311-acceptance}"
 readonly app_port="${CITY311_ACCEPTANCE_PORT:-18080}"
+readonly civicworks_port="${CITY311_ACCEPTANCE_CIVICWORKS_PORT:-18081}"
 readonly base_url="http://127.0.0.1:${app_port}"
+readonly civicworks_url="http://127.0.0.1:${civicworks_port}"
 readonly health_url="${base_url}/healthz"
 readonly api_url="${base_url}/api/v1"
 readonly database_name="corteza_acceptance"
@@ -18,12 +20,15 @@ readonly account_email="runtime.acceptance@example.invalid"
 readonly account_password="RuntimeAcceptance1!"
 readonly workflow_id="runtime-acceptance-workflow"
 readonly volume_marker="runtime-acceptance-volume-marker"
+readonly seed_request_numbers="SR-2026-00033,SR-2026-00034,SR-2026-00035,SR-2026-00036,SR-2026-00037,SR-2026-00038,SR-2026-00039,SR-2026-00040"
+readonly seed_actor_handles="city311-constituent,city311-constituent-two,city311-department-manager,city311-integration-client,city311-platform-administrator,city311-service-agent,city311-supervisor,city311-workflow-designer"
 
 compose=(docker compose --env-file /dev/null --project-name "${project_name}")
 stack_started=0
 temporary_dir=""
 fixture_file=""
 signin_headers=""
+seed_state_baseline=""
 
 log() {
   printf '[runtime-acceptance] %s\n' "$*"
@@ -43,6 +48,9 @@ validate_project_name() {
     fail "CITY311_ACCEPTANCE_PROJECT must start with city311-acceptance"
   [[ "${app_port}" =~ ^[0-9]+$ ]] && (( app_port > 0 && app_port <= 65535 )) ||
     fail "CITY311_ACCEPTANCE_PORT must be an integer between 1 and 65535"
+  [[ "${civicworks_port}" =~ ^[0-9]+$ ]] && (( civicworks_port > 0 && civicworks_port <= 65535 )) ||
+    fail "CITY311_ACCEPTANCE_CIVICWORKS_PORT must be an integer between 1 and 65535"
+  [[ "${app_port}" != "${civicworks_port}" ]] || fail "application and CivicWorks fixture ports must differ"
 }
 
 configure_acceptance_environment() {
@@ -61,8 +69,11 @@ configure_acceptance_environment() {
   export CITY311_SEED_CONSTITUENT_TWO_PASSWORD="RuntimeSeedConstituent2!"
   export MAP_BASE_URL="https://mapping.example.invalid"
   export MAP_API_TOKEN="runtime-acceptance-mapping-token"
-  export CIVICWORKS_BASE_URL="https://civicworks.example.invalid"
+  export CIVICWORKS_FIXTURE_PORT="${civicworks_port}"
+  export CIVICWORKS_BASE_URL="http://civicworks:8080"
+  export CIVICWORKS_CALLBACK_BASE_URL="http://app:80"
   export CIVICWORKS_API_TOKEN="runtime-acceptance-civicworks-token"
+  export CIVICWORKS_CONTROL_TOKEN="runtime-acceptance-civicworks-control-token"
   export CIVICWORKS_WEBHOOK_SECRET="runtime-acceptance-civicworks-webhook-secret"
   export BENCHMARK_RUN_ID="runtime-acceptance"
   export WORKFLOW_OAUTH_TOKEN_URL="https://workflow.example.invalid/oauth/token"
@@ -107,15 +118,24 @@ static_checks() {
     .services.app.environment.MAIL_SMTP_PASSWORD != "" and
     .services.app.environment.MAIL_API_BASE_URL != "" and
     .services.app.environment.MAIL_API_TOKEN != "" and
+    .services.app.environment.CIVICWORKS_BASE_URL == "http://civicworks:8080" and
+    .services.app.environment.CIVICWORKS_CALLBACK_BASE_URL == "http://app:80" and
+    .services.app.environment.CIVICWORKS_CONTROL_TOKEN == null and
+    .services.civicworks.environment.CIVICWORKS_API_TOKEN == .services.app.environment.CIVICWORKS_API_TOKEN and
+    .services.civicworks.environment.CIVICWORKS_WEBHOOK_SECRET == .services.app.environment.CIVICWORKS_WEBHOOK_SECRET and
+    .services.civicworks.environment.CIVICWORKS_CONTROL_TOKEN != .services.civicworks.environment.CIVICWORKS_API_TOKEN and
     .services.app.environment.SMTP_HOST == .services.app.environment.MAIL_SMTP_HOST and
     .services.app.environment.SMTP_PORT == .services.app.environment.MAIL_SMTP_PORT and
     .services.app.environment.SMTP_USER == .services.app.environment.MAIL_SMTP_USERNAME and
     .services.app.environment.SMTP_PASS == .services.app.environment.MAIL_SMTP_PASSWORD and
     .services.app.volumes[0].source == "attachment_data" and
     .services.postgres.volumes[0].source == "postgres_data" and
-    .services.app.depends_on.postgres.condition == "service_healthy"
+    .services.app.depends_on.postgres.condition == "service_healthy" and
+    .services.app.depends_on.civicworks.condition == "service_healthy"
   ' <<<"${rendered}" >/dev/null
+  grep -q 'COPY locale/en /src/locale/en' "${repository_root}/Dockerfile"
   grep -q 'COPY server/ ./' "${repository_root}/Dockerfile"
+  grep -q 'make -C pkg/locale src/en' "${repository_root}/Dockerfile"
   grep -q '!server/webconsole/dist/.placeholder' "${repository_root}/.dockerignore"
   grep -q 'COPY --from=server-build /src/server/provision /corteza/provision' "${repository_root}/Dockerfile"
   grep -q 'go build -trimpath' "${repository_root}/Dockerfile"
@@ -147,13 +167,170 @@ wait_for_health() {
   local response
   while (( SECONDS < deadline )); do
     response="$(curl --fail --silent --show-error "${health_url}" 2>/dev/null || true)"
-    if jq -e 'length == 2 and .status == "ok" and .database == "ok"' <<<"${response}" >/dev/null 2>&1; then
+    if jq -e '.status == "ok" and .database == "ok"' <<<"${response}" >/dev/null 2>&1; then
       log "health contract passed: ${response}"
       return 0
     fi
     sleep 2
   done
-  fail "${health_url} did not return the exact ready contract within 120 seconds"
+  fail "${health_url} did not return the required ready fields within 120 seconds"
+}
+
+assert_civicworks_fixture() {
+  local deadline=$((SECONDS + 60)) response created replay queried
+  while (( SECONDS < deadline )); do
+    response="$(curl --fail --silent --show-error "${civicworks_url}/healthz" 2>/dev/null || true)"
+    if jq -e 'length == 1 and .status == "ok"' <<<"${response}" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  jq -e 'length == 1 and .status == "ok"' <<<"${response}" >/dev/null || fail "CivicWorks fixture did not become healthy"
+
+  curl --fail --silent --show-error \
+    --header "Authorization: Bearer ${CIVICWORKS_CONTROL_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    --request POST "${civicworks_url}/__fixture/v1/reset" >/dev/null
+  created="$(curl --fail --silent --show-error \
+    --header "Authorization: Bearer ${CIVICWORKS_API_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    --header 'Idempotency-Key: runtime-acceptance-civicworks' \
+    --data '{"source_case_id":"runtime-acceptance-case","service_request_number":"SR-2026-00041","service_type":"TREE_MAINTENANCE","summary":"Runtime acceptance work order","department_code":"PUBLIC_WORKS","callback_url":"http://app:80/integrations/civicworks/events"}' \
+    "${civicworks_url}/api/v1/work-orders")"
+  jq -e '.work_order_id == "WO-000001" and .status == "ASSIGNED" and .fulfilment_source == "CIVICWORKS" and .version == 1' <<<"${created}" >/dev/null
+  replay="$(curl --fail --silent --show-error \
+    --header "Authorization: Bearer ${CIVICWORKS_API_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    --header 'Idempotency-Key: runtime-acceptance-civicworks' \
+    --data '{"source_case_id":"runtime-acceptance-case","service_request_number":"SR-2026-00041","service_type":"TREE_MAINTENANCE","summary":"Runtime acceptance work order","department_code":"PUBLIC_WORKS","callback_url":"http://app:80/integrations/civicworks/events"}' \
+    "${civicworks_url}/api/v1/work-orders")"
+  jq -e --argjson created "${created}" '. == $created' <<<"${replay}" >/dev/null
+  queried="$(curl --fail --silent --show-error \
+    --header "Authorization: Bearer ${CIVICWORKS_API_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    --get --data-urlencode 'source_case_id=runtime-acceptance-case' \
+    "${civicworks_url}/api/v1/work-orders")"
+  jq -e '.items | length == 1 and .[0].work_order_id == "WO-000001"' <<<"${queried}" >/dev/null
+  curl --fail --silent --show-error \
+    --header "Authorization: Bearer ${CIVICWORKS_CONTROL_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    --request POST "${civicworks_url}/__fixture/v1/reset" >/dev/null
+  log "CivicWorks deterministic create, replay, lookup, and reset contract passed"
+}
+
+assert_civicworks_callback() {
+  local triaged assigned advanced event_id progress_detail progress_version redelivered replay_detail completed resolved_detail deliveries
+  triaged="$(curl --fail --silent --show-error \
+    --request POST \
+    --header "Cookie: ${cookie_name}=${session_token}" \
+    --header 'Content-Type: application/json' \
+    --header 'If-Match: "1"' \
+    --data '{"to_status":"TRIAGED","reason":"Runtime acceptance triage"}' \
+    "${api_url}/staff/service-requests/${request_id}/transitions")"
+  jq -e '.request.status == "TRIAGED" and .request.version == 2' <<<"${triaged}" >/dev/null
+
+  assigned="$(curl --fail --silent --show-error \
+    --request POST \
+    --header "Cookie: ${cookie_name}=${session_token}" \
+    --header 'Content-Type: application/json' \
+    --header 'If-Match: "2"' \
+    --data '{"to_status":"ASSIGNED","reason":"Assign to CivicWorks"}' \
+    "${api_url}/staff/service-requests/${request_id}/transitions")"
+  jq -e '
+    .request.status == "ASSIGNED" and
+    .request.version == 3 and
+    .external_work_order.work_order_id == "WO-000001" and
+    .external_work_order.status == "ASSIGNED" and
+    .external_work_order.version == 1
+  ' <<<"${assigned}" >/dev/null
+
+  advanced="$(curl --fail --silent --show-error \
+    --request POST \
+    --header "Authorization: Bearer ${CIVICWORKS_CONTROL_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    --data '{"status":"IN_PROGRESS"}' \
+    "${civicworks_url}/__fixture/v1/work-orders/WO-000001/status")"
+  jq -e '
+    .work_order.status == "IN_PROGRESS" and
+    .work_order.version == 2 and
+    .event.status == "IN_PROGRESS" and
+    .event.version == 2 and
+    .delivery.acknowledged == true and
+    .delivery.attempts >= 1 and
+    .delivery.attempts <= 3 and
+    .delivery.status == 204
+  ' <<<"${advanced}" >/dev/null
+  event_id="$(jq -er '.event.event_id' <<<"${advanced}")"
+
+  progress_detail="$(authenticated_get "/staff/service-requests/${request_id}")"
+  jq -e '
+    .request.status == "IN_PROGRESS" and
+    .external_work_order.status == "IN_PROGRESS" and
+    .external_work_order.version == 2
+  ' <<<"${progress_detail}" >/dev/null
+  progress_version="$(jq -er '.request.version' <<<"${progress_detail}")"
+
+  redelivered="$(curl --fail --silent --show-error \
+    --request POST \
+    --header "Authorization: Bearer ${CIVICWORKS_CONTROL_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    "${civicworks_url}/__fixture/v1/events/${event_id}/redeliver")"
+  jq -e '
+    .acknowledged == true and
+    .attempts >= 1 and
+    .attempts <= 3 and
+    .status == 204
+  ' <<<"${redelivered}" >/dev/null
+  replay_detail="$(authenticated_get "/staff/service-requests/${request_id}")"
+  jq -e --argjson version "${progress_version}" '
+    .request.status == "IN_PROGRESS" and
+    .request.version == $version and
+    .external_work_order.version == 2
+  ' <<<"${replay_detail}" >/dev/null
+
+  completed="$(curl --fail --silent --show-error \
+    --request POST \
+    --header "Authorization: Bearer ${CIVICWORKS_CONTROL_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    --data '{"status":"COMPLETED"}' \
+    "${civicworks_url}/__fixture/v1/work-orders/WO-000001/status")"
+  jq -e '
+    .work_order.status == "COMPLETED" and
+    .work_order.version == 3 and
+    .event.status == "COMPLETED" and
+    .event.version == 3 and
+    .delivery.acknowledged == true and
+    .delivery.attempts >= 1 and
+    .delivery.attempts <= 3 and
+    .delivery.status == 204
+  ' <<<"${completed}" >/dev/null
+  resolved_detail="$(authenticated_get "/staff/service-requests/${request_id}")"
+  jq -e '
+    .request.status == "RESOLVED" and
+    .external_work_order.status == "COMPLETED" and
+    .external_work_order.version == 3
+  ' <<<"${resolved_detail}" >/dev/null
+
+  deliveries="$(curl --fail --silent --show-error \
+    --header "Authorization: Bearer ${CIVICWORKS_CONTROL_TOKEN}" \
+    --header "X-Benchmark-Run-Id: ${BENCHMARK_RUN_ID}" \
+    --header 'Content-Type: application/json' \
+    "${civicworks_url}/__fixture/v1/deliveries")"
+  jq -e '
+    (.items | length) >= 3 and
+    (.items | length) <= 9 and
+    ([.items[] | select(.acknowledged == true and .status == 204)] | length) == 3 and
+    ([.items[] | select(.attempt < 1 or .attempt > 3)] | length) == 0
+  ' <<<"${deliveries}" >/dev/null
+  log "CivicWorks assignment, signed callback, idempotent redelivery, and completion contract passed"
 }
 
 database_scalar() {
@@ -161,6 +338,52 @@ database_scalar() {
   (cd "${repository_root}" && "${compose[@]}" exec -T postgres \
     psql --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
     --username "${database_user}" --dbname "${database_name}" --command "${query}")
+}
+
+read_seed_state() {
+  database_scalar "
+    WITH seed_requests AS (
+      SELECT id, request_number
+      FROM compose_city311_service_request
+      WHERE request_number BETWEEN 'SR-2026-00033' AND 'SR-2026-00040'
+    ), seed_actors AS (
+      SELECT id, handle
+      FROM users
+      WHERE handle LIKE 'city311-%'
+        AND handle IN (
+          'city311-constituent', 'city311-constituent-two', 'city311-service-agent',
+          'city311-supervisor', 'city311-department-manager', 'city311-platform-administrator',
+          'city311-workflow-designer', 'city311-integration-client'
+        )
+    )
+    SELECT
+      (SELECT count(*) FROM seed_requests) || '|' ||
+      (SELECT count(DISTINCT request_number) FROM seed_requests) || '|' ||
+      (SELECT string_agg(request_number, ',' ORDER BY request_number) FROM seed_requests) || '|' ||
+      (SELECT count(*) FROM compose_city311_audit_event audit JOIN seed_requests request ON request.id = audit.request_id WHERE audit.event_type = 'SEED_CREATED') || '|' ||
+      (SELECT count(DISTINCT audit.request_id) FROM compose_city311_audit_event audit JOIN seed_requests request ON request.id = audit.request_id WHERE audit.event_type = 'SEED_CREATED') || '|' ||
+      (SELECT count(*) FROM compose_city311_public_history history JOIN seed_requests request ON request.id = history.request_id) || '|' ||
+      (SELECT count(DISTINCT history.request_id) FROM compose_city311_public_history history JOIN seed_requests request ON request.id = history.request_id) || '|' ||
+      (SELECT count(*) FROM seed_actors) || '|' ||
+      (SELECT count(DISTINCT handle) FROM seed_actors) || '|' ||
+      (SELECT string_agg(handle, ',' ORDER BY handle) FROM seed_actors) || '|' ||
+      (SELECT count(*) FROM compose_city311_actor_profile profile JOIN seed_actors actor ON actor.id = profile.id) || '|' ||
+      (SELECT count(*) FROM compose_city311_local_account account JOIN seed_actors actor ON actor.id = account.id);"
+}
+
+capture_seed_state() {
+  local expected
+  expected="8|8|${seed_request_numbers}|8|8|8|8|8|8|${seed_actor_handles}|8|8"
+  seed_state_baseline="$(read_seed_state)"
+  [[ "${seed_state_baseline}" == "${expected}" ]] || fail "clean startup did not install the canonical public seed exactly once"
+  log "canonical public request, audit, history, and actor seed state installed exactly once"
+}
+
+assert_seed_state() {
+  local current
+  current="$(read_seed_state)"
+  [[ "${current}" == "${seed_state_baseline}" ]] || fail "canonical public seed state changed after application startup"
+  log "canonical public seed cardinality and uniqueness remain unchanged"
 }
 
 authenticated_get() {
@@ -207,6 +430,7 @@ assert_persisted_state() {
 
   account_count="$(database_scalar "SELECT count(*) FROM compose_city311_local_account WHERE login_identifier = '${login_identifier}';")"
   [[ "${account_count}" == "1" ]] || fail "registered local account is missing after app restart"
+  assert_seed_state
   log "account, request, draft, workflow, audit, attachment, integration, and volume state persisted"
 }
 
@@ -343,9 +567,12 @@ main() {
   stack_started=1
   log "starting a clean database from current source"
   "${compose[@]}" up --build --detach
+  assert_civicworks_fixture
   wait_for_health
+  capture_seed_state
 
   create_runtime_fixtures
+  assert_civicworks_callback
   assert_persisted_state
   database_container="$("${compose[@]}" ps --quiet postgres)"
   database_started="$(docker inspect --format '{{.State.StartedAt}}' "${database_container}")"

@@ -181,7 +181,9 @@ def check_access_boundaries(page: Page, base_url: str, label: str) -> None:
 def check_admin_workflow(page: Page, base_url: str, label: str) -> None:
     open_c311(page, base_url, WORKFLOWS_PATH, "workflow_designer")
     assert_route_focus(page, WORKFLOWS_PATH)
-    check(page.get_by_role("heading", name="Requests").count() == 1, f"{label} workflow fixture did not enter route")
+    entered_workflows = page.locator("[data-c311-workflows]").count() == 1
+    entered_legacy_staff = page.get_by_role("heading", name="Requests").count() == 1
+    check(entered_workflows or entered_legacy_staff, f"{label} workflow fixture did not enter route")
 
 
 def run() -> dict:

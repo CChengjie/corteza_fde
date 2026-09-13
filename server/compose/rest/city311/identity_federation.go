@@ -52,21 +52,37 @@ func (h *handler) federatedSignInStart(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) federatedSignInCallback(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	provider := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "provider")))
+	if (provider == "saml" && r.Method != http.MethodPost) || (provider != "saml" && r.Method != http.MethodGet) {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	values := r.URL.Query()
+	if provider == "saml" {
+		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		if err := r.ParseForm(); err != nil {
+			h.expireFederationCookie(w)
+			writeJSON(w, http.StatusUnauthorized, contract.APIError{
+				Error: contract.ErrorUnauthenticated, Message: "Federated authentication failed. Please return to sign in and try again.", Retryable: false,
+			})
+			return
+		}
+		values = r.PostForm
+	}
 	cookie, err := r.Cookie(city311Service.FederationFlowCookie)
-	if err != nil || strings.TrimSpace(r.URL.Query().Get("error")) != "" {
+	if err != nil || strings.TrimSpace(values.Get("error")) != "" {
 		h.expireFederationCookie(w)
 		writeJSON(w, http.StatusUnauthorized, contract.APIError{
 			Error: contract.ErrorUnauthenticated, Message: "Federated authentication failed. Please return to sign in and try again.", Retryable: false,
 		})
 		return
 	}
-	provider := chi.URLParam(r, "provider")
-	state := r.URL.Query().Get("state")
-	if strings.EqualFold(provider, "saml") {
-		state = r.URL.Query().Get("RelayState")
+	state := values.Get("state")
+	if provider == "saml" {
+		state = values.Get("RelayState")
 	}
 	token, resolved, completionErr := h.identity.CompleteFederatedSignIn(
-		r.Context(), provider, state, r.URL.Query().Get("code"), r.URL.Query().Get("SAMLResponse"), cookie.Value,
+		r.Context(), provider, state, values.Get("code"), values.Get("SAMLResponse"), cookie.Value,
 	)
 	h.expireFederationCookie(w)
 	if completionErr != nil {
@@ -80,13 +96,13 @@ func (h *handler) federatedSignInCallback(w http.ResponseWriter, r *http.Request
 func (h *handler) setFederationCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.FederationFlowCookie, Value: value, Path: "/api/v1/auth",
-		MaxAge: 600, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+		MaxAge: 600, HttpOnly: true, Secure: true, SameSite: http.SameSiteNoneMode,
 	})
 }
 
 func (h *handler) expireFederationCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.FederationFlowCookie, Value: "", Path: "/api/v1/auth",
-		MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+		MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteNoneMode,
 	})
 }

@@ -62,6 +62,16 @@ export default {
       return `c311-heading-${this._uid}`
     },
   },
+  watch: {
+    title (value) {
+      if (typeof document !== 'undefined' && value) document.title = value
+      this.focusMain()
+    },
+  },
+  mounted () {
+    if (typeof document !== 'undefined' && this.title) document.title = this.title
+    this.focusMain()
+  },
   methods: {
     focusMain () {
       this.$nextTick(() => (this.$refs.heading || this.$refs.main)?.focus())

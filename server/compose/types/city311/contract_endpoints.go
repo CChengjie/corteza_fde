@@ -18,7 +18,8 @@ func addContractEndpoints(document *ContractDocument) {
 		{"session_sign_out", "DELETE", "/api/v1/session", "session required", "", "empty_response", 204},
 		{"account_register", "POST", "/api/v1/accounts", "public", "account_registration", "session", 201},
 		{"federated_sign_in_start", "GET", "/api/v1/auth/{provider}/start", "public", "", "federated_redirect", 200},
-		{"federated_sign_in_callback", "GET", "/api/v1/auth/{provider}/callback", "public", "", "session", 200},
+		{"federated_sign_in_callback", "GET", "/api/v1/auth/oidc/callback", "public", "", "session", 200},
+		{"federated_saml_callback", "POST", "/api/v1/auth/saml/callback", "public", "federated_saml_callback", "session", 200},
 		{"operation_get", "GET", "/api/v1/operations/{operation_id}", "session required", "", "operation", 200},
 		{"geocode_proxy", "POST", "/api/v1/geocode", "session optional", "geocode_request", "geocode_response", 200},
 		{"portal_attachment_upload", "POST", "/api/v1/portal/attachments", "session optional", "portal_attachment_upload", "portal_attachment", 201},
@@ -31,8 +32,11 @@ func addContractEndpoints(document *ContractDocument) {
 		{"portal_draft_submit", "POST", "/api/v1/portal/service-request-drafts/{request_id}/submit", "constituent session", "empty_request", "service_request_response", 200},
 		{"portal_my_requests", "GET", "/api/v1/portal/service-requests", "constituent session", "", "list_response", 200},
 		{"portal_link_anonymous_request", "POST", "/api/v1/portal/service-requests/link", "constituent session", "anonymous_request_link", "service_request_record", 200},
+		{"portal_note_create", "POST", "/api/v1/portal/service-requests/{request_id}/notes", "linked constituent", "request_note", "request_note", 201},
 		{"profile_get", "GET", "/api/v1/account/profile", "constituent session", "", "constituent", 200},
 		{"profile_update", "PATCH", "/api/v1/account/profile", "constituent session", "profile_update", "constituent", 200},
+		{"email_replacement_request", "POST", EmailReplacementRequestPath, "constituent session", "email_replacement_request", "email_replacement_acknowledgement", 202},
+		{"email_replacement_confirm", "POST", EmailReplacementConfirmPath, "public", "email_replacement_confirm", "email_replacement_result", 200},
 		{"account_delete", "DELETE", "/api/v1/account", "constituent session", "", "empty_response", 204},
 		{"password_change", "POST", "/api/v1/account/password", "constituent session", "password_change", "empty_response", 204},
 		{"login_identifier_change", "POST", "/api/v1/account/login-identifier", "constituent session", "login_identifier_change", "session", 200},
@@ -74,7 +78,12 @@ func addContractEndpoints(document *ContractDocument) {
 		{"admin_content_publish", "POST", "/api/v1/admin/content/{content_key}/publish", "platform_administrator", "empty_request", "content_object", 200},
 		{"admin_content_versions", "GET", "/api/v1/admin/content/{content_key}/versions", "platform_administrator", "", "list_response", 200},
 		{"admin_content_rollback", "POST", "/api/v1/admin/content/{content_key}/rollback", "platform_administrator", "rollback", "content_object", 200},
+		{"admin_help_get", "GET", "/api/v1/admin/help/{help_key}", "platform_administrator", "", "help_content", 200},
 		{"admin_help_update", "PATCH", "/api/v1/admin/help/{help_key}", "platform_administrator", "help_write", "help_content", 200},
+		{"admin_help_preview", "POST", "/api/v1/admin/help/{help_key}/preview", "platform_administrator", "help_write", "help_content", 200},
+		{"admin_help_publish", "POST", "/api/v1/admin/help/{help_key}/publish", "platform_administrator", "empty_request", "help_content", 200},
+		{"admin_help_versions", "GET", "/api/v1/admin/help/{help_key}/versions", "platform_administrator", "", "list_response", 200},
+		{"admin_help_rollback", "POST", "/api/v1/admin/help/{help_key}/rollback", "platform_administrator", "rollback", "help_content", 200},
 		{"admin_categories_list", "GET", "/api/v1/admin/contact-categories", "department_manager or platform_administrator", "", "list_response", 200},
 		{"admin_categories_create", "POST", "/api/v1/admin/contact-categories", "department_manager or platform_administrator", "category_write", "category", 201},
 		{"admin_categories_update", "PATCH", "/api/v1/admin/contact-categories/{category_code}", "department_manager or platform_administrator", "category_write", "category", 200},
@@ -153,13 +162,34 @@ func addConsumedEndpoints(document *ContractDocument) {
 }
 
 func configureEndpointMechanics(document *ContractDocument) {
+	start := document.Endpoints["federated_sign_in_start"]
+	start.QueryParameters = map[string]map[string]interface{}{
+		"client": {
+			"type": "string", "enum": []string{"staff", "public"}, "default": "staff", "example": "public",
+			"description": "Selects the OIDC relying-party client. SAML accepts only staff.",
+		},
+	}
+	document.Endpoints["federated_sign_in_start"] = start
+
+	oidcCallback := document.Endpoints["federated_sign_in_callback"]
+	oidcCallback.QueryParameters = map[string]map[string]interface{}{
+		"state": {"type": "string", "min_length": 1, "example": "returned-state", "description": "Required with code for a successful OIDC callback."},
+		"code":  {"type": "string", "min_length": 1, "example": "authorization-code", "description": "Required with state for a successful OIDC callback."},
+		"error": {"type": "string", "min_length": 1, "example": "access_denied", "description": "Provider error alternative to state and code."},
+	}
+	document.Endpoints["federated_sign_in_callback"] = oidcCallback
+
+	samlCallback := document.Endpoints["federated_saml_callback"]
+	samlCallback.RequestMediaType = "application/x-www-form-urlencoded"
+	document.Endpoints["federated_saml_callback"] = samlCallback
+
 	for _, name := range []string{
 		"portal_draft_update", "portal_draft_delete", "portal_draft_submit", "profile_update",
 		"staff_request_transition", "staff_request_reassign", "staff_collaborator_add", "staff_collaborator_remove",
 		"staff_constituent_link", "staff_constituent_unlink", "staff_duplicate_group_confirm", "staff_duplicate_group_remove",
 		"staff_reopen_approve", "staff_origin_override", "staff_scope_override", "admin_branding_update", "admin_branding_publish",
 		"admin_branding_rollback", "admin_content_update", "admin_content_publish", "admin_content_rollback", "admin_custom_fields_update",
-		"admin_help_update",
+		"admin_help_update", "admin_help_publish", "admin_help_rollback", "admin_categories_update",
 		"workflow_update", "workflow_activate", "workflow_deactivate", "identity_configuration_update", "integration_update", "integration_rotate",
 		"integration_revoke", "saved_report_update", "saved_report_share",
 	} {
@@ -188,7 +218,7 @@ func configureEndpointMechanics(document *ContractDocument) {
 	for name, itemSchema := range map[string]string{
 		"portal_my_requests": "portal_request_summary", "staff_request_queue": "request_queue_item",
 		"staff_constituent_search": "constituent", "admin_branding_versions": "branding",
-		"admin_content_list": "content_object", "admin_content_versions": "content_object",
+		"admin_content_list": "content_object", "admin_content_versions": "content_object", "admin_help_versions": "help_content",
 		"admin_categories_list": "category", "admin_custom_fields_list": "custom_field_definition",
 		"workflow_list": "workflow_definition", "workflow_execution_list": "workflow_execution",
 		"integration_list": "integration_connection", "report_catalogue": "report_catalogue_item",
@@ -197,6 +227,27 @@ func configureEndpointMechanics(document *ContractDocument) {
 		endpoint := document.Endpoints[name]
 		endpoint.EntityResponseSchemas = map[string]string{"items": itemSchema}
 		endpoint.QueryParameters = standardListQuery()
+		document.Endpoints[name] = endpoint
+	}
+
+	for _, name := range []string{"admin_help_get", "admin_help_publish", "admin_help_versions", "admin_help_rollback"} {
+		endpoint := document.Endpoints[name]
+		if endpoint.QueryParameters == nil {
+			endpoint.QueryParameters = map[string]map[string]interface{}{}
+		}
+		endpoint.QueryParameters["language"] = map[string]interface{}{"enum_ref": "language", "default": "EN"}
+		document.Endpoints[name] = endpoint
+	}
+
+	for _, name := range []string{"public_help_get", "admin_help_get", "admin_help_update", "admin_help_preview", "admin_help_publish", "admin_help_rollback"} {
+		endpoint := document.Endpoints[name]
+		endpoint.ResponseHeaders = map[string]string{"ETag": "success response: quoted decimal language-specific help revision"}
+		document.Endpoints[name] = endpoint
+	}
+
+	for _, name := range []string{"admin_categories_create", "admin_categories_update"} {
+		endpoint := document.Endpoints[name]
+		endpoint.ResponseHeaders = map[string]string{"ETag": "success response: quoted decimal category revision"}
 		document.Endpoints[name] = endpoint
 	}
 
@@ -244,8 +295,16 @@ func configurePublicEndpointErrors(document *ContractDocument) {
 	setErrors("public_branding_get", map[string]int{})
 	setErrors("public_content_get", map[string]int{string(ErrorNotFound): 404})
 	setErrors("public_help_get", map[string]int{string(ErrorNotFound): 404})
-	setErrors("federated_sign_in_start", map[string]int{})
+	setErrors("federated_sign_in_start", map[string]int{
+		string(ErrorNotFound):               404,
+		string(ErrorValidation):             422,
+		string(ErrorTemporarilyUnavailable): 503,
+	})
 	setErrors("federated_sign_in_callback", map[string]int{
+		string(ErrorUnauthenticated):        401,
+		string(ErrorTemporarilyUnavailable): 503,
+	})
+	setErrors("federated_saml_callback", map[string]int{
 		string(ErrorUnauthenticated):        401,
 		string(ErrorTemporarilyUnavailable): 503,
 	})

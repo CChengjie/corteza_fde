@@ -115,9 +115,11 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.Delete(sessionRoute, h.sessionSignOut)
 		r.Post("/auth/password-reset/request", h.passwordResetRequest)
 		r.Post("/auth/password-reset/confirm", h.passwordResetConfirm)
+		r.Post("/auth/email-replacement/confirm", h.emailReplacementConfirm)
 		r.Patch("/preferences/language", h.languageUpdate)
 		r.Get("/auth/{provider}/start", h.federatedSignInStart)
 		r.Get("/auth/{provider}/callback", h.federatedSignInCallback)
+		r.Post("/auth/{provider}/callback", h.federatedSignInCallback)
 		r.With(requireIdentity).Get("/operations/{operation_id}", h.operationGet)
 		r.With(requireIdentity).Get("/operations/{operation_id}/result", h.operationResult)
 		r.Route("/account", func(r chi.Router) {
@@ -125,6 +127,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.With(requireProfileConstituent).Delete("/", h.accountDelete)
 			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
 			r.With(requireProfileConstituent).Patch("/profile", h.profileUpdate)
+			r.With(requireProfileConstituent).Post("/email-replacement", h.emailReplacementRequest)
 			r.Post("/password", h.passwordChange)
 			r.Post("/login-identifier", h.loginIdentifierChange)
 		})
@@ -161,7 +164,12 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Post("/content/{content_key}/publish", h.adminContentPublish)
 			r.Get("/content/{content_key}/versions", h.adminContentVersions)
 			r.Post("/content/{content_key}/rollback", h.adminContentRollback)
+			r.Get("/help/{help_key}", h.adminHelpGet)
 			r.Patch("/help/{help_key}", h.adminHelpUpdate)
+			r.Post("/help/{help_key}/preview", h.adminHelpPreview)
+			r.Post("/help/{help_key}/publish", h.adminHelpPublish)
+			r.Get("/help/{help_key}/versions", h.adminHelpVersions)
+			r.Post("/help/{help_key}/rollback", h.adminHelpRollback)
 			r.Get("/workflows", h.workflowList)
 			r.Post("/workflows", h.workflowCreate)
 			r.Get("/workflows/{workflow_id}", h.workflowGet)
@@ -259,6 +267,7 @@ func identitySessionFromContext(ctx context.Context) *city311Service.ResolvedSes
 
 func requireCityIdentitySession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if identitySessionFromContext(r.Context()) == nil {
 			writeJSON(w, http.StatusUnauthorized, contract.APIError{Error: contract.ErrorUnauthenticated, Message: authenticationRequiredMessage, Retryable: false})
 			return

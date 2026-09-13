@@ -112,6 +112,61 @@ func TestIdentityConfigurationIsVersionedAndNeverReturnsSecrets(t *testing.T) {
 	require.Len(t, audits, 1)
 }
 
+func TestIdentityConfigurationLosingInsertReturnsVersionConflict(t *testing.T) {
+	identity, st, _, now := testFederatedIdentityService(t)
+	ctx := context.Background()
+	administrator := contract.Actor{ID: 44, Roles: []contract.ApplicationRole{contract.ApplicationRolePlatformAdministrator}}
+	configuration, err := identity.IdentityConfiguration(ctx, administrator)
+	require.NoError(t, err)
+
+	raw := errors.New("write failed")
+	require.ErrorIs(t, identity.identityConfigurationWriteError(ctx, configuration.Version, raw), raw)
+	revisions, _, err := store.SearchCity311ConfigurationRevisions(ctx, st, composeTypes.City311ConfigurationRevisionFilter{})
+	require.NoError(t, err)
+	var revisionID uint64
+	for _, revision := range revisions {
+		if revision.ID >= revisionID {
+			revisionID = revision.ID + 1
+		}
+	}
+	require.NoError(t, store.CreateCity311ConfigurationRevision(ctx, st, &composeTypes.City311ConfigurationRevision{
+		ID: revisionID, ResourceType: configurationIdentity, ResourceKey: identityConfigurationKey,
+		Payload: composeTypes.City311JSON{"oidc_enabled": true, "saml_enabled": true},
+		Version: int(configuration.Version + 1), Published: true, CreatedAt: now.UTC(),
+	}))
+
+	mapped := identity.identityConfigurationWriteError(ctx, configuration.Version, store.ErrNotUnique)
+	serviceErr := requireIdentityError(t, mapped, 409, contract.ErrorVersionConflict)
+	require.NotNil(t, serviceErr.Payload.CurrentVersion)
+	require.Equal(t, configuration.Version+1, *serviceErr.Payload.CurrentVersion)
+}
+
+func TestIdentityConfigurationInitializationPreservesUnrelatedDuplicateError(t *testing.T) {
+	_, st := testService(t)
+	ctx := context.Background()
+	now := time.Date(2026, 2, 3, 15, 4, 5, 0, time.UTC)
+	const duplicateID = uint64(981_000_000_000_000_001)
+	require.NoError(t, store.CreateCity311ConfigurationRevision(ctx, st, &composeTypes.City311ConfigurationRevision{
+		ID: duplicateID, ResourceType: "UNRELATED_CONFIGURATION", ResourceKey: "unrelated",
+		Payload: composeTypes.City311JSON{}, Version: 1, Published: true, CreatedAt: now,
+	}))
+	identity := NewIdentity(st, IdentityOptions{
+		Secret: []byte("identity-configuration-unrelated-duplicate-secret"),
+		Now:    func() time.Time { return now }, NextID: func() uint64 { return duplicateID },
+	})
+	administrator := contract.Actor{ID: 44, Roles: []contract.ApplicationRole{contract.ApplicationRolePlatformAdministrator}}
+
+	_, err := identity.IdentityConfiguration(ctx, administrator)
+	require.ErrorContains(t, err, "compose_city311_configuration_revision.id")
+	var serviceErr *ServiceError
+	require.False(t, errors.As(err, &serviceErr))
+	revisions, _, searchErr := store.SearchCity311ConfigurationRevisions(ctx, st, composeTypes.City311ConfigurationRevisionFilter{
+		ResourceType: configurationIdentity, ResourceKey: identityConfigurationKey,
+	})
+	require.NoError(t, searchErr)
+	require.Empty(t, revisions)
+}
+
 func TestIdentityConfigurationRejectsEnablingMissingRuntimeValues(t *testing.T) {
 	_, st, _, _ := testIdentityService(t)
 	runtime := &IdentityRuntimeConfiguration{BaseURL: "https://city311.example.test"}
@@ -123,6 +178,29 @@ func TestIdentityConfigurationRejectsEnablingMissingRuntimeValues(t *testing.T) 
 	_, err = identity.UpdateIdentityConfiguration(context.Background(), administrator, 1, contract.IdentityConfigurationWrite{OIDCEnabled: boolPointer(true)})
 	validation := requireIdentityError(t, err, 422, contract.ErrorValidation)
 	require.Equal(t, "/oidc_enabled", validation.Payload.Errors[0].Field)
+}
+
+func TestFederatedStartErrorsMatchPublishedContract(t *testing.T) {
+	identity, _, provider, _ := testFederatedIdentityService(t)
+	ctx := context.Background()
+
+	_, _, err := identity.StartFederatedSignIn(ctx, "unknown", federatedClientStaff, nil)
+	requireIdentityError(t, err, 404, contract.ErrorNotFound)
+	_, _, err = identity.StartFederatedSignIn(ctx, federatedProviderSAML, federatedClientPublic, nil)
+	validation := requireIdentityError(t, err, 422, contract.ErrorValidation)
+	require.Equal(t, "/query/client", validation.Payload.Errors[0].Field)
+
+	_, _, err = identity.StartFederatedSignIn(ctx, federatedProviderOIDC, "", nil)
+	require.NoError(t, err)
+	require.Equal(t, federatedClientStaff, provider.starts[len(provider.starts)-1].Client)
+
+	administrator := contract.Actor{ID: 44, Roles: []contract.ApplicationRole{contract.ApplicationRolePlatformAdministrator}}
+	configuration, err := identity.IdentityConfiguration(ctx, administrator)
+	require.NoError(t, err)
+	_, err = identity.UpdateIdentityConfiguration(ctx, administrator, configuration.Version, contract.IdentityConfigurationWrite{OIDCEnabled: boolPointer(false)})
+	require.NoError(t, err)
+	_, _, err = identity.StartFederatedSignIn(ctx, federatedProviderOIDC, federatedClientPublic, nil)
+	requireIdentityError(t, err, 503, contract.ErrorTemporarilyUnavailable)
 }
 
 func TestFederatedOIDCPKCEProvisioningAndImmutableSubjectUpdate(t *testing.T) {

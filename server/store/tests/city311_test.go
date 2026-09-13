@@ -306,6 +306,29 @@ func testCity311PasswordResetTokens(t *testing.T, s store.City311PasswordResetTo
 	require.NoError(t, s.DeleteCity311PasswordResetTokenByID(ctx, token.ID))
 }
 
+func testCity311EmailReplacementTokens(t *testing.T, s store.City311EmailReplacementTokens) {
+	ctx := context.Background()
+	require.NoError(t, s.TruncateCity311EmailReplacementTokens(ctx))
+	createdAt := *now()
+	token := &composeTypes.City311EmailReplacementToken{
+		ID: 651, TokenHash: "email-replacement-token-hash", UserID: 501,
+		PendingEmail: "replacement@example.invalid", CreatedAt: createdAt, ExpiresAt: createdAt.Add(30 * time.Minute),
+	}
+	require.NoError(t, s.CreateCity311EmailReplacementToken(ctx, token))
+	fetched, err := s.LookupCity311EmailReplacementTokenByTokenHash(ctx, token.TokenHash)
+	require.NoError(t, err)
+	require.Equal(t, token.PendingEmail, fetched.PendingEmail)
+	require.Nil(t, fetched.UsedAt)
+	usedAt := createdAt.Add(time.Minute)
+	fetched.UsedAt = &usedAt
+	require.NoError(t, s.UpdateCity311EmailReplacementToken(ctx, fetched))
+	set, _, err := s.SearchCity311EmailReplacementTokens(ctx, composeTypes.City311EmailReplacementTokenFilter{UserID: token.UserID})
+	require.NoError(t, err)
+	require.Len(t, set, 1)
+	require.Equal(t, usedAt, *set[0].UsedAt)
+	require.NoError(t, s.DeleteCity311EmailReplacementTokenByID(ctx, token.ID))
+}
+
 func testCity311RequestSequences(t *testing.T, s store.City311RequestSequences) {
 	ctx := context.Background()
 	require.NoError(t, s.TruncateCity311RequestSequences(ctx))

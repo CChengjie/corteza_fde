@@ -130,6 +130,7 @@ func TestHealthzReportsMappingConfigurationReadiness(t *testing.T) {
 func setCivicWorksHealthEnvironment(t *testing.T) {
 	t.Helper()
 	t.Setenv("CIVICWORKS_BASE_URL", "https://civicworks.example.invalid")
+	t.Setenv("CIVICWORKS_CALLBACK_BASE_URL", "https://city311.example.invalid")
 	t.Setenv("CIVICWORKS_API_TOKEN", "runtime-civicworks-token")
 	t.Setenv("CIVICWORKS_WEBHOOK_SECRET", "runtime-civicworks-webhook-secret")
 	t.Setenv("BENCHMARK_RUN_ID", "benchmark-run-health")

@@ -79,6 +79,9 @@ func (svc *IdentityService) DeleteAccount(ctx context.Context, resolved *Resolve
 		if err = svc.invalidateAccountResetTokens(ctx, tx, userID, now); err != nil {
 			return err
 		}
+		if err = svc.invalidateEmailReplacementTokens(ctx, tx, userID, now); err != nil {
+			return err
+		}
 		if err = svc.cancelAccountNotifications(ctx, tx, userID, now); err != nil {
 			return err
 		}

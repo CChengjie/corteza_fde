@@ -172,27 +172,77 @@ func TestContentDraftPreviewPublicationVersionsAndRollback(t *testing.T) {
 }
 
 func TestHelpLocalisationVersioningSanitisationAndEnglishFallback(t *testing.T) {
-	svc, _ := testService(t)
+	svc, st := testService(t)
 	ctx := context.Background()
 	require.NoError(t, svc.Seed(ctx, svc.now()))
 	admin := presentationAdministrator()
-	updated, err := svc.UpdateHelp(ctx, admin, "public.request.submit", 1, contract.HelpWrite{
+	input := contract.HelpWrite{
 		Language: contract.LanguageES, Body: `<p>Describa el problema.</p><script>alert(1)</script>`,
-	})
+	}
+	preview, err := svc.PreviewHelp(ctx, admin, "public.request.submit", input)
 	require.NoError(t, err)
-	require.Equal(t, uint64(2), updated.Version)
-	require.NotContains(t, updated.Body, "script")
+	require.Equal(t, uint64(2), preview.Version)
+	require.Equal(t, "DRAFT", preview.State)
+	require.False(t, preview.Published)
+	require.NotContains(t, preview.Body, "script")
+	spanishBeforePublish, err := svc.PublicHelp(ctx, "public.request.submit", []contract.Language{contract.LanguageES})
+	require.NoError(t, err)
+	require.Equal(t, contract.LanguageEN, spanishBeforePublish.Language)
+
+	draft, err := svc.UpdateHelp(ctx, admin, "public.request.submit", 1, input)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), draft.Version)
+	require.Equal(t, "DRAFT", draft.State)
+	require.False(t, draft.Published)
+	require.NotContains(t, draft.Body, "script")
+	_, err = svc.UpdateHelp(ctx, admin, "public.request.submit", 1, input)
+	requireServiceError(t, err, http.StatusConflict, contract.ErrorVersionConflict)
+	published, err := svc.PublishHelp(ctx, admin, "public.request.submit", contract.LanguageES, draft.Version)
+	require.NoError(t, err)
+	require.Equal(t, uint64(3), published.Version)
+	require.Equal(t, "PUBLISHED", published.State)
+	require.True(t, published.Published)
 	spanish, err := svc.PublicHelp(ctx, "public.request.submit", []contract.Language{contract.LanguageES})
 	require.NoError(t, err)
 	require.Equal(t, contract.LanguageES, spanish.Language)
+	require.Equal(t, published.Body, spanish.Body)
+
+	secondDraft, err := svc.UpdateHelp(ctx, admin, "public.request.submit", published.Version, contract.HelpWrite{
+		Language: contract.LanguageES, Body: `<p>Segundo texto.</p>`,
+	})
+	require.NoError(t, err)
+	publicWithDraft, err := svc.PublicHelp(ctx, "public.request.submit", []contract.Language{contract.LanguageES})
+	require.NoError(t, err)
+	require.Equal(t, published.Body, publicWithDraft.Body)
+	secondPublished, err := svc.PublishHelp(ctx, admin, "public.request.submit", contract.LanguageES, secondDraft.Version)
+	require.NoError(t, err)
+	rolledBack, err := svc.RollbackHelp(ctx, admin, "public.request.submit", contract.LanguageES, secondPublished.Version, published.Version)
+	require.NoError(t, err)
+	require.Equal(t, uint64(6), rolledBack.Version)
+	require.Equal(t, published.Body, rolledBack.Body)
+	require.Equal(t, "PUBLISHED", rolledBack.State)
+	versions, err := svc.HelpVersions(ctx, admin, "public.request.submit", contract.LanguageES, PresentationListQuery{PageSize: 2})
+	require.NoError(t, err)
+	require.Equal(t, 5, versions.TotalCount)
+	require.Len(t, versions.Items, 2)
+	require.NotNil(t, versions.NextPageToken)
+	require.Equal(t, uint64(6), versions.Items[0].Version)
+	_, err = svc.HelpVersions(ctx, admin, "public.request.submit", contract.LanguageES, PresentationListQuery{PageToken: "invalid"})
+	requireServiceError(t, err, http.StatusBadRequest, contract.ErrorInvalidPageToken)
+
 	englishFallback, err := svc.PublicHelp(ctx, "public.request.submit", []contract.Language{contract.LanguageVI})
 	require.NoError(t, err)
 	require.Equal(t, contract.LanguageEN, englishFallback.Language)
-	_, err = svc.UpdateHelp(ctx, admin, "public.request.submit", 1, contract.HelpWrite{Language: contract.LanguageES, Body: "<p>Ayuda</p>"})
-	requireServiceError(t, err, http.StatusConflict, contract.ErrorVersionConflict)
+	_, err = svc.PublishHelp(ctx, admin, "public.request.submit", contract.LanguageES, 0)
+	requireServiceError(t, err, http.StatusPreconditionRequired, contract.ErrorExpectedVersionRequired)
 	_, err = svc.UpdateHelp(ctx, admin, "public.request.submit", 1, contract.HelpWrite{Language: "FR", Body: "<p>Aide</p>"})
 	requireServiceError(t, err, http.StatusUnprocessableEntity, contract.ErrorValidation)
-	english, err := svc.UpdateHelp(ctx, admin, "public.request.submit", 1, contract.HelpWrite{Language: contract.LanguageEN, Body: "<p>Updated English help.</p>"})
-	require.NoError(t, err)
-	require.Equal(t, uint64(2), english.Version)
+	_, err = svc.RollbackHelp(ctx, admin, "public.request.submit", contract.LanguageES, rolledBack.Version, 2)
+	requireServiceError(t, err, http.StatusUnprocessableEntity, contract.ErrorValidation)
+
+	for _, eventType := range []string{"HELP_UPDATED", "HELP_PUBLISHED", "HELP_ROLLED_BACK"} {
+		audits, _, searchErr := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{EventType: eventType})
+		require.NoError(t, searchErr)
+		require.NotEmpty(t, audits, eventType)
+	}
 }

@@ -26,12 +26,15 @@ func (restCivicWorksClient) CreateWorkOrder(_ context.Context, input contract.Ci
 	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
 	return &contract.CivicWorksWorkOrder{
 		WorkOrderID: "WO-REST", SourceCaseID: input.SourceCaseID, ServiceRequestNumber: input.ServiceRequestNumber,
+		ServiceType: input.ServiceType, Summary: input.Summary, DepartmentCode: input.DepartmentCode,
+		FulfilmentSource: "CIVICWORKS", Location: input.Location,
 		Status: contract.CivicWorksStatusAssigned, ExternalStatusURL: "https://civicworks.example.invalid/ui/work-orders/WO-REST",
 		Version: 1, CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
 
 func TestCivicWorksWebhookHTTPHMACIdempotencyAndValidation(t *testing.T) {
+	t.Setenv("CIVICWORKS_CALLBACK_BASE_URL", "https://city311.example.test")
 	_, st, svc := testRouter(t)
 	ctx := context.Background()
 	agent, err := store.LookupUserByEmail(ctx, st, "service-agent@city311.example.invalid")

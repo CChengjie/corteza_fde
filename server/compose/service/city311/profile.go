@@ -131,6 +131,19 @@ func (svc *IdentityService) updateProfile(ctx context.Context, resolved *Resolve
 	}
 	var result *ProfileSnapshot
 	err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+		if input.PrimaryCategory != nil {
+			code := string(*input.PrimaryCategory)
+			if err := store.LockCity311ConfigurationResource(ctx, tx, configurationContactCategory, code); err != nil {
+				return err
+			}
+			active, err := activeContactCategory(ctx, tx, code)
+			if err != nil {
+				return err
+			}
+			if !active {
+				return validationError(contract.FieldError{Field: "/primary_category", Code: contract.ValidationInvalidValue})
+			}
+		}
 		result, err = svc.persistProfilePatch(ctx, tx, resolved.Record.UserID, expectedVersion, patch)
 		return err
 	})
@@ -241,7 +254,7 @@ func profilePatch(input contract.ProfileUpdate) (map[string]any, error) {
 	if input.Addresses != nil {
 		fields = append(fields, validateProfileAddresses(*input.Addresses)...)
 	}
-	if input.PrimaryCategory != nil && !profileEnumContains(contract.ContactCategories, *input.PrimaryCategory) {
+	if input.PrimaryCategory != nil && !validCategoryCode(string(*input.PrimaryCategory)) {
 		fields = append(fields, contract.FieldError{Field: "/primary_category", Code: contract.ValidationInvalidValue})
 	}
 	if input.PreferredLanguage != nil && !profileEnumContains(contract.Languages, *input.PreferredLanguage) {

@@ -54,6 +54,8 @@ const (
 
 	seedConstituentPasswordEnv    = "CITY311_SEED_CONSTITUENT_PASSWORD"
 	seedConstituentTwoPasswordEnv = "CITY311_SEED_CONSTITUENT_TWO_PASSWORD"
+	seedStaffPasswordEnv          = "CITY311_SEED_STAFF_PASSWORD"
+	seedAdministratorPasswordEnv  = "CITY311_SEED_ADMIN_PASSWORD"
 	loginIdentifierField          = "/login_identifier"
 	invalidResetTokenMessage      = "The reset token is invalid."
 	authenticationRequiredMessage = "Authentication is required."

@@ -83,6 +83,8 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-local-only-city311-session-secret-change-before-deployment}
       CITY311_SEED_CONSTITUENT_PASSWORD: ${CITY311_SEED_CONSTITUENT_PASSWORD:-City311-Local-Constituent-1!}
       CITY311_SEED_CONSTITUENT_TWO_PASSWORD: ${CITY311_SEED_CONSTITUENT_TWO_PASSWORD:-City311-Local-Constituent-2!}
+      CITY311_SEED_STAFF_PASSWORD: ${CITY311_SEED_STAFF_PASSWORD:-City311-Local-Staff-1!}
+      CITY311_SEED_ADMIN_PASSWORD: ${CITY311_SEED_ADMIN_PASSWORD:-City311-Local-Admin-1!}
       MAP_BASE_URL: ${MAP_BASE_URL:-https://mapping.example.invalid}
       MAP_API_TOKEN: ${MAP_API_TOKEN:-local-only-mapping-token}
       CIVICWORKS_BASE_URL: ${CIVICWORKS_BASE_URL:-http://civicworks:8080}

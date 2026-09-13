@@ -2216,6 +2216,22 @@ describe('C311 shared components', () => {
     expect(provider.rollbackAdminHelp).toHaveBeenCalledWith('public.request.submit', { target_version: 3 }, 'EN', { expectedVersion: 4 })
   })
 
+  it('updates an existing contact category from the compose administration workspace', async () => {
+    const provider = adminProvider()
+    const category = { code: 'GENERAL', labels: { EN: 'General' }, active: true, version: 3 }
+    provider.listAdminCategories.mockResolvedValue({ items: [category] })
+    provider.updateAdminCategory = jest.fn().mockResolvedValue({ ...category, labels: { EN: 'General enquiries' }, version: 4 })
+    const wrapper = mount(AdminWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    await flushPromises()
+    await wrapper.find('tbody button').trigger('click')
+    expect(wrapper.find('#category-code').attributes('readonly')).toBe('readonly')
+    await wrapper.setData({ category: { ...wrapper.vm.category, label: 'General enquiries' } })
+    await wrapper.vm.saveCategory()
+    expect(provider.updateAdminCategory).toHaveBeenCalledWith('GENERAL', { code: 'GENERAL', active: true, labels: { EN: 'General enquiries' } }, { expectedVersion: 3 })
+    expect(wrapper.vm.category.originalCode).toBe('')
+  })
+
   it('keeps accessible operations data available when a separate section is forbidden and refreshes after saving', async () => {
     const provider = {
       listWorkflows: jest.fn().mockResolvedValue({ items: [{ workflow_id: 'workflow-1', name: 'Initial', trigger: 'SERVICE_REQUEST_CREATED', active: false, version: 1 }] }),

@@ -2231,6 +2231,25 @@ describe('C311 shared components', () => {
     expect(provider.listWorkflows).toHaveBeenCalledTimes(2)
   })
 
+  it('uses explicit button types and sends linearized HTML as mail text from operations', async () => {
+    const provider = {
+      listWorkflows: jest.fn().mockResolvedValue({ items: [] }),
+      listWorkflowExecutions: jest.fn().mockResolvedValue({ items: [] }),
+      listReports: jest.fn().mockResolvedValue({ items: [] }),
+      previewMail: jest.fn().mockResolvedValue({ preview_id: 'preview-1' }),
+      sendMail: jest.fn().mockResolvedValue({ message_id: 'message-1' }),
+    }
+    const wrapper = mount(OperationsWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    expect(wrapper.findAll('button').wrappers.every(button => ['button', 'submit'].includes(button.attributes('type')))).toBe(true)
+    await wrapper.setData({ mail: { to: 'resident@example.test', subject: 'Update', html: '<p>Road <strong>repair</strong></p>' } })
+    await wrapper.vm.previewMail()
+    await wrapper.vm.sendMail()
+    const expectedMail = expect.objectContaining({ to: ['resident@example.test'], subject: 'Update', text: 'Road repair', html: '<p>Road <strong>repair</strong></p>' })
+    expect(provider.previewMail).toHaveBeenCalledWith(expectedMail)
+    expect(provider.sendMail).toHaveBeenCalledWith(expectedMail)
+  })
+
   it('requires a snooze time locally and displays protected request detail fields for staff', async () => {
     const provider = { actionStaffReminder: jest.fn() }
     const wrapper = mount(StaffWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })

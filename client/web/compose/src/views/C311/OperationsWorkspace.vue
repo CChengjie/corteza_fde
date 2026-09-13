@@ -19,7 +19,7 @@
 </template>
 
 <script>
-import { components, c311 } from '@cortezaproject/corteza-vue'
+import { components } from '@cortezaproject/corteza-vue'
 
 const { C311AppShell, C311ErrorSummary, C311MainNav } = components
 const emptyWorkflow = () => JSON.stringify({ workflow_id: '', name: '', trigger: 'SERVICE_REQUEST_CREATED', active: false, conditions: [], actions: [] }, null, 2)

@@ -250,7 +250,7 @@ func (h *handler) optionalIdentitySession(next http.Handler) http.Handler {
 			return
 		}
 		if resolved == nil {
-			h.expireIdentityCookie(w)
+			h.expireIdentityCookie(w, r)
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -319,7 +319,7 @@ func (h *handler) sessionSignIn(w http.ResponseWriter, r *http.Request) {
 		writeResult(w, 0, nil, err)
 		return
 	}
-	h.setIdentityCookie(w, token)
+	h.setIdentityCookie(w, r, token)
 	writeJSON(w, http.StatusOK, h.identity.Session(resolved))
 }
 
@@ -333,7 +333,7 @@ func (h *handler) sessionSignOut(w http.ResponseWriter, r *http.Request) {
 		writeResult(w, 0, nil, err)
 		return
 	}
-	h.expireIdentityCookie(w)
+	h.expireIdentityCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -375,17 +375,25 @@ func (h *handler) loginIdentifierChange(w http.ResponseWriter, r *http.Request) 
 	writeResult(w, http.StatusOK, response, err)
 }
 
-func (h *handler) setIdentityCookie(w http.ResponseWriter, token string) {
+// secureCookie is disabled only when a trusted reverse proxy explicitly
+// reports an HTTP request. This keeps direct and HTTPS deployments secure,
+// while allowing the documented local HTTP Compose deployment to retain a
+// City 311 session across page navigation.
+func secureCookie(r *http.Request) bool {
+	return r == nil || !strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "http")
+}
+
+func (h *handler) setIdentityCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: token, Path: "/",
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode,
 	})
 }
 
-func (h *handler) expireIdentityCookie(w http.ResponseWriter) {
+func (h *handler) expireIdentityCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode,
 	})
 }
 

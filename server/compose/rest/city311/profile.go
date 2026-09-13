@@ -21,7 +21,7 @@ func (h *handler) accountDelete(w http.ResponseWriter, r *http.Request) {
 		writeResult(w, 0, nil, err)
 		return
 	}
-	h.expireIdentityCookie(w)
+	h.expireIdentityCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
 

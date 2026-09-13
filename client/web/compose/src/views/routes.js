@@ -64,6 +64,12 @@ export default [
     meta: { c311: { requiresAuth: true, route: 'admin_branding_get', capabilities: ['admin_branding_get'] } },
   },
   {
+    name: 'c311.operations',
+    path: '/c311/operations',
+    component: () => import('./C311/OperationsWorkspace.vue'),
+    meta: { c311: { requiresAuth: true } },
+  },
+  {
     name: 'c311.status',
     path: '/c311/status',
     component: () => import('./C311/Portal.vue'),

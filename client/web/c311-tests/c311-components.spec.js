@@ -1727,9 +1727,9 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.publicNoteError.message).toBe('Try again.')
   })
 
-  it('requires explicit confirmation and clears the session after mock account disposition', async () => {
+  it('requires DELETE confirmation and clears the session after account deletion', async () => {
     const session = { authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['profile_get'] } }
-    const runtime = { provider: { getProfile: jest.fn().mockResolvedValue({ display_name: 'Alex', preferred_language: 'EN', login_identifier: 'alex' }), deleteOrAnonymizeAccount: jest.fn().mockResolvedValue({ status: 'ANONYMIZED', message: 'Account anonymized.' }) }, session, clearSession: jest.fn(() => { runtime.session = { authenticated: false, actor: null } }) }
+    const runtime = { provider: { getProfile: jest.fn().mockResolvedValue({ display_name: 'Alex', preferred_language: 'EN', login_identifier: 'alex' }), deleteOrAnonymizeAccount: jest.fn().mockResolvedValue({ status: 'DELETED', message: 'Account deleted and personal profile data anonymized.' }) }, session, clearSession: jest.fn(() => { runtime.session = { authenticated: false, actor: null } }) }
     const wrapper = mount(PublicPortal, {
       mocks: { ...mocks, $route: { name: 'c311.account', query: {} }, $C311: runtime },
       stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
@@ -1738,12 +1738,12 @@ describe('C311 shared components', () => {
     wrapper.vm.accountDispositionConfirmation = 'wrong'
     await wrapper.vm.updateAccountDisposition()
     expect(runtime.provider.deleteOrAnonymizeAccount).not.toHaveBeenCalled()
-    wrapper.vm.accountDispositionConfirmation = 'ANONYMIZE'
+    wrapper.vm.accountDispositionConfirmation = 'DELETE'
     await wrapper.vm.updateAccountDisposition()
-    expect(runtime.provider.deleteOrAnonymizeAccount).toHaveBeenCalledWith({ mode: 'ANONYMIZE', confirmation: 'ANONYMIZE' })
+    expect(runtime.provider.deleteOrAnonymizeAccount).toHaveBeenCalledWith({ mode: 'DELETE', confirmation: 'DELETE' })
     expect(runtime.clearSession).toHaveBeenCalledTimes(1)
-    expect(wrapper.vm.accountDispositionResult.status).toBe('ANONYMIZED')
-    expect(wrapper.find('[data-c311-account-disposition-result]').text()).toContain('ANONYMIZED')
+    expect(wrapper.vm.accountDispositionResult.status).toBe('DELETED')
+    expect(wrapper.find('[data-c311-account-disposition-result]').text()).toContain('DELETED')
   })
 
   it('preserves account input and session when account disposition conflicts', async () => {

@@ -61,7 +61,7 @@ export default [
     name: 'c311.admin.workspace',
     path: '/c311/admin',
     component: () => import('./C311/AdminWorkspace.vue'),
-    meta: { c311: { requiresAuth: true } },
+    meta: { c311: { requiresAuth: true, route: 'admin_branding_get', capabilities: ['admin_branding_get'] } },
   },
   {
     name: 'c311.status',

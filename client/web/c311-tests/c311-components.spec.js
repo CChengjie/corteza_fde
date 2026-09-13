@@ -633,6 +633,9 @@ describe('C311 shared components', () => {
     composeInteraction.beforeEnter({}, {}, composeNext)
     expect(composeNext).toHaveBeenLastCalledWith({ name: 'c311.not-found' })
 
+    const composeAdmin = composeRoutes.find(route => route.name === 'c311.admin.workspace')
+    expect(composeAdmin.meta.c311).toEqual(expect.objectContaining({ requiresAuth: true, route: 'admin_branding_get', capabilities: ['admin_branding_get'] }))
+
     const staff = adminRoutes.find(route => route.name === 'c311.staff')
     expect(staff.meta.c311).toEqual(expect.objectContaining({ requiresAuth: true, route: 'staff_request_queue', capabilities: ['staff_request_queue'], scopes: ['service_requests.write'] }))
     const staffSubmit = adminRoutes.find(route => route.name === 'c311.staff.submit')

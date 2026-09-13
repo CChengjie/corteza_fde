@@ -12,3 +12,14 @@
 client
 lib
 webapp
+# The standalone frontend image builds Compose from source and packages the
+# local Corteza SDKs. Keep its narrowly-scoped inputs in the Docker context.
+!client/
+!client/web/
+!client/web/compose/
+!client/web/compose/**
+!lib/
+!lib/js/
+!lib/js/**
+!lib/vue/
+!lib/vue/**

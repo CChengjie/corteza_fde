@@ -38,7 +38,11 @@ export function createC311Provider (api: C311ProviderConstructors): C311Provider
   }
 
   if (api.C311HttpProvider && api.C311FetchTransport) {
-    return new api.C311HttpProvider(new api.C311FetchTransport({ baseURL: window.CortezaAPI || '' }))
+    // CortezaAPI conventionally ends in /api, while City311 endpoints are
+    // rooted at /api/v1. Use the origin so the transport cannot produce
+    // /api/api/v1 requests in same-origin deployments.
+    const baseURL = (window.C311API || window.CortezaAPI || '').replace(/\/api\/?$/, '')
+    return new api.C311HttpProvider(new api.C311FetchTransport({ baseURL }))
   }
 
   return undefined
@@ -134,5 +138,6 @@ declare global {
     C311MockSession?: 'current' | 'expired'
     __C311MockProvider?: C311Provider
     CortezaAPI?: string
+    C311API?: string
   }
 }

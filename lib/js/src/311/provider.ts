@@ -311,7 +311,6 @@ export interface C311Provider {
   linkAnonymousRequest (input: AnonymousStatusLookupRequest): Promise<ServiceRequest>
   reopenPortalRequest (requestID: string, reason: string, options?: C311RequestOptions): Promise<ReopenRequestResponse>
   getPublicStatus (input: AnonymousStatusLookupRequest): Promise<AnonymousStatusLookupResponse>
-  /** Mock-only public voter note append until a portal note operation is published. */
   createPortalNote (requestID: string, input: RequestNote): Promise<RequestNote>
 
   geocode (input: GeocodeRequest): Promise<GeocodeResponse>

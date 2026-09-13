@@ -123,12 +123,12 @@ describe('City 311 frontend contract', () => {
     expect(provider.getWriteCount('account_disposition')).to.equal(0)
   })
 
-  it('keeps account disposition HTTP side-effect free until a backend operation exists', async () => {
+  it('maps confirmed account deletion to the published HTTP operation', async () => {
     const requests: C311TransportRequest[] = []
     const provider = new C311HttpProvider({ request: async <T> (request: C311TransportRequest): Promise<T> => { requests.push(request); return {} as T } })
-    const error = await expectError(() => provider.deleteOrAnonymizeAccount({ mode: 'DELETE', confirmation: 'DELETE' }), 'OPERATION_FAILED')
-    expect(error.status).to.equal(501)
-    expect(requests).to.deep.equal([])
+    const result = await provider.deleteOrAnonymizeAccount({ mode: 'DELETE', confirmation: 'DELETE' })
+    expect(result).to.deep.include({ status: 'DELETED' })
+    expect(requests).to.deep.equal([{ method: 'DELETE', path: '/api/v1/account' }])
   })
 
   it('provides complete role and session-expiry fixtures for route checks', () => {

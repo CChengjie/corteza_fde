@@ -23,6 +23,10 @@ import type {
   FederatedRedirect,
   HelpContent,
   HelpWrite,
+  IdentityConfiguration,
+  IdentityConfigurationWrite,
+  IntegrationConnection,
+  IntegrationConnectionWrite,
   LanguagePreference,
   LoginIdentifierChange,
   ListQuery,
@@ -548,6 +552,8 @@ export class MockC311Provider implements C311Provider {
   private readonly adminCustomFields: CustomFieldDefinition[]
   private readonly adminHelp: Record<string, HelpContent>
   private readonly adminHelpVersions: Record<string, HelpContent[]>
+  private identityConfiguration: IdentityConfiguration
+  private readonly integrations: IntegrationConnection[]
 
   private extensionStorage (): Storage | undefined {
     if (typeof window === 'undefined' || (window as Window & { C311Mode?: string }).C311Mode !== 'mock') return undefined
@@ -599,6 +605,8 @@ export class MockC311Provider implements C311Provider {
     this.adminCustomFields = copy(this.fixtures.custom_fields || [])
     this.adminHelp = {}
     this.adminHelpVersions = {}
+    this.identityConfiguration = { oidc_enabled: true, saml_enabled: false, oidc_issuer_url: 'https://identity.example.invalid', oidc_staff_client_id: 'city311-staff', oidc_public_client_id: 'city311-public', oidc_client_secret_configured: true, saml_metadata_url: 'https://identity.example.invalid/saml/metadata', saml_sp_entity_id: 'https://city311.example.invalid/saml', actor_role_mappings: [], version: 1, updated_at: BENCHMARK_NOW }
+    this.integrations = [{ integration_id: 'civicworks', kind: 'CIVICWORKS', active: true, secret_configured: true, version: 1, updated_at: BENCHMARK_NOW }]
     Object.values(this.fixtures.public_help || {}).forEach(item => LANGUAGES.forEach(language => {
       const value = { ...copy(item), language, state: 'PUBLISHED' as const, published: true }
       this.adminHelp[`${item.help_key}:${language}`] = value
@@ -1294,6 +1302,14 @@ export class MockC311Provider implements C311Provider {
     this.failIfNeeded(['terminal'])
     return copy(this.publishedBranding)
   }
+
+  async getIdentityConfiguration (): Promise<IdentityConfiguration> { this.requireCapability('identity_configuration_get'); return copy(this.identityConfiguration) }
+  async updateIdentityConfiguration (input: IdentityConfigurationWrite, options: C311RequestOptions = {}): Promise<IdentityConfiguration> { this.requireCapability('identity_configuration_update'); this.requireVersion(options, this.identityConfiguration.version); this.identityConfiguration = { ...this.identityConfiguration, ...input, version: this.identityConfiguration.version + 1, updated_at: BENCHMARK_NOW }; return copy(this.identityConfiguration) }
+  async listIntegrations (query: ListQuery = {}): Promise<PageResponse<IntegrationConnection>> { this.requireCapability('integration_list'); return this.page(this.integrations, query) }
+  async getIntegration (integrationID: string): Promise<IntegrationConnection> { this.requireCapability('integration_get'); const item = this.integrations.find(value => value.integration_id === integrationID); if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); return copy(item) }
+  async updateIntegration (integrationID: string, input: IntegrationConnectionWrite, options: C311RequestOptions = {}): Promise<IntegrationConnection> { this.requireCapability('integration_update'); const item = await this.getIntegration(integrationID); this.requireVersion(options, item.version); const index = this.integrations.findIndex(value => value.integration_id === integrationID); this.integrations[index] = { ...item, active: input.active, secret_configured: input.secret ? true : item.secret_configured, version: item.version + 1, updated_at: BENCHMARK_NOW }; return copy(this.integrations[index]) }
+  async rotateIntegrationSecret (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { this.requireCapability('integration_rotate'); const item = await this.getIntegration(integrationID); this.requireVersion(options, item.version); const index = this.integrations.findIndex(value => value.integration_id === integrationID); this.integrations[index] = { ...item, secret_configured: true, version: item.version + 1, updated_at: BENCHMARK_NOW }; return copy(this.integrations[index]) }
+  async revokeIntegration (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { this.requireCapability('integration_revoke'); const item = await this.getIntegration(integrationID); this.requireVersion(options, item.version); const index = this.integrations.findIndex(value => value.integration_id === integrationID); this.integrations[index] = { ...item, active: false, secret_configured: false, version: item.version + 1, updated_at: BENCHMARK_NOW }; return copy(this.integrations[index]) }
 
   async updateBranding (input: BrandingWrite, options: C311RequestOptions = {}): Promise<Branding> {
     this.requireCapability('admin_branding_update'); this.requireVersion(options, this.branding.version); this.failIfNeeded(['validation', 'version-conflict'])

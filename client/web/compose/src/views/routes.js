@@ -58,6 +58,12 @@ export default [
     meta: { c311: { requiresAuth: true, route: 'staff_request_queue', capabilities: ['staff_request_queue'] } },
   },
   {
+    name: 'c311.admin.workspace',
+    path: '/c311/admin',
+    component: () => import('./C311/AdminWorkspace.vue'),
+    meta: { c311: { requiresAuth: true } },
+  },
+  {
     name: 'c311.status',
     path: '/c311/status',
     component: () => import('./C311/Portal.vue'),

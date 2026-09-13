@@ -1856,4 +1856,35 @@ describe('FE-09 workflow and extension provider', () => {
     }
     await expectError(() => new MockC311Provider({ role: 'department_manager', scenario: 'terminal' }).getOperation('operation-unknown'), 'NOT_FOUND')
   })
+
+  it('maps account, portal note, identity, and integration HTTP contracts', async () => {
+    const requests: C311TransportRequest[] = []
+    const provider = new C311HttpProvider({ request: async <T> (request: C311TransportRequest): Promise<T> => { requests.push(request); return {} as T } })
+    await provider.createPortalNote('request/1', { body: 'Portal note', portal_visible: true })
+    await provider.deleteOrAnonymizeAccount({ mode: 'DELETE', confirmation: 'DELETE' })
+    await provider.requestEmailReplacement({ email: 'replacement@example.test' })
+    await provider.confirmEmailReplacement({ token: 'token-1' })
+    await provider.getIdentityConfiguration()
+    await provider.updateIdentityConfiguration({ oidc_enabled: false }, { expectedVersion: 2 })
+    await provider.listIntegrations({ page_size: 10 })
+    await provider.getIntegration('civic/works')
+    await provider.updateIntegration('civic/works', { active: true }, { expectedVersion: 3 })
+    await provider.rotateIntegrationSecret('civic/works', { expectedVersion: 4 })
+    await provider.revokeIntegration('civic/works', { expectedVersion: 5 })
+    expect(requests.map(request => `${request.method} ${request.path}`)).to.deep.equal([
+      'POST /api/v1/portal/service-requests/request%2F1/notes',
+      'DELETE /api/v1/account',
+      'POST /api/v1/account/email-replacement',
+      'POST /api/v1/auth/email-replacement/confirm',
+      'GET /api/v1/admin/identity',
+      'PATCH /api/v1/admin/identity',
+      'GET /api/v1/admin/integrations',
+      'GET /api/v1/admin/integrations/civic%2Fworks',
+      'PATCH /api/v1/admin/integrations/civic%2Fworks',
+      'POST /api/v1/admin/integrations/civic%2Fworks/rotate',
+      'POST /api/v1/admin/integrations/civic%2Fworks/revoke',
+    ])
+    expect(requests[5].headers).to.deep.equal({ 'If-Match': '"2"' })
+    expect(requests[8].headers).to.deep.equal({ 'If-Match': '"3"' })
+  })
 })

@@ -20,6 +20,10 @@ import type {
   FederatedRedirect,
   HelpContent,
   HelpWrite,
+  IdentityConfiguration,
+  IdentityConfigurationWrite,
+  IntegrationConnection,
+  IntegrationConnectionWrite,
   LanguagePreference,
   LoginIdentifierChange,
   ListQuery,
@@ -254,6 +258,13 @@ export interface C311Provider {
   confirmAccountLink (): Promise<Session>
   completeFederatedSignIn (provider: IdentityProvider, query?: Record<string, string>): Promise<FederatedSignInResult>
   getBranding (): Promise<Branding>
+  getIdentityConfiguration (): Promise<IdentityConfiguration>
+  updateIdentityConfiguration (input: IdentityConfigurationWrite, options?: C311RequestOptions): Promise<IdentityConfiguration>
+  listIntegrations (query?: ListQuery): Promise<PageResponse<IntegrationConnection>>
+  getIntegration (integrationID: string): Promise<IntegrationConnection>
+  updateIntegration (integrationID: string, input: IntegrationConnectionWrite, options?: C311RequestOptions): Promise<IntegrationConnection>
+  rotateIntegrationSecret (integrationID: string, options?: C311RequestOptions): Promise<IntegrationConnection>
+  revokeIntegration (integrationID: string, options?: C311RequestOptions): Promise<IntegrationConnection>
   getAdminBranding (): Promise<Branding>
   updateBranding (input: BrandingWrite, options?: C311RequestOptions): Promise<Branding>
   previewBranding (input: BrandingWrite): Promise<Branding>
@@ -472,6 +483,14 @@ export class C311HttpProvider implements C311Provider {
   getBranding (): Promise<Branding> {
     return this.request({ method: 'GET', path: '/api/v1/public/branding' })
   }
+
+  getIdentityConfiguration (): Promise<IdentityConfiguration> { return this.request({ method: 'GET', path: '/api/v1/admin/identity' }) }
+  updateIdentityConfiguration (input: IdentityConfigurationWrite, options: C311RequestOptions = {}): Promise<IdentityConfiguration> { return this.request({ method: 'PATCH', path: '/api/v1/admin/identity', body: input, ...this.requestOptions(options) }) }
+  listIntegrations (query: ListQuery = {}): Promise<PageResponse<IntegrationConnection>> { return this.request({ method: 'GET', path: '/api/v1/admin/integrations', query: this.listQuery(query) }) }
+  getIntegration (integrationID: string): Promise<IntegrationConnection> { return this.request({ method: 'GET', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}` }) }
+  updateIntegration (integrationID: string, input: IntegrationConnectionWrite, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'PATCH', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}`, body: input, ...this.requestOptions(options) }) }
+  rotateIntegrationSecret (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'POST', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}/rotate`, body: {}, ...this.requestOptions(options) }) }
+  revokeIntegration (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'POST', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}/revoke`, body: {}, ...this.requestOptions(options) }) }
 
   updateBranding (input: BrandingWrite, options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'PATCH', path: '/api/v1/admin/branding', body: input, ...this.requestOptions(options) }) }
   getAdminBranding (): Promise<Branding> { return this.request({ method: 'GET', path: '/api/v1/admin/branding' }) }

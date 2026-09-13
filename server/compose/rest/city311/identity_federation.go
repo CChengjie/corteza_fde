@@ -45,7 +45,7 @@ func (h *handler) federatedSignInStart(w http.ResponseWriter, r *http.Request) {
 		writeResult(w, 0, nil, err)
 		return
 	}
-	h.setFederationCookie(w, r, flow)
+	h.setFederationCookie(w, flow)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, result)
 }
@@ -61,7 +61,7 @@ func (h *handler) federatedSignInCallback(w http.ResponseWriter, r *http.Request
 	if provider == "saml" {
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
 		if err := r.ParseForm(); err != nil {
-			h.expireFederationCookie(w, r)
+			h.expireFederationCookie(w)
 			writeJSON(w, http.StatusUnauthorized, contract.APIError{
 				Error: contract.ErrorUnauthenticated, Message: "Federated authentication failed. Please return to sign in and try again.", Retryable: false,
 			})
@@ -71,7 +71,7 @@ func (h *handler) federatedSignInCallback(w http.ResponseWriter, r *http.Request
 	}
 	cookie, err := r.Cookie(city311Service.FederationFlowCookie)
 	if err != nil || strings.TrimSpace(values.Get("error")) != "" {
-		h.expireFederationCookie(w, r)
+		h.expireFederationCookie(w)
 		writeJSON(w, http.StatusUnauthorized, contract.APIError{
 			Error: contract.ErrorUnauthenticated, Message: "Federated authentication failed. Please return to sign in and try again.", Retryable: false,
 		})
@@ -84,25 +84,25 @@ func (h *handler) federatedSignInCallback(w http.ResponseWriter, r *http.Request
 	token, resolved, completionErr := h.identity.CompleteFederatedSignIn(
 		r.Context(), provider, state, values.Get("code"), values.Get("SAMLResponse"), cookie.Value,
 	)
-	h.expireFederationCookie(w, r)
+	h.expireFederationCookie(w)
 	if completionErr != nil {
 		writeResult(w, 0, nil, completionErr)
 		return
 	}
-	h.setIdentityCookie(w, r, token)
+	h.setIdentityCookie(w, token)
 	writeJSON(w, http.StatusOK, h.identity.Session(resolved))
 }
 
-func (h *handler) setFederationCookie(w http.ResponseWriter, r *http.Request, value string) {
+func (h *handler) setFederationCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.FederationFlowCookie, Value: value, Path: "/api/v1/auth",
-		MaxAge: 600, HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteNoneMode,
+		MaxAge: 600, HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteNoneMode,
 	})
 }
 
-func (h *handler) expireFederationCookie(w http.ResponseWriter, r *http.Request) {
+func (h *handler) expireFederationCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.FederationFlowCookie, Value: "", Path: "/api/v1/auth",
-		MaxAge: -1, HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteNoneMode,
+		MaxAge: -1, HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteNoneMode,
 	})
 }

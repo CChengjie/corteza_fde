@@ -7,6 +7,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -250,7 +252,7 @@ func (h *handler) optionalIdentitySession(next http.Handler) http.Handler {
 			return
 		}
 		if resolved == nil {
-			h.expireIdentityCookie(w, r)
+			h.expireIdentityCookie(w)
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -319,7 +321,7 @@ func (h *handler) sessionSignIn(w http.ResponseWriter, r *http.Request) {
 		writeResult(w, 0, nil, err)
 		return
 	}
-	h.setIdentityCookie(w, r, token)
+	h.setIdentityCookie(w, token)
 	writeJSON(w, http.StatusOK, h.identity.Session(resolved))
 }
 
@@ -333,7 +335,7 @@ func (h *handler) sessionSignOut(w http.ResponseWriter, r *http.Request) {
 		writeResult(w, 0, nil, err)
 		return
 	}
-	h.expireIdentityCookie(w, r)
+	h.expireIdentityCookie(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -375,25 +377,29 @@ func (h *handler) loginIdentifierChange(w http.ResponseWriter, r *http.Request) 
 	writeResult(w, http.StatusOK, response, err)
 }
 
-// secureCookie is disabled only when a trusted reverse proxy explicitly
-// reports an HTTP request. This keeps direct and HTTPS deployments secure,
-// while allowing the documented local HTTP Compose deployment to retain a
-// City 311 session across page navigation.
-func secureCookie(r *http.Request) bool {
-	return r == nil || !strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "http")
+// secureCookie permits insecure cookies only for an explicit loopback HTTP
+// application URL. Request headers are untrusted because the backend can be
+// reached directly as well as through a reverse proxy.
+func secureCookie() bool {
+	baseURL, err := url.Parse(strings.TrimSpace(os.Getenv("APP_BASE_URL")))
+	if err != nil || !strings.EqualFold(baseURL.Scheme, "http") {
+		return true
+	}
+	hostname := strings.ToLower(baseURL.Hostname())
+	return hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1"
 }
 
-func (h *handler) setIdentityCookie(w http.ResponseWriter, r *http.Request, token string) {
+func (h *handler) setIdentityCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: token, Path: "/",
-		HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteLaxMode,
 	})
 }
 
-func (h *handler) expireIdentityCookie(w http.ResponseWriter, r *http.Request) {
+func (h *handler) expireIdentityCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteLaxMode,
 	})
 }
 

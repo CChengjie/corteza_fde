@@ -28,8 +28,7 @@ class E2eAssetTests(unittest.TestCase):
         workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "test-e2e.yml").read_text(encoding="utf-8")
         self.assertIn("- 'codex/fix-e2e-login-ci'", workflow)
         self.assertIn("Apply E2E login synchronization patch", workflow)
-        self.assertIn("auth.refresh-token", workflow)
-        self.assertIn("not.match", workflow)
+        self.assertIn(".nav-sidebar", workflow)
 
 
 if __name__ == "__main__":

@@ -105,12 +105,9 @@ jobs:
           const marker = '  cy.get(`[data-test-id="${buttonLoginID}"]`).click()\n})'
           const replacement = `  cy.get(\`[data-test-id="\${buttonLoginID}"]\`).click()
 
-          // Wait until OAuth callback processing has persisted the session.
-          cy.location('pathname', { timeout: 60000 }).should('not.match', /\\/auth\\/login$/)
-          cy.window({ timeout: 60000 }).its('sessionStorage')
-            .invoke('getItem', 'auth.refresh-token')
-            .should('be.a', 'string')
-            .and('not.be.empty')
+          // Wait until the callback, token exchange, and Admin bootstrap all
+          // complete before callers navigate to the application root.
+          cy.get('.nav-sidebar', { timeout: 60000 }).should('be.visible')
           })`
           if (!source.includes(marker)) throw new Error('login command marker not found')
           fs.writeFileSync(file, source.replace(marker, replacement))

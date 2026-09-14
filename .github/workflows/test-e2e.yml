@@ -129,6 +129,9 @@ jobs:
                 cy.get('[data-test-id="input-password"]').clear().type(password)
                 cy.get('[data-test-id="button-login-and-remember"]').click()
                 cy.location('pathname', { timeout: 60000 }).should('not.match', /\\/auth\\/login$/)
+                cy.window({ timeout: 60000 }).should(win => {
+                  expect(win.sessionStorage.getItem('auth.refresh-token'), 'Admin refresh token').to.be.a('string').and.not.empty
+                })
                 cy.visit(url + '/', { failOnStatusCode: false })
               }
             })

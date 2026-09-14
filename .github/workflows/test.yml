@@ -194,7 +194,18 @@ jobs:
         run: npm install -g yarn @vue/cli-service
       - name: "Install dependencies"
         working-directory: lib/${{ matrix.lib }}
-        run: yarn install
+        run: |
+          for attempt in 1 2 3; do
+            if yarn install --frozen-lockfile --network-timeout 300000; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 10))
+            fi
+          done
+
+          exit 1
       - name: "Run all tests"
         working-directory: lib/${{ matrix.lib }}
         run: yarn test:unit

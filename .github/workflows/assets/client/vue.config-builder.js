@@ -240,7 +240,7 @@ function fetchBaseUrl () {
     // eslint-disable-next-line no-eval
     eval(fileContents)
 
-    const u = window.CortezaAPI || ''
+    const u = window.CortezaProxyURL || window.CortezaAPI || ''
     const ur = new URL(u.startsWith('//') ? `http:${u}` : u)
 
     return `${ur.protocol}//${ur.host}/`

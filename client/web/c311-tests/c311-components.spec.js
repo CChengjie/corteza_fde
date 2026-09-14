@@ -1270,30 +1270,21 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.forms.account.display_name).toBe('Edited name')
   })
 
-  it('routes callback pending-link confirmation through server state', async () => {
+  it('marks an authenticated account-link redirect as explicitly confirmed', async () => {
     const provider = {
       startFederatedSignIn: jest.fn().mockResolvedValue({ authorization_url: 'https://identity.example.test/oidc/authorize' }),
-      completeFederatedSignIn: jest.fn().mockResolvedValue({ outcome: 'link_confirmation_required', pending_link: { expires_at: '2099-01-15T16:00:00.000Z' } }),
-      confirmAccountLink: jest.fn().mockResolvedValue({ authenticated: true, actor: null, preferred_language: 'EN', expires_at: null }),
     }
     const router = { push: jest.fn() }
-    const runtime = { provider, session: { authenticated: false }, pendingFederated: null }
+    const runtime = { provider, session: { authenticated: true }, pendingFederated: null }
     const wrapper = mount(PublicPortal, {
       mocks: { ...mocks, $route: { name: 'c311.sign-in', query: {} }, $router: router, $C311: runtime },
       stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
     })
-    await wrapper.vm.federated('oidc')
-    wrapper.vm.$route.query = { provider: 'oidc', code: 'fixture' }
-    await wrapper.vm.completeFederated()
-    expect(router.push).toHaveBeenCalledWith({ name: 'c311.auth.link.confirm' })
-    expect(runtime.pendingFederated).toEqual({ expires_at: '2099-01-15T16:00:00.000Z' })
     window.C311Mode = 'mock'
-    await wrapper.vm.confirmAccountLink()
+    window.confirm = jest.fn(() => true)
+    await wrapper.vm.federated('oidc')
     window.C311Mode = undefined
-    expect(provider.confirmAccountLink).toHaveBeenCalledWith()
-    expect(wrapper.vm.linkState).toBe('success')
-    expect(runtime.pendingFederated).toBe(null)
-    expect(router.push).not.toHaveBeenCalledWith(expect.objectContaining({ query: expect.anything() }))
+    expect(provider.startFederatedSignIn).toHaveBeenCalledWith('oidc', { linkConfirmed: true })
   })
 
   it('cancels pending account linking through the provider before returning to sign-in', async () => {

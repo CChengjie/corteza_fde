@@ -126,7 +126,6 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.With(requireIdentity).Get("/operations/{operation_id}/result", h.operationResult)
 		r.Route("/account", func(r chi.Router) {
 			r.Use(requireCityIdentitySession)
-			r.Post("/link/confirm", h.accountLinkConfirm)
 			r.With(requireProfileConstituent).Delete("/", h.accountDelete)
 			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
 			r.With(requireProfileConstituent).Patch("/profile", h.profileUpdate)

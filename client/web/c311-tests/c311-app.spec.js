@@ -166,6 +166,21 @@ describe('C311 application shell initialization', () => {
     expect(runtime.websocket).not.toHaveBeenCalled()
   })
 
+  it('lets real Admin City311 routes use the City311 session guard instead of generic OAuth', async () => {
+    const appFactory = require('../admin/src/app').default
+    const definition = appFactory({ router: mockRouter })
+    const { runtime } = makeRuntime({ name: 'c311.staff', meta: { c311: { requiresAuth: true } } })
+    const originalPathname = window.location.pathname
+    window.history.replaceState({}, '', '/c311/staff')
+
+    await definition.created.call(runtime)
+
+    expect(runtime.loaded).toBe(true)
+    expect(runtime.websocket).not.toHaveBeenCalled()
+    expect(runtime.$auth.startAuthenticationFlow).not.toHaveBeenCalled()
+    window.history.replaceState({}, '', originalPathname)
+  })
+
   it('initializes Admin authenticated C311 locale persistence', async () => {
     const appFactory = require('../admin/src/app').default
     const definition = appFactory({ router: mockRouter })

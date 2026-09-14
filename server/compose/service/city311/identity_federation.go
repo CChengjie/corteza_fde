@@ -244,7 +244,7 @@ func validFederationBaseURL(runtime IdentityRuntimeConfiguration) bool {
 	return err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
 }
 
-func (svc *IdentityService) StartFederatedSignIn(ctx context.Context, provider, requestedClient string, resolved *ResolvedSession) (*contract.FederatedRedirect, string, error) {
+func (svc *IdentityService) StartFederatedSignIn(ctx context.Context, provider, requestedClient string, resolved *ResolvedSession, linkConfirmation ...bool) (*contract.FederatedRedirect, string, error) {
 	if svc.configErr != nil {
 		return nil, "", svc.configurationUnavailable()
 	}
@@ -255,6 +255,10 @@ func (svc *IdentityService) StartFederatedSignIn(ctx context.Context, provider, 
 	client, linkUserID, err := federatedClientFor(provider, requestedClient, resolved)
 	if err != nil {
 		return nil, "", err
+	}
+	confirmed := len(linkConfirmation) > 0 && linkConfirmation[0]
+	if linkUserID != "" && !confirmed {
+		return nil, "", apiError(http.StatusForbidden, contract.ErrorForbidden, "Confirm account linking before continuing to the identity provider.")
 	}
 	svc.federationMu.Lock()
 	configuration, err := svc.ensureIdentityConfiguration(ctx)

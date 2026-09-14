@@ -254,8 +254,7 @@ export interface C311Provider {
   deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult>
   requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement>
   confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult>
-  startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect>
-  confirmAccountLink (): Promise<Session>
+  startFederatedSignIn (provider: IdentityProvider, options?: { linkConfirmed?: boolean }): Promise<FederatedRedirect>
   completeFederatedSignIn (provider: IdentityProvider, query?: Record<string, string>): Promise<FederatedSignInResult>
   getBranding (): Promise<Branding>
   getIdentityConfiguration (): Promise<IdentityConfiguration>
@@ -469,12 +468,8 @@ export class C311HttpProvider implements C311Provider {
     return this.request({ method: 'POST', path: '/api/v1/auth/email-replacement/confirm', body: input })
   }
 
-  startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect> {
-    return this.request({ method: 'GET', path: `/api/v1/auth/${encodeURIComponent(provider)}/start` })
-  }
-
-  confirmAccountLink (): Promise<Session> {
-    return this.request({ method: 'POST', path: '/api/v1/account/link/confirm', body: {} })
+  startFederatedSignIn (provider: IdentityProvider, options: { linkConfirmed?: boolean } = {}): Promise<FederatedRedirect> {
+    return this.request({ method: 'GET', path: `/api/v1/auth/${encodeURIComponent(provider)}/start`, query: options.linkConfirmed ? { link_confirmed: 'true' } : undefined })
   }
 
   completeFederatedSignIn (provider: IdentityProvider, query: Record<string, string> = {}): Promise<FederatedSignInResult> {

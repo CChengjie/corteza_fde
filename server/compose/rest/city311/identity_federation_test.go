@@ -140,7 +140,7 @@ func TestFederatedSignInHTTPContractAndSecureCookies(t *testing.T) {
 	require.Contains(t, current.Body.String(), `"display_name":"REST Federated Resident"`)
 }
 
-func TestAccountLinkConfirmationReturnsAuthenticatedSession(t *testing.T) {
+func TestAccountLinkRequiresConfirmedFederationStart(t *testing.T) {
 	router, _, _ := testFederationRouter(t)
 	registration := identityRegistrationBody("link.confirm", "link-confirm@example.invalid")
 	require.Equal(t, http.StatusAccepted, executeJSON(t, router, http.MethodPost, "/api/v1/accounts", registration, nil, 0).Code)
@@ -149,12 +149,10 @@ func TestAccountLinkConfirmationReturnsAuthenticatedSession(t *testing.T) {
 	}, nil, 0)
 	require.Equal(t, http.StatusOK, signedIn.Code, signedIn.Body.String())
 	cookie := signedIn.Result().Cookies()[0]
-	confirmed := executeJSON(t, router, http.MethodPost, "/api/v1/account/link/confirm", map[string]any{}, map[string]string{"Cookie": cookie.Name + "=" + cookie.Value}, 0)
+	unconfirmed := executeJSON(t, router, http.MethodGet, "/api/v1/auth/oidc/start", nil, map[string]string{"Cookie": cookie.Name + "=" + cookie.Value}, 0)
+	require.Equal(t, http.StatusForbidden, unconfirmed.Code, unconfirmed.Body.String())
+	confirmed := executeJSON(t, router, http.MethodGet, "/api/v1/auth/oidc/start?link_confirmed=true", nil, map[string]string{"Cookie": cookie.Name + "=" + cookie.Value}, 0)
 	require.Equal(t, http.StatusOK, confirmed.Code, confirmed.Body.String())
-	require.Contains(t, confirmed.Body.String(), `"authenticated":true`)
-
-	unauthenticated := executeJSON(t, router, http.MethodPost, "/api/v1/account/link/confirm", map[string]any{}, nil, 0)
-	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
 }
 
 func TestFederatedSAMLHTTPPostCallback(t *testing.T) {

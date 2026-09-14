@@ -53,7 +53,12 @@ export default (options = {}) => {
       if (this.$i18n.i18next.isInitialized) installC311I18n()
       if (window.C311Mode === 'mock') installC311I18n()
 
-      if (this.isC311MockRoute || this.$route?.meta?.c311?.public || ['c311.unauthorized', 'c311.forbidden', 'c311.not-found', 'c311.not-found-wildcard'].includes(this.$route?.name)) {
+      // City311 uses its own session cookie and router guard.  Sending an
+      // already-authenticated City311 administrator through the generic
+      // Corteza OAuth flow prevents the independently deployed Admin client
+      // from reaching its City311 routes.
+      const isC311Path = window.location?.pathname?.startsWith('/c311')
+      if (this.isC311MockRoute || isC311Path || this.$route?.meta?.c311?.public || ['c311.unauthorized', 'c311.forbidden', 'c311.not-found', 'c311.not-found-wildcard'].includes(this.$route?.name)) {
         this.loaded = true
         return
       }

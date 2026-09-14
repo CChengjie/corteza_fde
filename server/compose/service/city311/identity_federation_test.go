@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -298,7 +299,9 @@ func TestFederatedVerifiedEmailRequiresExplicitAuthenticatedLink(t *testing.T) {
 
 	_, localSession, err := identity.SignIn(ctx, contract.LocalSignIn{LoginIdentifier: registration.LoginIdentifier, Password: registration.Password})
 	require.NoError(t, err)
-	_, cookie, err = identity.StartFederatedSignIn(ctx, federatedProviderOIDC, federatedClientStaff, localSession)
+	_, _, err = identity.StartFederatedSignIn(ctx, federatedProviderOIDC, federatedClientStaff, localSession)
+	requireIdentityError(t, err, http.StatusForbidden, contract.ErrorForbidden)
+	_, cookie, err = identity.StartFederatedSignIn(ctx, federatedProviderOIDC, federatedClientStaff, localSession, true)
 	require.NoError(t, err)
 	start = provider.starts[len(provider.starts)-1]
 	require.Equal(t, federatedClientPublic, start.Client)

@@ -25,7 +25,7 @@ MAIN = "[data-c311-main]"
 ALLOWED_HTTP_ERROR_PATHS: frozenset[str] = frozenset({"/code-snippets.js", "/custom.css"})
 ALLOWED_WRITE_PATHS: frozenset[str] = frozenset({
     "/api/v1/session", "/api/v1/accounts", "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm",
-    "/api/v1/auth/oidc/start", "/api/v1/auth/oidc/callback", "/api/v1/account/link/confirm", "/api/v1/account/profile",
+    "/api/v1/auth/oidc/start", "/api/v1/auth/oidc/callback", "/api/v1/account/profile",
     "/api/v1/account/password", "/api/v1/account/login-identifier", "/api/v1/preferences/language",
     "/api/v1/portal/service-requests", "/api/v1/portal/attachments",
 })
@@ -221,23 +221,6 @@ def check_identity_forms(page: Page) -> None:
     page.locator("#c311-reset-password").fill("ValidPassword1!")
     page.locator('[data-c311-action="reset-password"]').click()
     page.locator('[data-c311-error-summary]').wait_for(state="visible")
-
-    open_page(page, "/c311/sign-in", "link-confirmation-required")
-    page.locator('[data-c311-action="oidc-sign-in"]').click()
-    page.wait_for_url("**/c311/auth/link/confirm*")
-    check("authorization_url" not in page.url and "token" not in page.url, "link confirmation exposed redirect data")
-    check(page.locator('[data-c311-page="link-confirm"]').count() == 1, "account-link confirmation page missing")
-    page.reload(wait_until="domcontentloaded")
-    page.locator('[data-c311-page="link-confirm"]').wait_for(state="visible")
-    page.locator('[data-c311-action="confirm-link"]').click()
-    page.locator('[data-c311-page="link-confirm"] .alert-success').wait_for(state="visible")
-    check("authorization_url" not in page.url and "token" not in page.url, "confirmed redirect data exposed")
-
-    open_page(page, "/c311/sign-in", "link-confirmation-required")
-    page.locator('[data-c311-action="oidc-sign-in"]').click()
-    page.wait_for_url("**/c311/auth/link/confirm")
-    page.locator('[data-c311-action="cancel-link-confirm"]').click()
-    page.wait_for_url("**/c311/sign-in")
 
     open_page(page, "/c311/auth/callback?provider=oidc&error=access_denied", "identity-claims-failure")
     page.locator('[data-c311-error-summary]').wait_for(state="visible")

@@ -756,7 +756,15 @@ export default {
     async federated (provider) {
       return this.runBusy('federated', async () => {
         try {
-          const redirect = await this.provider?.startFederatedSignIn?.(provider)
+          const isLinkingExistingAccount = !!this.$C311?.session?.authenticated
+          if (isLinkingExistingAccount && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+            const confirmed = window.confirm(this.t('identity.linkConfirmBeforeRedirect', 'Link this identity to your signed-in City 311 account?'))
+            if (!confirmed) {
+              this.federatedMessage = this.t('identity.linkCancelled', 'Account linking was cancelled.')
+              return
+            }
+          }
+          const redirect = await this.provider?.startFederatedSignIn?.(provider, { linkConfirmed: isLinkingExistingAccount })
           if (!redirect?.authorization_url) {
             this.federatedMessage = this.t('identity.unavailable', 'This sign-in method is unavailable.')
             return
@@ -773,23 +781,7 @@ export default {
         }
       })
     },
-    async confirmAccountLink () {
-      return this.runBusy('link', async () => {
-        this.formErrors = []
-        this.linkState = 'loading'
-        try {
-          const session = await this.provider?.confirmAccountLink?.()
-          this.$C311.pendingFederated = null
-          this.$C311.session = session
-          this.sessionRevision++
-          this.linkState = 'success'
-          this.federatedMessage = this.t('identity.linkConfirmed', 'Account linking confirmed.')
-        } catch (error) {
-          this.linkState = 'error'
-          this.setError(error)
-        }
-      })
-    },
+    async confirmAccountLink () { await this.cancelAccountLink() },
     async cancelAccountLink () {
       if (this.$C311) this.$C311.pendingFederated = null
       this.federatedMessage = this.t('identity.linkCancelled', 'Account linking was cancelled.')

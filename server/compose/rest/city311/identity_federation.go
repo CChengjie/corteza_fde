@@ -39,7 +39,7 @@ func (h *handler) adminIdentityConfigurationUpdate(w http.ResponseWriter, r *htt
 
 func (h *handler) federatedSignInStart(w http.ResponseWriter, r *http.Request) {
 	result, flow, err := h.identity.StartFederatedSignIn(
-		r.Context(), chi.URLParam(r, "provider"), r.URL.Query().Get("client"), identitySessionFromContext(r.Context()),
+		r.Context(), chi.URLParam(r, "provider"), r.URL.Query().Get("client"), identitySessionFromContext(r.Context()), r.URL.Query().Get("link_confirmed") == "true",
 	)
 	if err != nil {
 		writeResult(w, 0, nil, err)
@@ -90,15 +90,6 @@ func (h *handler) federatedSignInCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 	h.setIdentityCookie(w, token)
-	writeJSON(w, http.StatusOK, h.identity.Session(resolved))
-}
-
-// accountLinkConfirm completes the browser-facing confirmation step. The
-// federated callback already binds only to the authenticated local account;
-// this endpoint deliberately returns that resolved session rather than
-// accepting an account identifier from the client.
-func (h *handler) accountLinkConfirm(w http.ResponseWriter, r *http.Request) {
-	resolved := identitySessionFromContext(r.Context())
 	writeJSON(w, http.StatusOK, h.identity.Session(resolved))
 }
 

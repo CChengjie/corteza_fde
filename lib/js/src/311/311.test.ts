@@ -367,18 +367,15 @@ describe('City 311 frontend contract', () => {
       request: async <T> (request: C311TransportRequest): Promise<T> => {
         requests.push(request)
         if (request.path === '/api/v1/account/login-identifier') return session as T
-        if (request.path === '/api/v1/account/link/confirm') return session as T
         return undefined as T
       },
     })
 
     expect(await provider.changeLoginIdentifier({ current_password: 'Current-password-1!', login_identifier: 'alex.new' })).to.deep.equal(session)
     expect(await provider.changePassword({ current_password: 'Current-password-1!', new_password: 'New-password-2!' })).to.equal(undefined)
-    expect(await provider.confirmAccountLink()).to.deep.equal(session)
     expect(requests).to.deep.equal([
       { method: 'POST', path: '/api/v1/account/login-identifier', body: { current_password: 'Current-password-1!', login_identifier: 'alex.new' } },
       { method: 'POST', path: '/api/v1/account/password', body: { current_password: 'Current-password-1!', new_password: 'New-password-2!' } },
-      { method: 'POST', path: '/api/v1/account/link/confirm', body: {} },
     ])
   })
 
@@ -410,13 +407,11 @@ describe('City 311 frontend contract', () => {
     await expectError(() => provider.confirmPasswordReset({ token: 'reset-token-fixture-002', password: 'New-password-2!' }), 'INVALID_RESET_TOKEN')
   })
 
-  it('exposes and completes an explicit link confirmation operation', async () => {
+  it('requires the caller to mark an authenticated federation start as confirmed', async () => {
     const provider = new MockC311Provider({ scenario: 'link-confirmation-required' })
-    await provider.startFederatedSignIn('oidc')
+    await provider.startFederatedSignIn('oidc', { linkConfirmed: true })
     const pending = await provider.completeFederatedSignIn('oidc', { code: 'fixture-code' })
     expect(pending.outcome).to.equal('link_confirmation_required')
-    const confirmed = await provider.confirmAccountLink()
-    expect(confirmed.authenticated).to.equal(true)
   })
 
   it('keeps the account session unchanged when a pending federated link is cancelled', async () => {

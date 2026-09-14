@@ -124,13 +124,13 @@ jobs:
             if (!window.sessionStorage.getItem('auth.refresh-token')) {
               cy.login({ email, password, url })
               cy.visit(url + '/')
-              cy.location('href').then(href => cy.log(`admin href: ${href}`))
+              cy.location('href').then(href => cy.log(`admin href: \${href}`))
               cy.document().then(doc => {
-                cy.log(`admin title: ${doc.title}`)
-                cy.log(`admin body: ${(doc.body?.innerText || '').slice(0, 500)}`)
+                cy.log(`admin title: \${doc.title}`)
+                cy.log(`admin body: \${(doc.body?.innerText || '').slice(0, 500)}`)
               })
               cy.window().then(win => {
-                cy.log(`admin storage keys: ${Object.keys(win.sessionStorage).join(',')}`)
+                cy.log(`admin storage keys: \${Object.keys(win.sessionStorage).join(',')}`)
               })
               cy.get('.nav-sidebar', { timeout: 10000 }).should('be.visible')
             }

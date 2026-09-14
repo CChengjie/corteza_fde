@@ -239,7 +239,10 @@ jobs:
 
       - name: Wait for ${{ matrix.client.name }} dev server
         run: |
-          deadline=$((SECONDS + 600))
+          # The Admin bundle is large and the first webpack build can exceed
+          # ten minutes on a clean GitHub runner. Do not start Cypress until
+          # the injected bundle exists, but allow the compile to finish.
+          deadline=$((SECONDS + 1800))
           until html=$(curl --silent --fail "http://127.0.0.1:${{ matrix.client.port }}/") && \
                 printf '%s' "$html" | grep -Eq '<script[^>]+src="[^"]*(app|chunk-vendors|runtime)[^"]*\.js'; do
             if [ "$SECONDS" -ge "$deadline" ]; then

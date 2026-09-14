@@ -113,7 +113,21 @@ jobs:
           cy.location('pathname', { timeout: 60000 }).should('not.match', /\\/auth\\/login$/)
           })`
           if (!source.includes(marker)) throw new Error('login command marker not found')
-          fs.writeFileSync(file, source.replace(marker, replacement))
+          const patched = source.replace(marker, replacement)
+          fs.writeFileSync(file, `${patched}
+
+          // Complete the full Admin bootstrap in the shared login helper. The
+          // upstream specs call cy.visit(adminURL + '/') immediately after
+          // this command, so doing the first root visit here removes the race
+          // between the server session cookie and the OAuth callback.
+          Cypress.Commands.add('preTestLogin', ({ email = Cypress.env('USER_EMAIL'), password = Cypress.env('USER_PASSWORD'), url }) => {
+            if (!window.sessionStorage.getItem('auth.refresh-token')) {
+              cy.login({ email, password, url })
+              cy.visit(url + '/')
+              cy.get('.nav-sidebar', { timeout: 60000 }).should('be.visible')
+            }
+          })
+          `)
           NODE
 
       - name: Cache lib dependencies

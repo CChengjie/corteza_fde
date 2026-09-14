@@ -240,7 +240,8 @@ jobs:
       - name: Wait for ${{ matrix.client.name }} dev server
         run: |
           deadline=$((SECONDS + 600))
-          until curl --silent --fail "http://127.0.0.1:${{ matrix.client.port }}/" | grep -Eq '<script[^>]+src="[^"]+\.js'; do
+          until html=$(curl --silent --fail "http://127.0.0.1:${{ matrix.client.port }}/") && \
+                printf '%s' "$html" | grep -Eq '<script[^>]+src="[^"]*(app|chunk-vendors|runtime)[^"]*\.js'; do
             if [ "$SECONDS" -ge "$deadline" ]; then
               echo "Timed out waiting for Vue dev server compilation"
               sed -n '1,240p' "corteza/.e2e-${{ matrix.client.name }}.log" || true

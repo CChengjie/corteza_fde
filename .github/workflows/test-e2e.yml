@@ -124,15 +124,12 @@ jobs:
             if (!window.sessionStorage.getItem('auth.refresh-token')) {
               cy.login({ email, password, url })
               cy.visit(url + '/')
-              cy.then(() => {
-                if (!window.__cortezaE2eDiagnostic) {
-                  window.__cortezaE2eDiagnostic = true
-                  throw new Error('E2E bootstrap href=' + window.location.href +
-                    '; title=' + document.title +
-                    '; body=' + (document.body?.innerText || '').slice(0, 500) +
-                    '; storage=' + Object.keys(window.sessionStorage).join(','))
-                }
-              })
+              cy.location('href').then(href => cy.document().then(doc => cy.window().then(win => {
+                throw new Error('E2E bootstrap href=' + href +
+                  '; title=' + doc.title +
+                  '; body=' + (doc.body?.innerText || '').slice(0, 500) +
+                  '; storage=' + Object.keys(win.sessionStorage).join(','))
+              })))
               cy.get('.nav-sidebar', { timeout: 10000 }).should('be.visible')
             }
           })

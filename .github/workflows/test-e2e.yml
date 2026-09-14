@@ -114,12 +114,20 @@ jobs:
           fs.writeFileSync(file, `${patched}
 
           // Cypress' window is the AUT only after a page has been visited;
-          // reading sessionStorage before that point checks the runner and
-          // incorrectly reports an unauthenticated user. Always complete the
-          // login redirect and wait for the authenticated Admin shell here.
+          // reading sessionStorage before that point checks the runner. Start
+          // at Admin root and only fill the form when the server redirects to
+          // the login route. This also reuses an existing authenticated shell.
           Cypress.Commands.add('preTestLogin', ({ email = Cypress.env('USER_EMAIL'), password = Cypress.env('USER_PASSWORD'), url }) => {
-            cy.login({ email, password, url })
-            cy.visit(url + '/')
+            cy.visit(url + '/', { failOnStatusCode: false })
+            cy.location('pathname', { timeout: 60000 }).then(pathname => {
+              if (/\\/auth\\/login$/.test(pathname)) {
+                cy.get('[data-test-id="input-email"]').clear().type(email)
+                cy.get('[data-test-id="input-password"]').clear().type(password)
+                cy.get('[data-test-id="button-login-and-remember"]').click()
+                cy.location('pathname', { timeout: 60000 }).should('not.match', /\\/auth\\/login$/)
+                cy.visit(url + '/', { failOnStatusCode: false })
+              }
+            })
             cy.get('.nav-sidebar', { timeout: 60000 }).should('be.visible')
           })
           `)

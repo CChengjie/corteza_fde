@@ -112,7 +112,7 @@ jobs:
           CLIENT_NAME: ${{ matrix.client.name }}
         run: |
           mv ./.github/workflows/assets/docker-compose.yaml ./
-          cp .github/workflows/assets/client/vue.config-builder.js client/web/${CLIENT_NAME}/public/vue.config-builder.js
+          cp .github/workflows/assets/client/vue.config-builder.js client/web/${CLIENT_NAME}/vue.config-builder.js
           cp .github/workflows/assets/client/config.js client/web/${CLIENT_NAME}/public/config.js
 
           docker compose -f docker-compose.yaml config > /tmp/docker-compose.corteza.yaml

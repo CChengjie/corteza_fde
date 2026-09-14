@@ -169,6 +169,14 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
       },
 
       proxy: {
+        '^/api': {
+          target: fetchBaseUrl(),
+        },
+
+        '^/auth': {
+          target: fetchBaseUrl(),
+        },
+
         '^/custom.css': {
           target: fetchBaseUrl(),
         },

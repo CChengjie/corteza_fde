@@ -224,7 +224,9 @@ func (svc *IdentityService) cancelRequestNotifications(ctx context.Context, tx s
 		}
 		payload.Recipient = ""
 		payload.DeliveryKey = ""
-		payload.DeliveryStatus = mailStatusFailed
+		if operation.Status == mailStatusPending {
+			payload.DeliveryStatus = mailStatusFailed
+		}
 		result, mapErr := mapFrom(payload)
 		if mapErr != nil {
 			return mapErr

@@ -91,6 +91,14 @@ jobs:
         run: tools/c311-browser/run-fe07.sh
         env:
           C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe07-gate
+      - name: "FE-08 administration browser matrix"
+        run: tools/c311-browser/run-fe08.sh
+        env:
+          C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe08-gate
+      - name: "FE-09 workflow and extensions browser matrix"
+        run: tools/c311-browser/run-fe09.sh
+        env:
+          C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-fe09-gate
       - name: "FE-10 frontend quality browser matrix"
         run: tools/c311-browser/run-fe10.sh
         env:
@@ -143,6 +151,20 @@ jobs:
         with:
           name: c311-fe07-gate
           path: ${{ runner.temp }}/c311-fe07-gate
+          if-no-files-found: ignore
+      - name: "Upload FE-08 gate evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c311-fe08-gate
+          path: ${{ runner.temp }}/c311-fe08-gate
+          if-no-files-found: ignore
+      - name: "Upload FE-09 gate evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c311-fe09-gate
+          path: ${{ runner.temp }}/c311-fe09-gate
           if-no-files-found: ignore
       - name: "Upload FE-10 quality evidence"
         if: always()

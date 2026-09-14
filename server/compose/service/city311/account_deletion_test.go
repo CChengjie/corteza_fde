@@ -57,7 +57,16 @@ func TestAccountDeletionAnonymisesIdentityAndPreservesRequests(t *testing.T) {
 		ID: svc.nextID(), Kind: requestNotificationOperationKind, Status: mailStatusPending,
 		Result: composeTypes.City311JSON{"unexpected": true}, Error: composeTypes.City311JSON{}, CreatedAt: now, UpdatedAt: now,
 	}
-	require.NoError(t, store.CreateCity311Operation(ctx, st, matchingOperation, malformedOperation))
+	deliveredPayload, err := mapFrom(requestNotificationPayload{
+		RequestID: request.ID, RequestNumber: request.RequestNumber, ConstituentID: "C-" + strconv.FormatUint(userID, 10),
+		Recipient: "constituent1@city311.example.invalid", DeliveryKey: "request:delivered", DeliveryStatus: mailStatusDelivered,
+	})
+	require.NoError(t, err)
+	deliveredOperation := &composeTypes.City311Operation{
+		ID: svc.nextID(), Kind: requestNotificationOperationKind, Status: mailStatusDelivered,
+		Result: deliveredPayload, Error: composeTypes.City311JSON{}, CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, store.CreateCity311Operation(ctx, st, matchingOperation, malformedOperation, deliveredOperation))
 
 	require.NoError(t, identity.DeleteAccount(ctx, resolved))
 
@@ -111,7 +120,7 @@ func TestAccountDeletionAnonymisesIdentityAndPreservesRequests(t *testing.T) {
 	}
 	operations, _, err := store.SearchCity311Operations(ctx, st, composeTypes.City311OperationFilter{Kind: requestNotificationOperationKind})
 	require.NoError(t, err)
-	require.Len(t, operations, 2)
+	require.Len(t, operations, 3)
 	for _, operation := range operations {
 		if operation.ID == matchingOperation.ID {
 			require.Equal(t, mailStatusFailed, operation.Status)
@@ -119,8 +128,15 @@ func TestAccountDeletionAnonymisesIdentityAndPreservesRequests(t *testing.T) {
 			require.Empty(t, operation.Result["delivery_key"])
 			require.Equal(t, mailStatusFailed, operation.Result["delivery_status"])
 		} else {
-			require.Equal(t, mailStatusPending, operation.Status)
-			require.Equal(t, true, operation.Result["unexpected"])
+			if operation.ID == deliveredOperation.ID {
+				require.Equal(t, mailStatusDelivered, operation.Status)
+				require.Empty(t, operation.Result["recipient"])
+				require.Empty(t, operation.Result["delivery_key"])
+				require.Equal(t, mailStatusDelivered, operation.Result["delivery_status"])
+			} else {
+				require.Equal(t, mailStatusPending, operation.Status)
+				require.Equal(t, true, operation.Result["unexpected"])
+			}
 		}
 	}
 	memberships, _, err := store.SearchRoleMembers(ctx, st, systemTypes.RoleMemberFilter{Resource: "corteza::system:user/" + strconv.FormatUint(userID, 10)})

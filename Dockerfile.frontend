@@ -26,11 +26,11 @@ RUN corepack enable \
 
 FROM nginx:1.27-alpine
 
-COPY --from=build --chown=nginx:nginx /src/client/web/compose/dist /usr/share/nginx/html
-COPY --chown=nginx:nginx docker/frontend-nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /src/client/web/compose/dist /usr/share/nginx/html
+COPY docker/frontend-nginx.conf /etc/nginx/conf.d/default.conf
 
 RUN printf "%s\n" "window.CortezaAPI = '/api';" > /usr/share/nginx/html/config.js \
-    && chown nginx:nginx /usr/share/nginx/html/config.js /var/cache/nginx /var/run
+    && chown nginx:nginx /var/cache/nginx /var/run
 
 USER nginx
 

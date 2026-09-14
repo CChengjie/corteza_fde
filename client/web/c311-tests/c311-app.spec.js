@@ -199,6 +199,10 @@ describe('C311 application shell initialization', () => {
     jest.requireActual('../admin/src/plugins/index')
 
     expect(mockPlugins.createC311Provider).toHaveBeenCalledTimes(2)
+    expect(mockPlugins.createC311Provider.mock.calls).toEqual([
+      [expect.any(Object), {}],
+      [expect.any(Object), {}],
+    ])
     expect(mockPlugins.C311).toHaveBeenCalledTimes(2)
     expect(mockPlugins.C311.mock.calls[0][0]).toEqual(expect.objectContaining({ provider: expect.any(Object) }))
   })

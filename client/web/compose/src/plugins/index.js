@@ -26,7 +26,8 @@ Vue.use(Router)
 
 Vue.use(plugins.Auth(), { app: 'compose' })
 if (plugins.C311) {
-  const provider = plugins.createC311Provider(C311JS, { accessTokenFn: Vue.prototype.$auth.accessTokenFn })
+  const accessTokenFn = Vue.prototype.$auth && Vue.prototype.$auth.accessTokenFn
+  const provider = plugins.createC311Provider(C311JS, accessTokenFn ? { accessTokenFn } : {})
   Vue.use(plugins.C311(provider ? { provider } : {}))
 }
 

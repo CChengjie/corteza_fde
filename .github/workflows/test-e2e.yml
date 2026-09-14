@@ -223,7 +223,7 @@ jobs:
       - name: Wait for compiled admin assets
         run: |
           deadline=$((SECONDS + 600))
-          until curl --silent --fail http://127.0.0.1:8080/ | grep -Eq '<script[^>]+src="/[^" ]+\.js'; do
+          until curl --silent --fail http://127.0.0.1:8080/ | grep -Eq '<script[^>]+src="[^"]*(app|chunk-vendors|runtime)[^"]*\.js'; do
             if [ "$SECONDS" -ge "$deadline" ]; then
               echo "Timed out waiting for Vue dev server compilation"
               exit 124

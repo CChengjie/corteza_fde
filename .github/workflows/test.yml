@@ -196,7 +196,7 @@ jobs:
         working-directory: lib/${{ matrix.lib }}
         run: |
           for attempt in 1 2 3; do
-            if yarn install --frozen-lockfile --network-timeout 300000; then
+            if yarn install --frozen-lockfile --ignore-scripts --network-timeout 300000; then
               exit 0
             fi
 

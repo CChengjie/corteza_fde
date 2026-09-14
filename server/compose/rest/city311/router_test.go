@@ -231,11 +231,15 @@ func TestIdentityCookiesAllowOnlyLoopbackHTTP(t *testing.T) {
 	require.Len(t, federationCookies, 1)
 	require.False(t, federationCookies[0].Secure)
 	require.True(t, federationCookies[0].HttpOnly)
+	require.Equal(t, http.SameSiteLaxMode, federationCookies[0].SameSite)
 
 	t.Setenv("APP_BASE_URL", "http://city.example")
 	secureResponse := httptest.NewRecorder()
 	h.setIdentityCookie(secureResponse, "production-session")
 	require.True(t, secureResponse.Result().Cookies()[0].Secure)
+	secureFederationResponse := httptest.NewRecorder()
+	h.setFederationCookie(secureFederationResponse, "production-flow")
+	require.Equal(t, http.SameSiteNoneMode, secureFederationResponse.Result().Cookies()[0].SameSite)
 
 	t.Setenv("APP_BASE_URL", "https://city.example")
 	httpsResponse := httptest.NewRecorder()

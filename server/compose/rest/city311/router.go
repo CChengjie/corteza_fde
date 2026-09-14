@@ -389,6 +389,15 @@ func secureCookie() bool {
 	return hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1"
 }
 
+func federationCookieSameSite() http.SameSite {
+	if secureCookie() {
+		return http.SameSiteNoneMode
+	}
+	// Modern browsers reject SameSite=None cookies without Secure. Lax keeps
+	// the loopback OIDC top-level callback usable during local development.
+	return http.SameSiteLaxMode
+}
+
 func (h *handler) setIdentityCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: token, Path: "/",

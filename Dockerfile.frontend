@@ -3,6 +3,7 @@
 FROM node:22-bookworm AS build
 
 ARG BUILD_VERSION=city311-development
+ARG WEBAPP=compose
 ENV BUILD_VERSION=${BUILD_VERSION}
 
 WORKDIR /src
@@ -18,15 +19,17 @@ RUN corepack enable \
     && tar -xzf /tmp/corteza-js.tgz --strip-components=1 -C lib/vue/node_modules/@cortezaproject/corteza-js \
     && corepack yarn --cwd lib/vue build \
     && corepack yarn --cwd lib/vue pack --filename /tmp/corteza-vue.tgz \
-    && corepack yarn --cwd client/web/compose install --frozen-lockfile \
-    && mkdir -p client/web/compose/node_modules/@cortezaproject/corteza-js client/web/compose/node_modules/@cortezaproject/corteza-vue \
-    && tar -xzf /tmp/corteza-js.tgz --strip-components=1 -C client/web/compose/node_modules/@cortezaproject/corteza-js \
-    && tar -xzf /tmp/corteza-vue.tgz --strip-components=1 -C client/web/compose/node_modules/@cortezaproject/corteza-vue \
-    && corepack yarn --cwd client/web/compose build
+    && corepack yarn --cwd client/web/${WEBAPP} install --frozen-lockfile \
+    && mkdir -p client/web/${WEBAPP}/node_modules/@cortezaproject/corteza-js client/web/${WEBAPP}/node_modules/@cortezaproject/corteza-vue \
+    && tar -xzf /tmp/corteza-js.tgz --strip-components=1 -C client/web/${WEBAPP}/node_modules/@cortezaproject/corteza-js \
+    && tar -xzf /tmp/corteza-vue.tgz --strip-components=1 -C client/web/${WEBAPP}/node_modules/@cortezaproject/corteza-vue \
+    && corepack yarn --cwd client/web/${WEBAPP} build
 
 FROM nginx:1.27-alpine
 
-COPY --from=build /src/client/web/compose/dist /usr/share/nginx/html
+ARG WEBAPP=compose
+
+COPY --from=build /src/client/web/${WEBAPP}/dist /usr/share/nginx/html
 COPY docker/frontend-nginx.conf /etc/nginx/conf.d/default.conf
 
 RUN printf "%s\n" "window.CortezaAPI = '/api';" > /usr/share/nginx/html/config.js \

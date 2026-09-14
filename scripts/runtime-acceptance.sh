@@ -131,7 +131,10 @@ static_checks() {
     .services.app.volumes[0].source == "attachment_data" and
     .services.postgres.volumes[0].source == "postgres_data" and
     .services.app.depends_on.postgres.condition == "service_healthy" and
-    .services.app.depends_on.civicworks.condition == "service_healthy"
+    .services.app.depends_on.civicworks.condition == "service_healthy" and
+    .services.frontend.build.args.WEBAPP == "compose" and
+    .services.admin.build.args.WEBAPP == "admin" and
+    .services.admin.depends_on.app.condition == "service_healthy"
   ' <<<"${rendered}" >/dev/null
   grep -q 'COPY locale/en /src/locale/en' "${repository_root}/Dockerfile"
   grep -q 'COPY server/ ./' "${repository_root}/Dockerfile"

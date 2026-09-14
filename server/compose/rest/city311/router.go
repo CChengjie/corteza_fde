@@ -126,6 +126,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.With(requireIdentity).Get("/operations/{operation_id}/result", h.operationResult)
 		r.Route("/account", func(r chi.Router) {
 			r.Use(requireCityIdentitySession)
+			r.Post("/link/confirm", h.accountLinkConfirm)
 			r.With(requireProfileConstituent).Delete("/", h.accountDelete)
 			r.With(requireProfileConstituent).Get("/profile", h.profileGet)
 			r.With(requireProfileConstituent).Patch("/profile", h.profileUpdate)
@@ -182,6 +183,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 			r.Get("/workflow-executions", h.workflowExecutionList)
 			r.Get("/workflow-executions/{execution_id}", h.workflowExecutionGet)
 		})
+		r.With(requireIdentity).Post("/actions", h.workflowActionExecute)
 		r.Post("/portal/service-requests", h.portalSubmit)
 		r.Post("/portal/attachments", h.attachmentUpload)
 		r.With(requireIdentity).Get("/attachments/{attachment_id}", h.attachmentDownload)

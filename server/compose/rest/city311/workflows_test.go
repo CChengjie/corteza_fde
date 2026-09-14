@@ -12,6 +12,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type workflowActionHTTPStub struct {
+	requests []contract.WorkflowActionRequest
+	keys     []string
+}
+
+func (stub *workflowActionHTTPStub) Execute(_ context.Context, input contract.WorkflowActionRequest, key string) (int, error) {
+	stub.requests = append(stub.requests, input)
+	stub.keys = append(stub.keys, key)
+	return http.StatusAccepted, nil
+}
+
 func TestWorkflowHTTPDefinitionLifecycleAndRoleEnforcement(t *testing.T) {
 	router, st, _ := testRouter(t)
 	ctx := context.Background()
@@ -127,4 +138,51 @@ func TestWorkflowHTTPTestOperationExecutionLogAndValidation(t *testing.T) {
 	require.Equal(t, http.StatusUnprocessableEntity, badPageSize.Code, badPageSize.Body.String())
 	badBody := executeJSON(t, router, http.MethodPost, "/api/v1/admin/workflows", map[string]any{"unknown": true}, nil, designer.ID)
 	require.Equal(t, http.StatusUnprocessableEntity, badBody.Code, badBody.Body.String())
+}
+
+func TestWorkflowActionHTTPBridgePersistsExecution(t *testing.T) {
+	router, st, service := testRouter(t)
+	ctx := context.Background()
+	designer, err := store.LookupUserByEmail(ctx, st, "workflow-designer@city311.example.invalid")
+	require.NoError(t, err)
+	profile, err := store.LookupCity311ActorProfileByID(ctx, st, designer.ID)
+	require.NoError(t, err)
+	profile.ApplicationRoles = append(profile.ApplicationRoles, contract.ApplicationRolePlatformAdministrator)
+	require.NoError(t, store.UpdateCity311ActorProfile(ctx, st, profile))
+	stub := &workflowActionHTTPStub{}
+	service.SetWorkflowHTTPClient(stub)
+	seeded, err := store.LookupCity311ServiceRequestByRequestNumber(ctx, st, "SR-2026-00034")
+	require.NoError(t, err)
+
+	missingKey := executeJSON(t, router, http.MethodPost, "/api/v1/actions", map[string]any{
+		"action": "notify_department", "request_id": strconv.FormatUint(seeded.ID, 10), "payload": map[string]any{},
+	}, nil, designer.ID)
+	require.Equal(t, http.StatusUnprocessableEntity, missingKey.Code, missingKey.Body.String())
+
+	response := executeJSON(t, router, http.MethodPost, "/api/v1/actions", map[string]any{
+		"action": "notify_department", "request_id": strconv.FormatUint(seeded.ID, 10), "payload": map[string]any{"channel": "EMAIL"},
+	}, map[string]string{contract.IdempotencyHeader: "manual-action-1"}, designer.ID)
+	require.Equal(t, http.StatusAccepted, response.Code, response.Body.String())
+	accepted := contract.WorkflowActionAccepted{}
+	require.NoError(t, decodeResponse(response, &accepted))
+	require.NotEmpty(t, accepted.ExecutionID)
+	require.Equal(t, []string{"manual-action-1"}, stub.keys)
+	require.Len(t, stub.requests, 1)
+	replay := executeJSON(t, router, http.MethodPost, "/api/v1/actions", map[string]any{
+		"action": "notify_department", "request_id": strconv.FormatUint(seeded.ID, 10), "payload": map[string]any{"channel": "EMAIL"},
+	}, map[string]string{contract.IdempotencyHeader: "manual-action-1"}, designer.ID)
+	require.Equal(t, http.StatusAccepted, replay.Code, replay.Body.String())
+	replayed := contract.WorkflowActionAccepted{}
+	require.NoError(t, decodeResponse(replay, &replayed))
+	require.Equal(t, accepted, replayed)
+	require.Len(t, stub.requests, 1)
+
+	conflict := executeJSON(t, router, http.MethodPost, "/api/v1/actions", map[string]any{
+		"action": "notify_department", "request_id": strconv.FormatUint(seeded.ID, 10), "payload": map[string]any{"channel": "SMS"},
+	}, map[string]string{contract.IdempotencyHeader: "manual-action-1"}, designer.ID)
+	require.Equal(t, http.StatusConflict, conflict.Code, conflict.Body.String())
+
+	execution := executeJSON(t, router, http.MethodGet, "/api/v1/admin/workflow-executions/"+accepted.ExecutionID, nil, nil, designer.ID)
+	require.Equal(t, http.StatusOK, execution.Code, execution.Body.String())
+	require.Contains(t, execution.Body.String(), `"response_status":202`)
 }

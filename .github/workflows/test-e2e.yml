@@ -229,7 +229,7 @@ jobs:
 
           docker compose run \
             --entrypoint="bash -c \" \
-              cypress run --spec cypress/e2e/basic-functionalities/${CLIENT_NAME}/index.cy.js --browser chrome --config video=false,screenshotOnRunFailure=false \
+              cypress run --spec cypress/e2e/basic-functionalities/admin/user/Create.cy.js --browser chrome --config video=false,screenshotOnRunFailure=false \
             \"" \
           cypress
 

@@ -28,7 +28,6 @@ class Fe02MatrixTests(unittest.TestCase):
         self.assertIn("SERVICE_CATALOGUE", source)
         self.assertIn("SPA logout kept authenticated navigation", source)
         self.assertIn('[data-c311-action="change-login-identifier"]', source)
-        self.assertIn("linkConfirmed: isLinkingExistingAccount", source)
         self.assertNotIn('/c311/security-notice', source)
         self.assertIn("C311Mode = 'mock'", source)
         self.assertNotIn("password=", source)

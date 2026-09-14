@@ -4,13 +4,38 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	autTypes "github.com/cortezaproject/corteza/server/automation/types"
 	"github.com/cortezaproject/corteza/server/pkg/expr"
+	"github.com/cortezaproject/corteza/server/pkg/id"
 	"github.com/cortezaproject/corteza/server/pkg/wfexec"
 	"github.com/cortezaproject/corteza/server/system/automation"
+	sysTypes "github.com/cortezaproject/corteza/server/system/types"
 	"github.com/stretchr/testify/require"
 )
+
+func loadIteratorTemplateScenario(ctx context.Context, t *testing.T) {
+	t.Helper()
+
+	req := require.New(t)
+	req.NoError(defStore.TruncateTemplates(ctx))
+	loadScenarioWithName(ctx, t, "S0009_iterator_templates")
+
+	// The scenario imports the workflow definition. Seed iterator data directly so
+	// repeated scenario imports cannot leave the chunked iterator with an empty set.
+	req.NoError(defStore.TruncateTemplates(ctx))
+	templates := make([]*sysTypes.Template, 0, 5)
+	for i := 1; i <= 5; i++ {
+		templates = append(templates, &sysTypes.Template{
+			ID:        id.Next(),
+			Handle:    fmt.Sprintf("t%d", i),
+			Type:      sysTypes.DocumentTypeHTML,
+			CreatedAt: time.Now(),
+		})
+	}
+	req.NoError(defStore.CreateTemplate(ctx, templates...))
+}
 
 func Test0009_iterator_templates(t *testing.T) {
 	wfexec.MaxIteratorBufferSize = wfexec.DefaultMaxIteratorBufferSize
@@ -23,9 +48,7 @@ func Test0009_iterator_templates(t *testing.T) {
 		req = require.New(t)
 	)
 
-	req.NoError(defStore.TruncateTemplates(ctx))
-
-	loadScenario(ctx, t)
+	loadIteratorTemplateScenario(ctx, t)
 
 	var (
 		_, trace = mustExecWorkflow(ctx, t, "testing", autTypes.WorkflowExecParams{})
@@ -64,9 +87,7 @@ func Test0009_iterator_templates_chunked(t *testing.T) {
 		req = require.New(t)
 	)
 
-	req.NoError(defStore.TruncateTemplates(ctx))
-
-	loadScenarioWithName(ctx, t, "S0009_iterator_templates")
+	loadIteratorTemplateScenario(ctx, t)
 
 	var (
 		_, trace = mustExecWorkflow(ctx, t, "testing", autTypes.WorkflowExecParams{})

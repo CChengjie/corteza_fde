@@ -95,7 +95,7 @@ jobs:
           ref: 2024.9.x
           path: corteza-e2e-cypress
 
-      - name: Apply E2E login synchronization patch
+      - name: Patch E2E login bootstrap
         working-directory: corteza-e2e-cypress
         run: |
           node <<'NODE'
@@ -105,33 +105,22 @@ jobs:
           const marker = '  cy.get(`[data-test-id="${buttonLoginID}"]`).click()\n})'
           const replacement = `  cy.get(\`[data-test-id="\${buttonLoginID}"]\`).click()
 
-          // The login form completes on the server-auth page first. The
-          // caller then visits the Admin root, which starts the OAuth callback
-          // flow and bootstraps the authenticated application. Waiting for the
-          // form redirect here prevents that follow-up visit from racing the
-          // login POST without assuming Admin DOM is already mounted.
+          // The form submits to the server auth endpoint. Wait for that
+          // redirect before the caller starts the Admin OAuth bootstrap.
           cy.location('pathname', { timeout: 60000 }).should('not.match', /\\/auth\\/login$/)
           })`
           if (!source.includes(marker)) throw new Error('login command marker not found')
           const patched = source.replace(marker, replacement)
           fs.writeFileSync(file, `${patched}
 
-          // Complete the full Admin bootstrap in the shared login helper. The
-          // upstream specs call cy.visit(adminURL + '/') immediately after
-          // this command, so doing the first root visit here removes the race
-          // between the server session cookie and the OAuth callback.
+          // Cypress' window is the AUT only after a page has been visited;
+          // reading sessionStorage before that point checks the runner and
+          // incorrectly reports an unauthenticated user. Always complete the
+          // login redirect and wait for the authenticated Admin shell here.
           Cypress.Commands.add('preTestLogin', ({ email = Cypress.env('USER_EMAIL'), password = Cypress.env('USER_PASSWORD'), url }) => {
-            if (!window.sessionStorage.getItem('auth.refresh-token')) {
-              cy.login({ email, password, url })
-              cy.visit(url + '/')
-              cy.location('href').then(href => cy.document().then(doc => cy.window().then(win => {
-                throw new Error('E2E bootstrap href=' + href +
-                  '; title=' + doc.title +
-                  '; body=' + (doc.body?.innerText || '').slice(0, 500) +
-                  '; storage=' + Object.keys(win.sessionStorage).join(','))
-              })))
-              cy.get('.nav-sidebar', { timeout: 10000 }).should('be.visible')
-            }
+            cy.login({ email, password, url })
+            cy.visit(url + '/')
+            cy.get('.nav-sidebar', { timeout: 60000 }).should('be.visible')
           })
           `)
           NODE
@@ -193,39 +182,53 @@ jobs:
           CLIENT_NAME: ${{ matrix.client.name }}
           CLIENT_PORT: ${{ matrix.client.port }}
         run: |
+          rm -f .e2e-admin.log .e2e-admin-ready
           docker compose -f docker-compose.yaml \
             run -d \
             --name "${CLIENT_NAME}" \
             --use-aliases \
             client \
-            sh -c "ls && cd /corteza/lib/js && yarn link && \
+            sh -c "set -eu; exec > /corteza/.e2e-${CLIENT_NAME}.log 2>&1; \
+                  echo 'Installing and linking client dependencies'; \
+                  cd /corteza/lib/js && yarn link && \
                   cd /corteza/lib/vue && yarn link && \
                   cd /corteza/client/web/${CLIENT_NAME} && \
                   yarn link @cortezaproject/corteza-vue && \
                   yarn link @cortezaproject/corteza-js && \
-                  yarn install && \
-                  yarn serve --port ${CLIENT_PORT}"
-
-      - name: Inspect admin build logs
-        if: always()
-        run: docker logs admin 2>&1 | tail -n 250 || true
+                  yarn install --network-timeout 120000 && \
+                  touch /corteza/.e2e-${CLIENT_NAME}-ready && \
+                  exec yarn serve --host 127.0.0.1 --port ${CLIENT_PORT}"
 
       # github actions do not support docker-compose --wait
       - name: Wait for postgres healthcheck
         run: timeout 180s sh -c 'until docker ps | grep postgres | grep -q healthy; do echo "Waiting for container to be healthy..."; sleep 1; done'
 
-      - name: Wait for ${{ matrix.client.name }} healthcheck
+      - name: Wait for ${{ matrix.client.name }} setup
         env:
           CLIENT_NAME: ${{ matrix.client.name }}
         run: |
-          timeout 180s sh -c 'until docker ps | grep ${CLIENT_NAME} | grep -q healthy; do echo "Waiting for container to be healthy..."; sleep 1; done'
+          deadline=$((SECONDS + 600))
+          until test -f "corteza/.e2e-${CLIENT_NAME}-ready"; do
+            if ! docker inspect -f '{{.State.Running}}' "${CLIENT_NAME}" 2>/dev/null | grep -q true; then
+              echo "${CLIENT_NAME} stopped before dependencies were ready"
+              cat "corteza/.e2e-${CLIENT_NAME}.log" || true
+              exit 1
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "Timed out preparing ${CLIENT_NAME}"
+              cat "corteza/.e2e-${CLIENT_NAME}.log" || true
+              exit 124
+            fi
+            sleep 5
+          done
 
-      - name: Wait for compiled admin assets
+      - name: Wait for ${{ matrix.client.name }} dev server
         run: |
           deadline=$((SECONDS + 600))
-          until curl --silent --fail http://127.0.0.1:8080/ | grep -Eq '<script[^>]+src="[^"]*(app|chunk-vendors|runtime)[^"]*\.js'; do
+          until curl --silent --fail "http://127.0.0.1:${{ matrix.client.port }}/" | grep -Eq '<script[^>]+src="[^"]+\.js'; do
             if [ "$SECONDS" -ge "$deadline" ]; then
               echo "Timed out waiting for Vue dev server compilation"
+              sed -n '1,240p' "corteza/.e2e-${{ matrix.client.name }}.log" || true
               exit 124
             fi
             echo "Waiting for Vue dev server compilation..."
@@ -245,7 +248,7 @@ jobs:
 
           docker compose run \
             --entrypoint="bash -c \" \
-              cypress run --spec cypress/e2e/basic-functionalities/admin/user/Create.cy.js --browser chrome --config video=false,screenshotOnRunFailure=false \
+              cypress run --spec cypress/e2e/basic-functionalities/${CLIENT_NAME}/index.cy.js --browser chrome --config video=false,screenshotOnRunFailure=false \
             \"" \
           cypress
 

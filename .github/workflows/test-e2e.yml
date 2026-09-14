@@ -193,10 +193,11 @@ jobs:
 
       - name: Publish results
         # always() runs the step even when canceled manually
-        if: success() || failure()
+        if: ${{ (success() || failure()) && env.RELEASE_CRUST_SFTP_URI != '' && env.RELEASE_CRUST_SFTP_KEY != '' }}
         working-directory: corteza-e2e-cypress
         env:
           RELEASE_CRUST_SFTP_URI: ${{ secrets.RELEASE_CRUST_SFTP_URI }}
+          RELEASE_CRUST_SFTP_KEY: ${{ secrets.RELEASE_CRUST_SFTP_KEY }}
           RELEASE_CRUST_KEY_FILE: ${{ env.TMP_KEY }}
         run: |
           npx mochawesome-merge "cypress/reports/*.json" > cypress/report.json && \
@@ -207,9 +208,13 @@ jobs:
     needs: [server-client-setup]
     runs-on: ubuntu-22.04
     if: failure()
+    env:
+      MATRIX_HOME_SERVER: ${{ secrets.MATRIX_HOME_SERVER }}
+      MATRIX_ACCESS_TOKEN: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+      MATRIX_ROOM_ID: ${{ secrets.MATRIX_ROOM_ID }}
     steps:
       - name: Send message on failed testing results
-        if: ${{ secrets.MATRIX_HOME_SERVER != '' && secrets.MATRIX_ACCESS_TOKEN != '' && secrets.MATRIX_ROOM_ID != '' }}
+        if: ${{ env.MATRIX_HOME_SERVER != '' && env.MATRIX_ACCESS_TOKEN != '' && env.MATRIX_ROOM_ID != '' }}
         uses: fadenb/matrix-chat-message@v0.0.6
         env:
           E2E_REPORTS_USER: ${{ secrets.E2E_REPORTS_USER }}

@@ -1,0 +1,8 @@
+.env
+.venv/
+.openhands-state/
+__pycache__/
+logs/
+results/
+workspaces/
+tools/

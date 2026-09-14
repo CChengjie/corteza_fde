@@ -209,6 +209,7 @@ jobs:
     if: failure()
     steps:
       - name: Send message on failed testing results
+        if: ${{ secrets.MATRIX_HOME_SERVER != '' && secrets.MATRIX_ACCESS_TOKEN != '' && secrets.MATRIX_ROOM_ID != '' }}
         uses: fadenb/matrix-chat-message@v0.0.6
         env:
           E2E_REPORTS_USER: ${{ secrets.E2E_REPORTS_USER }}

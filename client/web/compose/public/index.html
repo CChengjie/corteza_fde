@@ -16,7 +16,7 @@
         const stylesheet = document.createElement('link')
         stylesheet.rel = 'stylesheet'
         stylesheet.type = 'text/css'
-        stylesheet.href = '<%= BASE_URL %>custom.css'
+        stylesheet.href = 'custom.css'
         document.head.appendChild(stylesheet)
       }
     </script>
@@ -41,7 +41,7 @@
     <script>
       if (window.C311Mode !== 'mock') {
         const codeSnippets = document.createElement('script')
-        codeSnippets.src = '<%= BASE_URL %>code-snippets.js'
+        codeSnippets.src = 'code-snippets.js'
         codeSnippets.type = 'text/javascript'
         document.body.appendChild(codeSnippets)
       }

@@ -4,13 +4,37 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	autTypes "github.com/cortezaproject/corteza/server/automation/types"
 	"github.com/cortezaproject/corteza/server/pkg/expr"
+	"github.com/cortezaproject/corteza/server/pkg/id"
 	"github.com/cortezaproject/corteza/server/pkg/wfexec"
 	"github.com/cortezaproject/corteza/server/system/automation"
+	sysTypes "github.com/cortezaproject/corteza/server/system/types"
 	"github.com/stretchr/testify/require"
 )
+
+func loadIteratorRoleScenario(ctx context.Context, t *testing.T) {
+	t.Helper()
+
+	req := require.New(t)
+	loadScenarioWithName(ctx, t, "S0007_iterator_roles")
+
+	// The scenario imports the workflow definition. Seed iterator data directly so
+	// repeated scenario imports cannot leave the chunked iterator with an empty set.
+	req.NoError(defStore.TruncateRoles(ctx))
+	roles := make([]*sysTypes.Role, 0, 5)
+	for i := 1; i <= 5; i++ {
+		roles = append(roles, &sysTypes.Role{
+			ID:        id.Next(),
+			Handle:    fmt.Sprintf("r%d", i),
+			Name:      fmt.Sprintf("r%d name", i),
+			CreatedAt: time.Now(),
+		})
+	}
+	req.NoError(defStore.CreateRole(ctx, roles...))
+}
 
 func Test0007_iterator_roles(t *testing.T) {
 	wfexec.MaxIteratorBufferSize = wfexec.DefaultMaxIteratorBufferSize
@@ -23,9 +47,7 @@ func Test0007_iterator_roles(t *testing.T) {
 		req = require.New(t)
 	)
 
-	req.NoError(defStore.TruncateRoles(ctx))
-
-	loadScenario(ctx, t)
+	loadIteratorRoleScenario(ctx, t)
 
 	var (
 		_, trace = mustExecWorkflow(ctx, t, "testing", autTypes.WorkflowExecParams{})
@@ -64,9 +86,7 @@ func Test0008_iterator_roles_chunked(t *testing.T) {
 		req = require.New(t)
 	)
 
-	req.NoError(defStore.TruncateRoles(ctx))
-
-	loadScenarioWithName(ctx, t, "S0007_iterator_roles")
+	loadIteratorRoleScenario(ctx, t)
 
 	var (
 		_, trace = mustExecWorkflow(ctx, t, "testing", autTypes.WorkflowExecParams{})

@@ -9,9 +9,13 @@ export interface C311PluginOptions {
   providerFactory?: (options: C311PluginOptions) => C311Provider
 }
 
+export interface C311ProviderOptions {
+  accessTokenFn?: () => string | undefined
+}
+
 export interface C311ProviderConstructors {
   C311HttpProvider?: new (transport: unknown) => C311Provider
-  C311FetchTransport?: new (options: { baseURL?: string }) => unknown
+  C311FetchTransport?: new (options: { baseURL?: string, accessTokenFn?: () => string | undefined }) => unknown
   MockC311Provider?: new (options: {
     role?: string
     scenario?: string
@@ -19,7 +23,7 @@ export interface C311ProviderConstructors {
   }) => C311Provider
 }
 
-export function createC311Provider (api: C311ProviderConstructors): C311Provider | undefined {
+export function createC311Provider (api: C311ProviderConstructors, options: C311ProviderOptions = {}): C311Provider | undefined {
   if (typeof window === 'undefined') return undefined
 
   const configured = window.C311Provider
@@ -42,7 +46,7 @@ export function createC311Provider (api: C311ProviderConstructors): C311Provider
     // rooted at /api/v1. Use the origin so the transport cannot produce
     // /api/api/v1 requests in same-origin deployments.
     const baseURL = (window.C311API || window.CortezaAPI || '').replace(/\/api\/?$/, '')
-    return new api.C311HttpProvider(new api.C311FetchTransport({ baseURL }))
+    return new api.C311HttpProvider(new api.C311FetchTransport({ baseURL, accessTokenFn: options.accessTokenFn }))
   }
 
   return undefined

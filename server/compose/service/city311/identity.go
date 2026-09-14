@@ -594,6 +594,55 @@ func (svc *IdentityService) Resolve(ctx context.Context, rawToken string) (*Reso
 	return &ResolvedSession{Record: record, Account: account, User: user, Actor: actor}, nil
 }
 
+// ResolveAuthenticatedStaff exposes an already-authenticated Corteza staff
+// user to City311 without issuing or extending a separate City311 cookie. It
+// deliberately excludes constituents, which must continue using the City311
+// local session lifecycle.
+func (svc *IdentityService) ResolveAuthenticatedStaff(ctx context.Context, userID uint64) (*ResolvedSession, error) {
+	if svc.configErr != nil {
+		return nil, svc.configurationUnavailable()
+	}
+	if userID == 0 {
+		return nil, nil
+	}
+	account, err := store.LookupCity311LocalAccountByID(ctx, svc.store, userID)
+	if errors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	user, err := store.LookupUserByID(ctx, svc.store, userID)
+	if errors.IsNotFound(err) || (err == nil && !user.Valid()) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	actor, err := svc.currentActor(ctx, user, account)
+	if errors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !hasCortezaBridgeRole(actor.ApplicationRoles) {
+		return nil, nil
+	}
+	return &ResolvedSession{Account: account, User: user, Actor: actor}, nil
+}
+
+func hasCortezaBridgeRole(roles []contract.ApplicationRole) bool {
+	for _, role := range roles {
+		switch role {
+		case contract.ApplicationRoleServiceAgent, contract.ApplicationRoleSupervisor,
+			contract.ApplicationRoleDepartmentManager, contract.ApplicationRolePlatformAdministrator:
+			return true
+		}
+	}
+	return false
+}
+
 func (svc *IdentityService) lookupIdentitySession(ctx context.Context, rawToken string) (*composeTypes.City311IdentitySession, error) {
 	record, err := store.LookupCity311IdentitySessionByTokenHash(ctx, svc.store, svc.hashToken(rawToken))
 	if errors.IsNotFound(err) {
@@ -639,9 +688,13 @@ func (svc *IdentityService) Session(resolved *ResolvedSession) *contract.Session
 	if resolved == nil {
 		return &contract.Session{Authenticated: false, Actor: nil, ExpiresAt: nil, PreferredLanguage: contract.LanguageEN}
 	}
-	expiresAt := resolved.Record.ExpiresAt
+	var expiresAt *time.Time
+	if resolved.Record != nil {
+		value := resolved.Record.ExpiresAt
+		expiresAt = &value
+	}
 	return &contract.Session{
-		Authenticated: true, Actor: resolved.Actor, ExpiresAt: &expiresAt,
+		Authenticated: true, Actor: resolved.Actor, ExpiresAt: expiresAt,
 		PreferredLanguage: contract.Language(resolved.Account.PreferredLanguage),
 	}
 }

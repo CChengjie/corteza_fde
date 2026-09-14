@@ -244,6 +244,12 @@ func (h *handler) optionalIdentitySession(next http.Handler) http.Handler {
 		}
 		cookie, err := r.Cookie(city311Service.IdentitySessionCookie)
 		if err != nil {
+			if bridged, handled := h.resolveAuthenticatedStaff(w, r); handled {
+				if bridged != nil {
+					next.ServeHTTP(w, bridged)
+				}
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -254,6 +260,12 @@ func (h *handler) optionalIdentitySession(next http.Handler) http.Handler {
 		}
 		if resolved == nil {
 			h.expireIdentityCookie(w)
+			if bridged, handled := h.resolveAuthenticatedStaff(w, r); handled {
+				if bridged != nil {
+					next.ServeHTTP(w, bridged)
+				}
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -261,6 +273,22 @@ func (h *handler) optionalIdentitySession(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, identitySessionContextKey{}, resolved)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (h *handler) resolveAuthenticatedStaff(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+	identity := auth.GetIdentityFromContext(r.Context())
+	if !identity.Valid() {
+		return nil, false
+	}
+	resolved, err := h.identity.ResolveAuthenticatedStaff(r.Context(), identity.Identity())
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return nil, true
+	}
+	if resolved == nil {
+		return nil, false
+	}
+	return r.WithContext(context.WithValue(r.Context(), identitySessionContextKey{}, resolved)), true
 }
 
 func identitySessionFromContext(ctx context.Context) *city311Service.ResolvedSession {

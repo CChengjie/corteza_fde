@@ -271,6 +271,24 @@ func TestIdentitySignOutDeletesServerSessionAndExpiresCookie(t *testing.T) {
 	require.Contains(t, current.Body.String(), `"authenticated":false`)
 }
 
+func TestCortezaAuthenticatedActorResolvesCity311Session(t *testing.T) {
+	router, st, _, _ := testIdentityRouter(t)
+	staff, err := store.LookupUserByEmail(context.Background(), st, "service-agent@city311.example.invalid")
+	require.NoError(t, err)
+
+	session := executeJSON(t, router, http.MethodGet, "/api/v1/session", nil, nil, staff.ID)
+	require.Equal(t, http.StatusOK, session.Code, session.Body.String())
+	require.Contains(t, session.Body.String(), `"authenticated":true`)
+	require.Contains(t, session.Body.String(), `"service_agent"`)
+
+	staleCookie := executeJSON(t, router, http.MethodGet, "/api/v1/session", nil, map[string]string{"Cookie": "city311_session=stale"}, staff.ID)
+	require.Equal(t, http.StatusOK, staleCookie.Code, staleCookie.Body.String())
+	require.Contains(t, staleCookie.Body.String(), `"authenticated":true`)
+
+	queue := executeJSON(t, router, http.MethodGet, "/api/v1/staff/service-requests", nil, nil, staff.ID)
+	require.Equal(t, http.StatusOK, queue.Code, queue.Body.String())
+}
+
 func TestPortalSubmissionUsesSinglePublishedSuccessStatus(t *testing.T) {
 	router, _, _ := testRouter(t)
 	headers := map[string]string{contract.IdempotencyHeader: "portal-replay-1"}

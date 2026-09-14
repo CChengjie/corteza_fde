@@ -759,6 +759,9 @@ export default {
     async applySubmissionSuccess (response) {
       if (!response) throw new Error(this.t('error.providerUnavailable', 'The request provider is unavailable.'))
       this.submissionResult = { request_number: response.request_number, status: response.status || 'SUBMITTED', version: response.version }
+      // Keep the exact credential pair from this successful submission so the
+      // status page cannot accidentally reuse an older browser lookup.
+      this.saveStatusLookup({ request_number: response.request_number, email: this.form.requester.email })
       this.state = 'populated'
       this.successMessage = this.t('status.submitted', `Request ${response.request_number} submitted.`).replace('{{number}}', response.request_number)
       this.statusMessage = this.successMessage

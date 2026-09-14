@@ -499,6 +499,16 @@ describe('City 311 frontend contract', () => {
     expect(calls[0].url).to.equal('https://fixture.example/api/v1/session?sort=updated_at&sort=desc&page_size=20&filters=%7B%22status%22%3A%22SUBMITTED%22%7D')
     expect(calls[0].init.credentials).to.equal('include')
 
+    const tokenTransport = new C311FetchTransport({
+      accessTokenFn: () => 'existing-corteza-token',
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), init })
+        return { ok: true, status: 204, headers: { get: () => null, forEach: () => {} } } as unknown as Response
+      },
+    })
+    await tokenTransport.request({ method: 'GET', path: '/api/v1/session' })
+    expect(calls[1].init.headers).to.include({ Authorization: 'Bearer existing-corteza-token' })
+
     const errorTransport = new C311FetchTransport({
       fetch: async () => ({
         ok: false,

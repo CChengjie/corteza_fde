@@ -1373,6 +1373,7 @@ describe('C311 shared components', () => {
     expect(options.idempotencyKey).toBeTruthy()
     expect(wrapper.vm.submissionResult.status).toBe('SUBMITTED')
     expect(wrapper.vm.submissionResult.request_number).toBe('SR-2026-00041')
+    expect(JSON.parse(window.sessionStorage.getItem(wrapper.vm.statusStorageKey))).toEqual({ request_number: 'SR-2026-00041', email: 'changed@example.test' })
     expect(wrapper.find('[data-c311-action="submit-request"]').exists()).toBe(false)
     await wrapper.vm.submit()
     expect(provider.submitPortalRequest).toHaveBeenCalledTimes(1)

@@ -17,7 +17,7 @@ const verboseEventbus = window.location.search.includes('verboseEventbus')
 
 Vue.use(plugins.Auth(), { app: 'admin' })
 if (plugins.C311) {
-  const provider = plugins.createC311Provider(C311JS)
+  const provider = plugins.createC311Provider(C311JS, { accessTokenFn: Vue.prototype.$auth.accessTokenFn })
   Vue.use(plugins.C311(provider ? { provider } : {}))
 }
 

@@ -116,6 +116,7 @@ export interface C311FetchTransportOptions {
   baseURL?: string
   fetch?: typeof globalThis.fetch
   headers?: Record<string, string>
+  accessTokenFn?: () => string | undefined
 }
 
 /**
@@ -126,11 +127,13 @@ export class C311FetchTransport implements C311Transport {
   private readonly baseURL: string
   private readonly fetcher: typeof globalThis.fetch
   private readonly defaultHeaders: Record<string, string>
+  private readonly accessTokenFn?: () => string | undefined
 
   constructor (options: C311FetchTransportOptions = {}) {
     this.baseURL = (options.baseURL || '').replace(/\/$/, '')
     this.fetcher = options.fetch || globalThis.fetch.bind(globalThis)
     this.defaultHeaders = { Accept: 'application/json', ...(options.headers || {}) }
+    this.accessTokenFn = options.accessTokenFn
   }
 
   async request<T> (request: C311TransportRequest): Promise<T> {
@@ -143,6 +146,8 @@ export class C311FetchTransport implements C311Transport {
     })
 
     const headers = { ...this.defaultHeaders, ...(request.headers || {}) }
+    const accessToken = this.accessTokenFn?.()
+    if (accessToken && !headers.Authorization) headers.Authorization = `Bearer ${accessToken}`
     let body: BodyInit | undefined
     if (request.body !== undefined) {
       const isBlob = typeof Blob !== 'undefined' && request.body instanceof Blob

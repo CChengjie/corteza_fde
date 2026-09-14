@@ -59,7 +59,7 @@ describe('C311 provider selection and runtime', () => {
 
     browserWindow.C311Mode = 'http'
     browserWindow.CortezaAPI = '/api'
-    const http = createC311Provider({ C311HttpProvider: HttpProvider as any, C311FetchTransport: FetchTransport as any })
+    const http = createC311Provider({ C311HttpProvider: HttpProvider as any, C311FetchTransport: FetchTransport as any }, { accessTokenFn: () => 'token' })
     expect(http).to.be.instanceOf(HttpProvider)
 
     browserWindow.C311API = 'https://city311.example.test'

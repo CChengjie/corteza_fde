@@ -24,6 +24,13 @@ class E2eAssetTests(unittest.TestCase):
         self.assertIn("'^/api'", builder)
         self.assertIn("'^/auth'", builder)
 
+    def test_e2e_login_waits_for_callback_session(self) -> None:
+        workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "test-e2e.yml").read_text(encoding="utf-8")
+        self.assertIn("- 'codex/fix-e2e-login-ci'", workflow)
+        self.assertIn("Apply E2E login synchronization patch", workflow)
+        self.assertIn("auth.refresh-token", workflow)
+        self.assertIn("not.match", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

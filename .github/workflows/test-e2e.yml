@@ -10,6 +10,7 @@ on:
     branches:
       - '20[0-9][0-9].[0-9].x'
       - '20[0-9][0-9].[0-9].[0-9]'
+      - 'codex/fix-e2e-login-ci'
 
 env:
   BUILD_OS: linux
@@ -93,6 +94,27 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: 2024.9.x
           path: corteza-e2e-cypress
+
+      - name: Apply E2E login synchronization patch
+        working-directory: corteza-e2e-cypress
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const file = 'cypress/support/commands.js'
+          const source = fs.readFileSync(file, 'utf8')
+          const marker = '  cy.get(`[data-test-id="${buttonLoginID}"]`).click()\n})'
+          const replacement = `  cy.get(\`[data-test-id="\${buttonLoginID}"]\`).click()
+
+          // Wait until OAuth callback processing has persisted the session.
+          cy.location('pathname', { timeout: 60000 }).should('not.match', /\\/auth\\/login$/)
+          cy.window({ timeout: 60000 }).its('sessionStorage')
+            .invoke('getItem', 'auth.refresh-token')
+            .should('be.a', 'string')
+            .and('not.be.empty')
+          })`
+          if (!source.includes(marker)) throw new Error('login command marker not found')
+          fs.writeFileSync(file, source.replace(marker, replacement))
+          NODE
 
       - name: Cache lib dependencies
         uses: actions/cache@v3

@@ -52,6 +52,30 @@ export default [
     meta: { c311: { requiresAuth: true, route: 'staff_service_request_create', capabilities: ['staff_service_request_create'], scopes: ['service_requests.write'] } },
   },
   {
+    name: 'c311.staff.requests',
+    path: '/c311/staff/requests',
+    component: () => import('./C311/StaffWorkspace.vue'),
+    meta: { c311: { requiresAuth: true, route: 'staff_request_queue', capabilities: ['staff_request_queue'] } },
+  },
+  {
+    name: 'c311.staff.constituents',
+    path: '/c311/staff/constituents',
+    component: () => import('./C311/ConstituentWorkspace.vue'),
+    meta: { c311: { requiresAuth: true, route: 'staff_constituent_search', capabilities: ['staff_constituent_search'] } },
+  },
+  {
+    name: 'c311.admin.workspace',
+    path: '/c311/admin',
+    component: () => import('./C311/AdminWorkspace.vue'),
+    meta: { c311: { requiresAuth: true, route: 'admin_branding_get', capabilities: ['admin_branding_get'] } },
+  },
+  {
+    name: 'c311.operations',
+    path: '/c311/operations',
+    component: () => import('./C311/OperationsWorkspace.vue'),
+    meta: { c311: { requiresAuth: true } },
+  },
+  {
     name: 'c311.status',
     path: '/c311/status',
     component: () => import('./C311/Portal.vue'),
@@ -98,6 +122,12 @@ export default [
     path: '/c311/reset-password',
     component: () => import('./C311/PublicPortal.vue'),
     meta: { c311: { public: true, route: 'password_reset_confirm' } },
+  },
+  {
+    name: 'c311.email-replacement-confirm',
+    path: '/c311/email-replacement/confirm',
+    component: () => import('./C311/PublicPortal.vue'),
+    meta: { c311: { public: true, route: 'email_replacement_confirm' } },
   },
   {
     name: 'c311.account',

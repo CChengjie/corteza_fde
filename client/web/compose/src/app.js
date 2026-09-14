@@ -47,7 +47,10 @@ export default (options = {}) => {
       // City 311 public routes use optional session cookies and must remain
       // reachable without starting Corteza's global OAuth flow.
       const isC311MockRoute = window.C311Mode === 'mock'
-      const isPublicC311Route = isC311MockRoute || this.$route?.meta?.c311?.public || ['c311.unauthorized', 'c311.forbidden', 'c311.not-found', 'c311.not-found-wildcard'].includes(this.$route?.name)
+      // The initial route may not have resolved while the async C311 guard is
+      // loading its session, so meta alone is not reliable during bootstrap.
+      const isC311Path = window.location?.pathname?.startsWith('/c311')
+      const isPublicC311Route = isC311MockRoute || isC311Path || this.$route?.meta?.c311?.public || ['c311.unauthorized', 'c311.forbidden', 'c311.not-found', 'c311.not-found-wildcard'].includes(this.$route?.name)
       if (isPublicC311Route) {
         this.loaded = true
         return

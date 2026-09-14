@@ -6,6 +6,10 @@ import { components, mixins, c311I18n } from './c311-components'
 import { formatC311DateTime as mockFormatC311DateTime } from './time-test-helper'
 import Portal from '../compose/src/views/C311/Portal.vue'
 import PublicPortal from '../compose/src/views/C311/PublicPortal.vue'
+import AdminWorkspace from '../compose/src/views/C311/AdminWorkspace.vue'
+import OperationsWorkspace from '../compose/src/views/C311/OperationsWorkspace.vue'
+import StaffWorkspace from '../compose/src/views/C311/StaffWorkspace.vue'
+import ConstituentWorkspace from '../compose/src/views/C311/ConstituentWorkspace.vue'
 import Staff from '../admin/src/views/C311/Staff.vue'
 import Extensions from '../admin/src/views/C311/Extensions.vue'
 import Config from '../admin/src/views/C311/Config.vue'
@@ -113,6 +117,31 @@ const RouterLinkStub = {
 const AppShellStub = { template: '<main><slot name="nav" /><slot /></main>' }
 const DataStateStub = { template: '<section><slot name="populated" /></section>' }
 const ChildStub = { template: '<span><slot /></span>' }
+
+const workspaceStubs = {
+  'c311-app-shell': AppShellStub,
+  'c311-data-state': DataStateStub,
+  'c311-error-summary': ChildStub,
+  'c311-main-nav': ChildStub,
+}
+
+const adminProvider = () => ({
+  getIdentityConfiguration: jest.fn().mockResolvedValue({ version: 1 }),
+  listIntegrations: jest.fn().mockResolvedValue({ items: [] }),
+  getAdminBranding: jest.fn().mockResolvedValue({ organisation_name: 'City', primary_colour: '#000000', accent_colour: '#ffffff', version: 2 }),
+  listAdminContent: jest.fn().mockResolvedValue({ items: [{ content_key: 'HOME', body: '<p>Home</p>', version: 3 }] }),
+  listAdminCategories: jest.fn().mockResolvedValue({ items: [] }),
+  listAdminCustomFields: jest.fn().mockResolvedValue({ items: [] }),
+  listWorkflows: jest.fn().mockResolvedValue({ items: [] }),
+  listWorkflowExecutions: jest.fn().mockResolvedValue({ items: [] }),
+  getAdminHelp: jest.fn().mockResolvedValue({ body: '<p>Existing help</p>', version: 4 }),
+  rollbackBranding: jest.fn().mockResolvedValue({}),
+  rollbackAdminContent: jest.fn().mockResolvedValue({}),
+  rollbackAdminHelp: jest.fn().mockResolvedValue({}),
+  previewBranding: jest.fn().mockResolvedValue({ organisation_name: 'Preview', primary_colour: '#111111', accent_colour: '#222222', font_family: 'Inter', public_header: 'Preview header' }),
+  previewAdminContent: jest.fn().mockResolvedValue({ body: '<p>Content preview</p>' }),
+  previewAdminHelp: jest.fn().mockResolvedValue({ body: '<p>Help preview</p>' }),
+})
 
 describe('C311 shared components', () => {
   afterEach(() => {
@@ -632,6 +661,9 @@ describe('C311 shared components', () => {
     window.C311Mode = 'http'
     composeInteraction.beforeEnter({}, {}, composeNext)
     expect(composeNext).toHaveBeenLastCalledWith({ name: 'c311.not-found' })
+
+    const composeAdmin = composeRoutes.find(route => route.name === 'c311.admin.workspace')
+    expect(composeAdmin.meta.c311).toEqual(expect.objectContaining({ requiresAuth: true, route: 'admin_branding_get', capabilities: ['admin_branding_get'] }))
 
     const staff = adminRoutes.find(route => route.name === 'c311.staff')
     expect(staff.meta.c311).toEqual(expect.objectContaining({ requiresAuth: true, route: 'staff_request_queue', capabilities: ['staff_request_queue'], scopes: ['service_requests.write'] }))
@@ -1727,9 +1759,9 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.publicNoteError.message).toBe('Try again.')
   })
 
-  it('requires explicit confirmation and clears the session after mock account disposition', async () => {
+  it('requires DELETE confirmation and clears the session after account deletion', async () => {
     const session = { authenticated: true, actor: { actor_id: 'actor-1', capabilities: ['profile_get'] } }
-    const runtime = { provider: { getProfile: jest.fn().mockResolvedValue({ display_name: 'Alex', preferred_language: 'EN', login_identifier: 'alex' }), deleteOrAnonymizeAccount: jest.fn().mockResolvedValue({ status: 'ANONYMIZED', message: 'Account anonymized.' }) }, session, clearSession: jest.fn(() => { runtime.session = { authenticated: false, actor: null } }) }
+    const runtime = { provider: { getProfile: jest.fn().mockResolvedValue({ display_name: 'Alex', preferred_language: 'EN', login_identifier: 'alex' }), deleteOrAnonymizeAccount: jest.fn().mockResolvedValue({ status: 'DELETED', message: 'Account deleted and personal profile data anonymized.' }) }, session, clearSession: jest.fn(() => { runtime.session = { authenticated: false, actor: null } }) }
     const wrapper = mount(PublicPortal, {
       mocks: { ...mocks, $route: { name: 'c311.account', query: {} }, $C311: runtime },
       stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
@@ -1738,12 +1770,12 @@ describe('C311 shared components', () => {
     wrapper.vm.accountDispositionConfirmation = 'wrong'
     await wrapper.vm.updateAccountDisposition()
     expect(runtime.provider.deleteOrAnonymizeAccount).not.toHaveBeenCalled()
-    wrapper.vm.accountDispositionConfirmation = 'ANONYMIZE'
+    wrapper.vm.accountDispositionConfirmation = 'DELETE'
     await wrapper.vm.updateAccountDisposition()
-    expect(runtime.provider.deleteOrAnonymizeAccount).toHaveBeenCalledWith({ mode: 'ANONYMIZE', confirmation: 'ANONYMIZE' })
+    expect(runtime.provider.deleteOrAnonymizeAccount).toHaveBeenCalledWith({ mode: 'DELETE', confirmation: 'DELETE' })
     expect(runtime.clearSession).toHaveBeenCalledTimes(1)
-    expect(wrapper.vm.accountDispositionResult.status).toBe('ANONYMIZED')
-    expect(wrapper.find('[data-c311-account-disposition-result]').text()).toContain('ANONYMIZED')
+    expect(wrapper.vm.accountDispositionResult.status).toBe('DELETED')
+    expect(wrapper.find('[data-c311-account-disposition-result]').text()).toContain('DELETED')
   })
 
   it('preserves account input and session when account disposition conflicts', async () => {
@@ -2161,6 +2193,111 @@ describe('C311 shared components', () => {
     expect(wrapper.vm.conflict.reloaded).toBe(true)
     await wrapper.vm.reapplyConflict()
     expect(provider.updateAdminCategory).toHaveBeenCalledTimes(2)
+  })
+
+  it('loads existing help, renders sanitized previews, and sends rollback target versions from the compose admin workspace', async () => {
+    const provider = adminProvider()
+    const wrapper = mount(AdminWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    await flushPromises()
+    expect(provider.getAdminHelp).toHaveBeenCalledWith('public.request.submit', 'EN')
+    expect(wrapper.vm.help.body).toBe('<p>Existing help</p>')
+    await wrapper.vm.previewBranding()
+    await wrapper.vm.previewContent()
+    await wrapper.vm.previewHelp()
+    expect(wrapper.text()).toContain('Preview header')
+    expect(wrapper.text()).toContain('Content preview')
+    expect(wrapper.text()).toContain('Help preview')
+    expect(wrapper.findAll('[data-c311-branding-preview]').wrappers.map(item => item.attributes('data-c311-branding-preview'))).toEqual(['mobile', 'tablet', 'desktop'])
+    expect(wrapper.findAll('[data-c311-branding-surface="login"]').length).toBe(3)
+    expect(wrapper.findAll('[data-c311-branding-surface="public"]').length).toBe(3)
+    await wrapper.vm.rollbackBranding(1)
+    await wrapper.vm.rollbackContent(2)
+    await wrapper.vm.rollbackHelp(3)
+    expect(provider.rollbackBranding).toHaveBeenCalledWith({ target_version: 1 }, { expectedVersion: 2 })
+    expect(provider.rollbackAdminContent).toHaveBeenCalledWith('HOME', { target_version: 2 }, { expectedVersion: 3 })
+    expect(provider.rollbackAdminHelp).toHaveBeenCalledWith('public.request.submit', { target_version: 3 }, 'EN', { expectedVersion: 4 })
+  })
+
+  it('updates an existing contact category from the compose administration workspace', async () => {
+    const provider = adminProvider()
+    const category = { code: 'GENERAL', labels: { EN: 'General' }, active: true, version: 3 }
+    provider.listAdminCategories.mockResolvedValue({ items: [category] })
+    provider.updateAdminCategory = jest.fn().mockResolvedValue({ ...category, labels: { EN: 'General enquiries' }, version: 4 })
+    const wrapper = mount(AdminWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    await flushPromises()
+    await wrapper.find('tbody button').trigger('click')
+    expect(wrapper.find('#category-code').attributes('readonly')).toBe('readonly')
+    await wrapper.setData({ category: { ...wrapper.vm.category, label: 'General enquiries' } })
+    await wrapper.vm.saveCategory()
+    expect(provider.updateAdminCategory).toHaveBeenCalledWith('GENERAL', { code: 'GENERAL', active: true, labels: { EN: 'General enquiries' } }, { expectedVersion: 3 })
+    expect(wrapper.vm.category.originalCode).toBe('')
+  })
+
+  it('keeps accessible operations data available when a separate section is forbidden and refreshes after saving', async () => {
+    const provider = {
+      listWorkflows: jest.fn().mockResolvedValue({ items: [{ workflow_id: 'workflow-1', name: 'Initial', trigger: 'SERVICE_REQUEST_CREATED', active: false, version: 1 }] }),
+      listWorkflowExecutions: jest.fn().mockResolvedValue({ items: [] }),
+      listReports: jest.fn().mockRejectedValue({ code: 'FORBIDDEN' }),
+      createWorkflow: jest.fn().mockResolvedValue({ workflow_id: 'workflow-2' }),
+    }
+    const wrapper = mount(OperationsWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    expect(wrapper.vm.workflows).toHaveLength(1)
+    expect(wrapper.vm.reportError).toBe(true)
+    wrapper.vm.workflowJSON = JSON.stringify({ workflow_id: 'workflow-2', name: 'Saved', trigger: 'SERVICE_REQUEST_CREATED', active: false, conditions: [], actions: [] })
+    await wrapper.vm.saveWorkflow()
+    expect(provider.listWorkflows).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses explicit button types and sends linearized HTML as mail text from operations', async () => {
+    const provider = {
+      listWorkflows: jest.fn().mockResolvedValue({ items: [] }),
+      listWorkflowExecutions: jest.fn().mockResolvedValue({ items: [] }),
+      listReports: jest.fn().mockResolvedValue({ items: [] }),
+      previewMail: jest.fn().mockResolvedValue({ preview_id: 'preview-1' }),
+      sendMail: jest.fn().mockResolvedValue({ message_id: 'message-1' }),
+    }
+    const wrapper = mount(OperationsWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    expect(wrapper.findAll('button').wrappers.every(button => ['button', 'submit'].includes(button.attributes('type')))).toBe(true)
+    await wrapper.setData({ mail: { to: 'resident@example.test', subject: 'Update', html: '<p>Road <strong>repair</strong></p>' } })
+    await wrapper.vm.previewMail()
+    await wrapper.vm.sendMail()
+    const expectedMail = expect.objectContaining({ to: ['resident@example.test'], subject: 'Update', text: 'Road repair', html: '<p>Road <strong>repair</strong></p>' })
+    expect(provider.previewMail).toHaveBeenCalledWith(expectedMail)
+    expect(provider.sendMail).toHaveBeenCalledWith(expectedMail)
+  })
+
+  it('validates reminder dates locally and displays protected request detail fields for staff', async () => {
+    const provider = { actionStaffReminder: jest.fn(), createStaffReminder: jest.fn() }
+    const wrapper = mount(StaffWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await wrapper.vm.reminderAction({ reminder_id: 'reminder-1' }, 'SNOOZE')
+    expect(provider.actionStaffReminder).not.toHaveBeenCalled()
+    expect(wrapper.vm.formErrors[0].code).toBe('REQUIRED')
+    await wrapper.vm.createReminder()
+    expect(provider.createStaffReminder).not.toHaveBeenCalled()
+    expect(wrapper.vm.formErrors[0].code).toBe('INVALID_VALUE')
+    await wrapper.setData({ state: 'populated', detail: { request: { request_number: 'SR-1', summary: 'Pothole', status: 'TRIAGED', owning_department: 'STREETS', primary_requester: { display_name: 'Resident', constituent_id: 'constituent-1' }, location: { address: { line1: '1 Main Street' } } }, collaborator_ids: [], reminders: [], history: [], audit: [] } })
+    expect(wrapper.text()).toContain('Resident')
+    expect(wrapper.text()).toContain('1 Main Street')
+  })
+
+  it('searches and opens staff constituent records through the provider', async () => {
+    const constituent = { constituent_id: 'constituent-1', display_name: 'Alex Example', emails: ['alex@example.test'], phone_numbers: [{ label: 'MOBILE', value: '555-0100' }], addresses: [{ line1: '1 Main Street', city: 'City', region: 'ST', postal_code: '12345', country: 'US' }], primary_category: 'RESIDENT', preferred_language: 'EN', email_opt_out: false }
+    const provider = { searchStaffConstituents: jest.fn().mockResolvedValue({ items: [constituent] }), getStaffConstituent: jest.fn().mockResolvedValue(constituent) }
+    const wrapper = mount(ConstituentWorkspace, { mocks: { ...mocks, $C311: { provider } }, stubs: workspaceStubs })
+    await flushPromises()
+    expect(provider.searchStaffConstituents).toHaveBeenCalledWith({ page_size: 50, filters: {} })
+    await wrapper.setData({ query: 'Alex' })
+    await wrapper.vm.search()
+    expect(provider.searchStaffConstituents).toHaveBeenLastCalledWith({ page_size: 50, filters: { query: ['Alex'] } })
+    await wrapper.find('tbody button').trigger('click')
+    await flushPromises()
+    expect(provider.getStaffConstituent).toHaveBeenCalledWith('constituent-1')
+    expect(wrapper.text()).toContain('555-0100')
+    expect(wrapper.text()).toContain('1 Main Street')
   })
 
 })

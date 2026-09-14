@@ -214,6 +214,39 @@ func TestIdentityHTTPContractAndSecureCookieLifecycle(t *testing.T) {
 	require.GreaterOrEqual(t, len(audits), 3)
 }
 
+func TestIdentityCookiesAllowOnlyLoopbackHTTP(t *testing.T) {
+	h := &handler{}
+	t.Setenv("APP_BASE_URL", "http://localhost:8080")
+
+	identityResponse := httptest.NewRecorder()
+	h.setIdentityCookie(identityResponse, "local-session")
+	identityCookies := identityResponse.Result().Cookies()
+	require.Len(t, identityCookies, 1)
+	require.False(t, identityCookies[0].Secure)
+	require.True(t, identityCookies[0].HttpOnly)
+
+	federationResponse := httptest.NewRecorder()
+	h.setFederationCookie(federationResponse, "local-flow")
+	federationCookies := federationResponse.Result().Cookies()
+	require.Len(t, federationCookies, 1)
+	require.False(t, federationCookies[0].Secure)
+	require.True(t, federationCookies[0].HttpOnly)
+	require.Equal(t, http.SameSiteLaxMode, federationCookies[0].SameSite)
+
+	t.Setenv("APP_BASE_URL", "http://city.example")
+	secureResponse := httptest.NewRecorder()
+	h.setIdentityCookie(secureResponse, "production-session")
+	require.True(t, secureResponse.Result().Cookies()[0].Secure)
+	secureFederationResponse := httptest.NewRecorder()
+	h.setFederationCookie(secureFederationResponse, "production-flow")
+	require.Equal(t, http.SameSiteNoneMode, secureFederationResponse.Result().Cookies()[0].SameSite)
+
+	t.Setenv("APP_BASE_URL", "https://city.example")
+	httpsResponse := httptest.NewRecorder()
+	h.setIdentityCookie(httpsResponse, "https-session")
+	require.True(t, httpsResponse.Result().Cookies()[0].Secure)
+}
+
 func TestIdentitySignOutDeletesServerSessionAndExpiresCookie(t *testing.T) {
 	router, _, _, _ := testIdentityRouter(t)
 	registration := identityRegistrationBody("alex.logout", "alex-logout@example.invalid")

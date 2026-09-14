@@ -88,6 +88,16 @@
       <p v-if="successMessage" class="alert alert-success mt-3" role="status">{{ successMessage }}</p>
     </section>
 
+    <section v-else-if="page === 'email-replacement-confirm'" data-c311-page="email-replacement-confirm" class="c311-public-page">
+      <h1>{{ t('account.email.confirmTitle', 'Confirm replacement email') }}</h1>
+      <c311-error-summary :errors="formErrors" :field-targets="fieldTargets" :title="t('error.review', 'Review your information')" />
+      <form @submit.prevent="confirmEmailReplacement">
+        <div class="form-group"><label for="c311-email-replacement-token">{{ t('field.verificationToken', 'Verification token') }}</label><input id="c311-email-replacement-token" v-model.trim="forms.emailReplacement.token" class="form-control" autocomplete="one-time-code" aria-describedby="c311-error-summary" :aria-invalid="hasError('token') ? 'true' : 'false'"></div>
+        <button class="btn btn-primary" type="submit" data-c311-action="confirm-replacement-email" :disabled="busy.emailReplacementConfirm">{{ busy.emailReplacementConfirm ? t('action.working', 'Working…') : t('account.email.confirm', 'Confirm email') }}</button>
+      </form>
+      <p v-if="successMessage" class="alert alert-success mt-3" role="status">{{ successMessage }}</p>
+    </section>
+
     <section v-else-if="page === 'account'" data-c311-page="account" class="c311-public-page">
       <c311-data-state v-if="state !== 'populated'" :state="state" :error="dataError" @retry="load" />
       <template v-else-if="!accountDispositionResult">
@@ -113,14 +123,16 @@
           <div class="form-group"><label for="c311-account-new-password">{{ t('field.newPassword', 'New password') }}</label><input id="c311-account-new-password" v-model="forms.account.new_password" class="form-control" type="password" autocomplete="new-password" aria-describedby="c311-error-summary" aria-errormessage="c311-error-summary" :aria-invalid="hasError('new_password') ? 'true' : 'false'"><small class="form-text text-muted">{{ passwordRuleText }}</small></div>
           <button class="btn btn-primary" type="submit" data-c311-action="change-password" :disabled="busy.password">{{ busy.password ? t('action.working', 'Working…') : t('action.changePassword', 'Save password') }}</button>
         </form>
+        <form v-if="canReplaceEmail" class="mt-4" @submit.prevent="requestEmailReplacement">
+          <h2>{{ t('account.email.title', 'Replace verified email') }}</h2>
+          <div class="form-group"><label for="c311-account-replacement-email">{{ t('field.email', 'New email') }}</label><input id="c311-account-replacement-email" v-model.trim="forms.account.replacement_email" class="form-control" type="email" autocomplete="email" aria-describedby="c311-error-summary" :aria-invalid="hasError('email') ? 'true' : 'false'"></div>
+          <button class="btn btn-primary" type="submit" data-c311-action="replace-email" :disabled="busy.emailReplacement">{{ busy.emailReplacement ? t('action.working', 'Working…') : t('account.email.send', 'Send verification') }}</button>
+        </form>
         <section v-if="canManageAccount" class="mt-4" data-c311-account-disposition aria-labelledby="c311-account-disposition-heading">
-          <h2 id="c311-account-disposition-heading">{{ t('account.disposition.title', 'Delete or anonymize account') }}</h2>
-          <p class="text-muted">{{ t('account.disposition.description', 'This mock-only action permanently changes this account. Type the action name to confirm.') }}</p>
-          <label for="c311-account-disposition-mode">{{ t('account.disposition.mode', 'Action') }}</label>
-          <select id="c311-account-disposition-mode" v-model="accountDispositionMode" class="form-control" :disabled="busy.accountDisposition">
-            <option value="ANONYMIZE">{{ t('account.disposition.anonymize', 'Anonymize account') }}</option>
-            <option value="DELETE">{{ t('account.disposition.delete', 'Delete account') }}</option>
-          </select>
+          <h2 id="c311-account-disposition-heading">{{ t('account.disposition.title', 'Delete account') }}</h2>
+          <p class="text-muted">{{ t('account.disposition.description', 'Delete sign-in access or anonymize personal profile data. Type the selected action to confirm.') }}</p>
+          <label for="c311-account-disposition-mode">{{ t('account.disposition.modeLabel', 'Account action') }}</label>
+          <select id="c311-account-disposition-mode" v-model="forms.account.disposition_mode" class="form-control"><option value="DELETE">DELETE</option><option value="ANONYMIZE">ANONYMIZE</option></select>
           <label class="mt-2" for="c311-account-disposition-confirm">{{ t('account.disposition.confirmLabel', 'Type the action name to confirm') }}</label>
           <input id="c311-account-disposition-confirm" v-model.trim="accountDispositionConfirmation" class="form-control" autocomplete="off" :aria-invalid="hasError('confirmation') ? 'true' : 'false'">
           <button class="btn btn-outline-danger mt-2" type="button" data-c311-action="account-disposition" :disabled="busy.accountDisposition" @click="updateAccountDisposition">{{ busy.accountDisposition ? t('action.working', 'Working…') : t('account.disposition.submit', 'Confirm account action') }}</button>
@@ -317,16 +329,16 @@ export default {
     sessionRevision: 0,
     restoredDraftFields: [],
     activeAccountAction: '',
-    accountDispositionMode: 'ANONYMIZE',
     accountDispositionConfirmation: '',
     accountDispositionResult: null,
-    busy: { signIn: false, register: false, forgot: false, reset: false, federated: false, account: false, loginIdentifier: false, password: false, link: false, accountDisposition: false },
+    busy: { signIn: false, register: false, forgot: false, reset: false, federated: false, account: false, loginIdentifier: false, password: false, link: false, accountDisposition: false, emailReplacement: false, emailReplacementConfirm: false },
     forms: {
       signIn: { login_identifier: '', password: '' },
       register: { display_name: '', email: '', login_identifier: '', password: '', preferred_language: 'EN' },
       forgot: { email: '' },
       reset: { password: '' },
-      account: { display_name: '', preferred_language: 'EN', login_identifier: '', current_password: '', new_password: '', phone_numbers: [], addresses: [], primary_category: 'RESIDENT' },
+      emailReplacement: { token: '' },
+      account: { display_name: '', preferred_language: 'EN', login_identifier: '', current_password: '', new_password: '', replacement_email: '', disposition_mode: 'DELETE', phone_numbers: [], addresses: [], primary_category: 'RESIDENT' },
     },
   }),
   computed: {
@@ -334,11 +346,11 @@ export default {
     actorID () { return this.$C311?.session?.actor?.actor_id || '' },
     isAuthenticated () { return this.sessionRevision >= 0 && !!this.$C311?.session?.authenticated },
     page () {
-      const names = { 'c311.portal': 'home', 'c311.services': 'services', 'c311.help': 'help', 'c311.sign-in': 'sign-in', 'c311.register': 'register', 'c311.forgot-password': 'forgot-password', 'c311.reset-password': 'reset-password', 'c311.account': 'account', 'c311.requests': 'requests', 'c311.auth.callback': 'auth-callback', 'c311.auth.link.confirm': 'link-confirm', 'c311.logout.callback': 'logout-callback' }
+      const names = { 'c311.portal': 'home', 'c311.services': 'services', 'c311.help': 'help', 'c311.sign-in': 'sign-in', 'c311.register': 'register', 'c311.forgot-password': 'forgot-password', 'c311.reset-password': 'reset-password', 'c311.email-replacement-confirm': 'email-replacement-confirm', 'c311.account': 'account', 'c311.requests': 'requests', 'c311.auth.callback': 'auth-callback', 'c311.auth.link.confirm': 'link-confirm', 'c311.logout.callback': 'logout-callback' }
       return names[this.$route?.name] || 'home'
     },
     pageNeedsContent () { return ['home', 'services', 'help'].includes(this.page) },
-    identityShell () { return ['sign-in', 'register', 'forgot-password', 'reset-password', 'auth-callback', 'link-confirm'].includes(this.page) },
+    identityShell () { return ['sign-in', 'register', 'forgot-password', 'reset-password', 'email-replacement-confirm', 'auth-callback', 'link-confirm'].includes(this.page) },
     phoneLabels () { return C311JS.PHONE_LABELS || ['MOBILE', 'HOME', 'WORK'] },
     contactCategories () { return C311JS.CONTACT_CATEGORIES || ['RESIDENT', 'BUSINESS', 'BUSINESS_OWNER', 'VETERAN', 'NEIGHBORHOOD_ASSOCIATION', 'GOVERNMENT', 'OTHER'] },
     fieldTargets () {
@@ -361,6 +373,7 @@ export default {
       if (this.page === 'account') targets.form = 'c311-account-name'
       if (this.page === 'account') targets.display_name = 'c311-account-name'
       if (this.page === 'reset-password') targets.password = 'c311-reset-password'
+      if (this.page === 'email-replacement-confirm') targets.token = 'c311-email-replacement-token'
       if (this.page === 'forgot-password') targets.email = 'c311-forgot-email'
       for (let index = 0; index < 3; index++) {
         targets[`phone_numbers/${index}/label`] = `c311-account-phone-${index}-label`
@@ -375,6 +388,7 @@ export default {
     },
     canChangeLoginIdentifier () { return this.canCapability('login_identifier_change') },
     canChangePassword () { return this.canCapability('password_change') },
+    canReplaceEmail () { return this.canCapability('email_replacement_request') && typeof this.provider?.requestEmailReplacement === 'function' },
     pageTitle () {
       return this.t(`portal.title.${this.page}`, {
         home: 'City 311', services: 'Services', help: 'Help center', 'sign-in': 'Sign in', register: 'Register', 'forgot-password': 'Forgot password', 'reset-password': 'Reset password', account: 'Account', requests: 'My requests', 'auth-callback': 'Sign in', 'link-confirm': 'Account linking', 'logout-callback': 'Signed out',
@@ -486,6 +500,8 @@ export default {
       this.profile = null
       this.linkState = 'idle'
       this.accountDispositionResult = null
+      if (this.page === 'email-replacement-confirm') this.forms.emailReplacement.token = String(this.$route?.query?.token || '')
+      this.forms.account.disposition_mode = 'DELETE'
       this.accountDispositionConfirmation = ''
     },
     normalizeField (field) { return normalizeFieldPath(field) },
@@ -865,13 +881,12 @@ export default {
     async updateAccountDisposition () {
       return this.runBusy('accountDisposition', async () => {
         this.formErrors = []
-        const mode = String(this.accountDispositionMode || '').toUpperCase()
-        if (!['DELETE', 'ANONYMIZE'].includes(mode) || this.accountDispositionConfirmation !== mode) {
-          this.formErrors = [{ field: 'confirmation', code: 'INVALID_VALUE', message: this.t('error.accountDispositionConfirmation', 'Type the selected action name to confirm.') }]
+        if (this.accountDispositionConfirmation !== this.forms.account.disposition_mode) {
+          this.formErrors = [{ field: 'confirmation', code: 'INVALID_VALUE', message: this.t('error.accountDispositionConfirmation', 'Type ' + this.forms.account.disposition_mode + ' to confirm.') }]
           return
         }
         try {
-          const result = await this.provider?.deleteOrAnonymizeAccount?.({ mode, confirmation: this.accountDispositionConfirmation })
+          const result = await this.provider?.deleteOrAnonymizeAccount?.({ mode: this.forms.account.disposition_mode, confirmation: this.accountDispositionConfirmation })
           this.accountDispositionResult = result
           this.c311ClearDirtyDraft?.()
           this.$C311?.clearSession?.()
@@ -880,6 +895,36 @@ export default {
         } catch (error) {
           this.setError(error)
         }
+      })
+    },
+    async requestEmailReplacement () {
+      return this.runBusy('emailReplacement', async () => {
+        this.formErrors = []
+        const email = String(this.forms.account.replacement_email || '').trim()
+        if (!/^\S+@\S+\.\S+$/.test(email)) {
+          this.formErrors = [{ field: 'email', code: 'INVALID_FORMAT', message: this.t('error.email', 'Enter a valid email address.') }]
+          return
+        }
+        try {
+          const result = await this.provider?.requestEmailReplacement?.({ email })
+          this.successMessage = result?.message || this.t('account.email.sent', 'Verification instructions have been sent to the new email address.')
+          this.forms.account.replacement_email = ''
+        } catch (error) { this.setError(error) }
+      })
+    },
+    async confirmEmailReplacement () {
+      return this.runBusy('emailReplacementConfirm', async () => {
+        this.formErrors = []
+        const token = String(this.forms.emailReplacement.token || '').trim()
+        if (!token) {
+          this.formErrors = [{ field: 'token', code: 'REQUIRED', message: this.t('error.required', 'This field is required.') }]
+          return
+        }
+        try {
+          const result = await this.provider?.confirmEmailReplacement?.({ token })
+          this.successMessage = result?.verified_email ? `${this.t('account.email.confirmed', 'Verified email updated:')} ${result.verified_email}` : this.t('account.email.confirmed', 'Verified email updated.')
+          this.forms.emailReplacement.token = ''
+        } catch (error) { this.setError(error) }
       })
     },
     async languageChanged (language) {

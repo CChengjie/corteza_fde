@@ -123,12 +123,12 @@ describe('City 311 frontend contract', () => {
     expect(provider.getWriteCount('account_disposition')).to.equal(0)
   })
 
-  it('keeps account disposition HTTP side-effect free until a backend operation exists', async () => {
+  it('maps confirmed account deletion to the published HTTP operation', async () => {
     const requests: C311TransportRequest[] = []
     const provider = new C311HttpProvider({ request: async <T> (request: C311TransportRequest): Promise<T> => { requests.push(request); return {} as T } })
-    const error = await expectError(() => provider.deleteOrAnonymizeAccount({ mode: 'DELETE', confirmation: 'DELETE' }), 'OPERATION_FAILED')
-    expect(error.status).to.equal(501)
-    expect(requests).to.deep.equal([])
+    const result = await provider.deleteOrAnonymizeAccount({ mode: 'DELETE', confirmation: 'DELETE' })
+    expect(result).to.deep.include({ status: 'DELETED' })
+    expect(requests).to.deep.equal([{ method: 'DELETE', path: '/api/v1/account' }])
   })
 
   it('provides complete role and session-expiry fixtures for route checks', () => {
@@ -1055,6 +1055,23 @@ describe('City 311 frontend contract', () => {
     expect(requests[2]).to.deep.include({ method: 'POST', path: '/api/v1/staff/service-requests/request-fixture-001/notes' })
   })
 
+  it('maps staff constituent search and detail operations to the frozen contract', async () => {
+    const requests: C311TransportRequest[] = []
+    const provider = new C311HttpProvider({ request: async <T> (request: C311TransportRequest): Promise<T> => { requests.push(request); return {} as T } })
+    await provider.searchStaffConstituents({ page_size: 50, filters: { query: ['Alex'] } })
+    await provider.getStaffConstituent('constituent/1')
+    expect(requests[0]).to.deep.include({ method: 'GET', path: '/api/v1/staff/constituents', query: { page_size: 50, filters: { query: ['Alex'] } } })
+    expect(requests[1]).to.deep.include({ method: 'GET', path: '/api/v1/staff/constituents/constituent%2F1' })
+  })
+
+  it('enforces staff constituent search and detail capabilities in the mock provider', async () => {
+    const agent = new MockC311Provider({ role: 'service_agent' })
+    const page = await agent.searchStaffConstituents({ filters: { query: ['fixture'] } })
+    expect(page.items.some(item => item.constituent_id === 'constituent-fixture-001')).to.equal(true)
+    expect((await agent.getStaffConstituent('constituent-fixture-001')).display_name).to.equal('Alex Example')
+    await expectError(() => new MockC311Provider({ role: 'constituent' }).searchStaffConstituents(), 'FORBIDDEN')
+  })
+
   it('enforces relationship capabilities, primary uniqueness, and append-only notes in the mock', async () => {
     const input = { constituent_id: 'constituent-2', relationship_type: 'AFFECTED_RESIDENT' as const, portal_visible: true, notify_status: true }
     await expectError(() => new MockC311Provider({ role: 'public_visitor' }).linkStaffConstituent('request-fixture-001', input, { expectedVersion: 1 }), 'UNAUTHENTICATED')
@@ -1855,5 +1872,36 @@ describe('FE-09 workflow and extension provider', () => {
       expect(result.error?.message).to.contain(scenario.replace('-', ' ').toUpperCase())
     }
     await expectError(() => new MockC311Provider({ role: 'department_manager', scenario: 'terminal' }).getOperation('operation-unknown'), 'NOT_FOUND')
+  })
+
+  it('maps account, portal note, identity, and integration HTTP contracts', async () => {
+    const requests: C311TransportRequest[] = []
+    const provider = new C311HttpProvider({ request: async <T> (request: C311TransportRequest): Promise<T> => { requests.push(request); return {} as T } })
+    await provider.createPortalNote('request/1', { body: 'Portal note', portal_visible: true })
+    await provider.deleteOrAnonymizeAccount({ mode: 'DELETE', confirmation: 'DELETE' })
+    await provider.requestEmailReplacement({ email: 'replacement@example.test' })
+    await provider.confirmEmailReplacement({ token: 'token-1' })
+    await provider.getIdentityConfiguration()
+    await provider.updateIdentityConfiguration({ oidc_enabled: false }, { expectedVersion: 2 })
+    await provider.listIntegrations({ page_size: 10 })
+    await provider.getIntegration('civic/works')
+    await provider.updateIntegration('civic/works', { active: true }, { expectedVersion: 3 })
+    await provider.rotateIntegrationSecret('civic/works', { expectedVersion: 4 })
+    await provider.revokeIntegration('civic/works', { expectedVersion: 5 })
+    expect(requests.map(request => `${request.method} ${request.path}`)).to.deep.equal([
+      'POST /api/v1/portal/service-requests/request%2F1/notes',
+      'DELETE /api/v1/account',
+      'POST /api/v1/account/email-replacement',
+      'POST /api/v1/auth/email-replacement/confirm',
+      'GET /api/v1/admin/identity',
+      'PATCH /api/v1/admin/identity',
+      'GET /api/v1/admin/integrations',
+      'GET /api/v1/admin/integrations/civic%2Fworks',
+      'PATCH /api/v1/admin/integrations/civic%2Fworks',
+      'POST /api/v1/admin/integrations/civic%2Fworks/rotate',
+      'POST /api/v1/admin/integrations/civic%2Fworks/revoke',
+    ])
+    expect(requests[5].headers).to.deep.equal({ 'If-Match': '"2"' })
+    expect(requests[8].headers).to.deep.equal({ 'If-Match': '"3"' })
   })
 })

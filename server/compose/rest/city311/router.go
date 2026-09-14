@@ -7,6 +7,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -375,17 +377,38 @@ func (h *handler) loginIdentifierChange(w http.ResponseWriter, r *http.Request) 
 	writeResult(w, http.StatusOK, response, err)
 }
 
+// secureCookie permits insecure cookies only for an explicit loopback HTTP
+// application URL. Request headers are untrusted because the backend can be
+// reached directly as well as through a reverse proxy.
+func secureCookie() bool {
+	baseURL, err := url.Parse(strings.TrimSpace(os.Getenv("APP_BASE_URL")))
+	if err != nil || !strings.EqualFold(baseURL.Scheme, "http") {
+		return true
+	}
+	hostname := strings.ToLower(baseURL.Hostname())
+	return hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1"
+}
+
+func federationCookieSameSite() http.SameSite {
+	if secureCookie() {
+		return http.SameSiteNoneMode
+	}
+	// Modern browsers reject SameSite=None cookies without Secure. Lax keeps
+	// the loopback OIDC top-level callback usable during local development.
+	return http.SameSiteLaxMode
+}
+
 func (h *handler) setIdentityCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: token, Path: "/",
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteLaxMode,
 	})
 }
 
 func (h *handler) expireIdentityCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteLaxMode,
 	})
 }
 

@@ -32,6 +32,7 @@ func addContractEndpoints(document *ContractDocument) {
 		{"portal_draft_submit", "POST", "/api/v1/portal/service-request-drafts/{request_id}/submit", "constituent session", "empty_request", "service_request_response", 200},
 		{"portal_my_requests", "GET", "/api/v1/portal/service-requests", "constituent session", "", "list_response", 200},
 		{"portal_link_anonymous_request", "POST", "/api/v1/portal/service-requests/link", "constituent session", "anonymous_request_link", "service_request_record", 200},
+		{"portal_note_create", "POST", "/api/v1/portal/service-requests/{request_id}/notes", "linked constituent", "request_note", "request_note", 201},
 		{"profile_get", "GET", "/api/v1/account/profile", "constituent session", "", "constituent", 200},
 		{"profile_update", "PATCH", "/api/v1/account/profile", "constituent session", "profile_update", "constituent", 200},
 		{"email_replacement_request", "POST", EmailReplacementRequestPath, "constituent session", "email_replacement_request", "email_replacement_acknowledgement", 202},

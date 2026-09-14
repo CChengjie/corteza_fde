@@ -25,6 +25,8 @@ func testService(t *testing.T) (*Service, store.Storer) {
 	t.Helper()
 	t.Setenv(seedConstituentPasswordEnv, "SeedConstituentPassword1!")
 	t.Setenv(seedConstituentTwoPasswordEnv, "SeedConstituentPassword2!")
+	t.Setenv(seedStaffPasswordEnv, "SeedStaffPassword1!")
+	t.Setenv(seedAdministratorPasswordEnv, "SeedAdministratorPassword1!")
 	t.Setenv("CIVICWORKS_CALLBACK_BASE_URL", "https://city311.example.test")
 	ctx := context.Background()
 	dsn := fmt.Sprintf("sqlite3://file:%s?mode=memory&cache=shared", t.Name())
@@ -62,6 +64,8 @@ func TestSeedIsRepeatableAndPreservesSeededRows(t *testing.T) {
 	}{
 		{handle: "city311-constituent", password: "SeedConstituentPassword1!"},
 		{handle: "city311-constituent-two", password: "SeedConstituentPassword2!"},
+		{handle: "city311-service-agent", password: "SeedStaffPassword1!"},
+		{handle: "city311-platform-administrator", password: "SeedAdministratorPassword1!"},
 	} {
 		_, _, err := identity.SignIn(ctx, contract.LocalSignIn{LoginIdentifier: seeded.handle, Password: seeded.password})
 		require.NoError(t, err)

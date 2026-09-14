@@ -20,6 +20,10 @@ import type {
   FederatedRedirect,
   HelpContent,
   HelpWrite,
+  IdentityConfiguration,
+  IdentityConfigurationWrite,
+  IntegrationConnection,
+  IntegrationConnectionWrite,
   LanguagePreference,
   LoginIdentifierChange,
   ListQuery,
@@ -83,6 +87,10 @@ import type {
   WorkflowActionAccepted,
   DataExportQuery,
   ContactEmailExportRequest,
+  EmailReplacementRequest,
+  EmailReplacementAcknowledgement,
+  EmailReplacementConfirm,
+  EmailReplacementResult,
 } from './types'
 
 export interface C311RequestOptions {
@@ -243,12 +251,20 @@ export interface C311Provider {
   confirmPasswordReset (input: PasswordResetConfirm): Promise<PasswordResetResponse>
   changeLoginIdentifier (input: LoginIdentifierChange): Promise<Session>
   changePassword (input: PasswordChange): Promise<void>
-  /** Frontend mock-only until the backend publishes an account disposition operation. */
   deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult>
+  requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement>
+  confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult>
   startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect>
   confirmAccountLink (): Promise<Session>
   completeFederatedSignIn (provider: IdentityProvider, query?: Record<string, string>): Promise<FederatedSignInResult>
   getBranding (): Promise<Branding>
+  getIdentityConfiguration (): Promise<IdentityConfiguration>
+  updateIdentityConfiguration (input: IdentityConfigurationWrite, options?: C311RequestOptions): Promise<IdentityConfiguration>
+  listIntegrations (query?: ListQuery): Promise<PageResponse<IntegrationConnection>>
+  getIntegration (integrationID: string): Promise<IntegrationConnection>
+  updateIntegration (integrationID: string, input: IntegrationConnectionWrite, options?: C311RequestOptions): Promise<IntegrationConnection>
+  rotateIntegrationSecret (integrationID: string, options?: C311RequestOptions): Promise<IntegrationConnection>
+  revokeIntegration (integrationID: string, options?: C311RequestOptions): Promise<IntegrationConnection>
   getAdminBranding (): Promise<Branding>
   updateBranding (input: BrandingWrite, options?: C311RequestOptions): Promise<Branding>
   previewBranding (input: BrandingWrite): Promise<Branding>
@@ -295,11 +311,12 @@ export interface C311Provider {
   linkAnonymousRequest (input: AnonymousStatusLookupRequest): Promise<ServiceRequest>
   reopenPortalRequest (requestID: string, reason: string, options?: C311RequestOptions): Promise<ReopenRequestResponse>
   getPublicStatus (input: AnonymousStatusLookupRequest): Promise<AnonymousStatusLookupResponse>
-  /** Mock-only public voter note append until a portal note operation is published. */
   createPortalNote (requestID: string, input: RequestNote): Promise<RequestNote>
 
   geocode (input: GeocodeRequest): Promise<GeocodeResponse>
   listStaffRequests (query?: RequestListQuery): Promise<PageResponse<RequestQueueItem>>
+  searchStaffConstituents (query?: ListQuery): Promise<PageResponse<Constituent>>
+  getStaffConstituent (constituentID: string): Promise<Constituent>
   getStaffRequest (requestID: string): Promise<StaffServiceRequestDetail>
   transitionStaffRequest (requestID: string, input: RequestTransition, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
   reassignStaffRequest (requestID: string, input: Reassignment, options?: C311RequestOptions): Promise<StaffServiceRequestDetail>
@@ -434,14 +451,22 @@ export class C311HttpProvider implements C311Provider {
     return this.request({ method: 'POST', path: '/api/v1/account/password', body: input })
   }
 
-  deleteOrAnonymizeAccount (_input: AccountDispositionRequest): Promise<AccountDispositionResult> {
-    // No canonical account deletion/anonymization operation exists yet. Keep HTTP
-    // mode explicit and side-effect free until the backend contract is published.
-    return Promise.reject(new C311ApiError({
-      error: 'OPERATION_FAILED',
-      message: 'Account deletion or anonymization is not available in HTTP mode.',
-      retryable: false,
-    }, 501))
+  async deleteOrAnonymizeAccount (input: AccountDispositionRequest): Promise<AccountDispositionResult> {
+    // The server performs a privacy-preserving deletion/anonymization transaction.
+    // Confirmation is deliberately a UI guard; the published DELETE operation has no body.
+    if (input.mode !== 'DELETE' || input.confirmation !== 'DELETE') {
+      throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'Type DELETE to confirm account deletion.', retryable: false }, 422)
+    }
+    await this.request<void>({ method: 'DELETE', path: '/api/v1/account' })
+    return { status: 'DELETED', message: 'Account deleted and personal profile data anonymized.' }
+  }
+
+  requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement> {
+    return this.request({ method: 'POST', path: '/api/v1/account/email-replacement', body: input })
+  }
+
+  confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult> {
+    return this.request({ method: 'POST', path: '/api/v1/auth/email-replacement/confirm', body: input })
   }
 
   startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect> {
@@ -459,6 +484,14 @@ export class C311HttpProvider implements C311Provider {
   getBranding (): Promise<Branding> {
     return this.request({ method: 'GET', path: '/api/v1/public/branding' })
   }
+
+  getIdentityConfiguration (): Promise<IdentityConfiguration> { return this.request({ method: 'GET', path: '/api/v1/admin/identity' }) }
+  updateIdentityConfiguration (input: IdentityConfigurationWrite, options: C311RequestOptions = {}): Promise<IdentityConfiguration> { return this.request({ method: 'PATCH', path: '/api/v1/admin/identity', body: input, ...this.requestOptions(options) }) }
+  listIntegrations (query: ListQuery = {}): Promise<PageResponse<IntegrationConnection>> { return this.request({ method: 'GET', path: '/api/v1/admin/integrations', query: this.listQuery(query) }) }
+  getIntegration (integrationID: string): Promise<IntegrationConnection> { return this.request({ method: 'GET', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}` }) }
+  updateIntegration (integrationID: string, input: IntegrationConnectionWrite, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'PATCH', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}`, body: input, ...this.requestOptions(options) }) }
+  rotateIntegrationSecret (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'POST', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}/rotate`, body: {}, ...this.requestOptions(options) }) }
+  revokeIntegration (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { return this.request({ method: 'POST', path: `/api/v1/admin/integrations/${encodeURIComponent(integrationID)}/revoke`, body: {}, ...this.requestOptions(options) }) }
 
   updateBranding (input: BrandingWrite, options: C311RequestOptions = {}): Promise<Branding> { return this.request({ method: 'PATCH', path: '/api/v1/admin/branding', body: input, ...this.requestOptions(options) }) }
   getAdminBranding (): Promise<Branding> { return this.request({ method: 'GET', path: '/api/v1/admin/branding' }) }
@@ -583,12 +616,8 @@ export class C311HttpProvider implements C311Provider {
       : { request_detail: null }
   }
 
-  createPortalNote (_requestID: string, _input: RequestNote): Promise<RequestNote> {
-    return Promise.reject(new C311ApiError({
-      error: 'OPERATION_FAILED',
-      message: 'Public voter notes are not available in HTTP mode.',
-      retryable: false,
-    }, 501))
+  createPortalNote (requestID: string, input: RequestNote): Promise<RequestNote> {
+    return this.request({ method: 'POST', path: `/api/v1/portal/service-requests/${encodeURIComponent(requestID)}/notes`, body: input })
   }
 
   geocode (input: GeocodeRequest): Promise<GeocodeResponse> {
@@ -597,6 +626,14 @@ export class C311HttpProvider implements C311Provider {
 
   listStaffRequests (query: RequestListQuery = {}): Promise<PageResponse<RequestQueueItem>> {
     return this.request({ method: 'GET', path: '/api/v1/staff/service-requests', query: this.requestListQuery(query) })
+  }
+
+  searchStaffConstituents (query: ListQuery = {}): Promise<PageResponse<Constituent>> {
+    return this.request({ method: 'GET', path: '/api/v1/staff/constituents', query: this.listQuery(query) })
+  }
+
+  getStaffConstituent (constituentID: string): Promise<Constituent> {
+    return this.request({ method: 'GET', path: `/api/v1/staff/constituents/${encodeURIComponent(constituentID)}` })
   }
 
   getStaffRequest (requestID: string): Promise<StaffServiceRequestDetail> {

@@ -96,13 +96,13 @@ func (h *handler) federatedSignInCallback(w http.ResponseWriter, r *http.Request
 func (h *handler) setFederationCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.FederationFlowCookie, Value: value, Path: "/api/v1/auth",
-		MaxAge: 600, HttpOnly: true, Secure: true, SameSite: http.SameSiteNoneMode,
+		MaxAge: 600, HttpOnly: true, Secure: secureCookie(), SameSite: federationCookieSameSite(),
 	})
 }
 
 func (h *handler) expireFederationCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.FederationFlowCookie, Value: "", Path: "/api/v1/auth",
-		MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteNoneMode,
+		MaxAge: -1, HttpOnly: true, Secure: secureCookie(), SameSite: federationCookieSameSite(),
 	})
 }

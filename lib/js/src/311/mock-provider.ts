@@ -23,6 +23,10 @@ import type {
   FederatedRedirect,
   HelpContent,
   HelpWrite,
+  IdentityConfiguration,
+  IdentityConfigurationWrite,
+  IntegrationConnection,
+  IntegrationConnectionWrite,
   LanguagePreference,
   LoginIdentifierChange,
   ListQuery,
@@ -88,6 +92,10 @@ import type {
   WorkflowActionAccepted,
   DataExportQuery,
   ContactEmailExportRequest,
+  EmailReplacementRequest,
+  EmailReplacementAcknowledgement,
+  EmailReplacementConfirm,
+  EmailReplacementResult,
 } from './types'
 import { validatePortalAttachment, type C311Provider, type C311RequestOptions, type PortalAttachmentUpload, type ReportExportOptions } from './provider'
 
@@ -522,6 +530,7 @@ export class MockC311Provider implements C311Provider {
   private resetTokenSerial = 0
   private activeResetToken: string | null = null
   private resetTokenUsed = false
+  private activeEmailReplacementToken: string | null = null
   private pendingAccountLinkProvider: IdentityProvider | null = null
   private pendingAccountLinkExpiresAt: string | null = null
   private pendingAccountLinkConsumed = false
@@ -543,6 +552,8 @@ export class MockC311Provider implements C311Provider {
   private readonly adminCustomFields: CustomFieldDefinition[]
   private readonly adminHelp: Record<string, HelpContent>
   private readonly adminHelpVersions: Record<string, HelpContent[]>
+  private identityConfiguration: IdentityConfiguration
+  private readonly integrations: IntegrationConnection[]
 
   private extensionStorage (): Storage | undefined {
     if (typeof window === 'undefined' || (window as Window & { C311Mode?: string }).C311Mode !== 'mock') return undefined
@@ -594,6 +605,8 @@ export class MockC311Provider implements C311Provider {
     this.adminCustomFields = copy(this.fixtures.custom_fields || [])
     this.adminHelp = {}
     this.adminHelpVersions = {}
+    this.identityConfiguration = { oidc_enabled: true, saml_enabled: false, oidc_issuer_url: 'https://identity.example.invalid', oidc_staff_client_id: 'city311-staff', oidc_public_client_id: 'city311-public', oidc_client_secret_configured: true, saml_metadata_url: 'https://identity.example.invalid/saml/metadata', saml_sp_entity_id: 'https://city311.example.invalid/saml', actor_role_mappings: [], version: 1, updated_at: BENCHMARK_NOW }
+    this.integrations = [{ integration_id: 'civicworks', kind: 'CIVICWORKS', active: true, secret_configured: true, version: 1, updated_at: BENCHMARK_NOW }]
     Object.values(this.fixtures.public_help || {}).forEach(item => LANGUAGES.forEach(language => {
       const value = { ...copy(item), language, state: 'PUBLISHED' as const, published: true }
       this.adminHelp[`${item.help_key}:${language}`] = value
@@ -1228,6 +1241,23 @@ export class MockC311Provider implements C311Provider {
     }
   }
 
+  async requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement> {
+    this.requireCapability('email_replacement_request')
+    if (!/^\S+@\S+\.\S+$/.test(input?.email || '')) this.failScenario('validation')
+    this.activeEmailReplacementToken = `email-replacement-${input.email}`
+    return { accepted: true, message: 'Verification instructions have been sent.' }
+  }
+
+  async confirmEmailReplacement (input: EmailReplacementConfirm): Promise<EmailReplacementResult> {
+    if (!input?.token || input.token !== this.activeEmailReplacementToken) this.failScenario('invalid-reset-token')
+    const token = this.activeEmailReplacementToken
+    if (!token) throw new C311ApiError({ error: 'VALIDATION_ERROR', message: 'The verification token is invalid.', retryable: false }, 422)
+    const verifiedEmail = token.replace('email-replacement-', '')
+    this.profile = { ...this.profile, emails: [verifiedEmail] }
+    this.activeEmailReplacementToken = null
+    return { verified_email: verifiedEmail }
+  }
+
   async startFederatedSignIn (provider: IdentityProvider): Promise<FederatedRedirect> {
     if (provider === 'saml') throw new C311ApiError({ error: 'FORBIDDEN', message: 'SAML sign-in is available on the staff surface only.', retryable: false }, 403)
     if (this.scenario === 'oidc-failure' && provider === 'oidc') this.failScenario('oidc-failure')
@@ -1272,6 +1302,14 @@ export class MockC311Provider implements C311Provider {
     this.failIfNeeded(['terminal'])
     return copy(this.publishedBranding)
   }
+
+  async getIdentityConfiguration (): Promise<IdentityConfiguration> { this.requireCapability('identity_configuration_get'); return copy(this.identityConfiguration) }
+  async updateIdentityConfiguration (input: IdentityConfigurationWrite, options: C311RequestOptions = {}): Promise<IdentityConfiguration> { this.requireCapability('identity_configuration_update'); this.requireVersion(options, this.identityConfiguration.version); this.identityConfiguration = { ...this.identityConfiguration, ...input, version: this.identityConfiguration.version + 1, updated_at: BENCHMARK_NOW }; return copy(this.identityConfiguration) }
+  async listIntegrations (query: ListQuery = {}): Promise<PageResponse<IntegrationConnection>> { this.requireCapability('integration_list'); return this.page(this.integrations, query) }
+  async getIntegration (integrationID: string): Promise<IntegrationConnection> { this.requireCapability('integration_get'); const item = this.integrations.find(value => value.integration_id === integrationID); if (!item) throw new C311ApiError(this.fixtures.errors['not-found'], 404); return copy(item) }
+  async updateIntegration (integrationID: string, input: IntegrationConnectionWrite, options: C311RequestOptions = {}): Promise<IntegrationConnection> { this.requireCapability('integration_update'); const item = await this.getIntegration(integrationID); this.requireVersion(options, item.version); const index = this.integrations.findIndex(value => value.integration_id === integrationID); this.integrations[index] = { ...item, active: input.active, secret_configured: input.secret ? true : item.secret_configured, version: item.version + 1, updated_at: BENCHMARK_NOW }; return copy(this.integrations[index]) }
+  async rotateIntegrationSecret (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { this.requireCapability('integration_rotate'); const item = await this.getIntegration(integrationID); this.requireVersion(options, item.version); const index = this.integrations.findIndex(value => value.integration_id === integrationID); this.integrations[index] = { ...item, secret_configured: true, version: item.version + 1, updated_at: BENCHMARK_NOW }; return copy(this.integrations[index]) }
+  async revokeIntegration (integrationID: string, options: C311RequestOptions = {}): Promise<IntegrationConnection> { this.requireCapability('integration_revoke'); const item = await this.getIntegration(integrationID); this.requireVersion(options, item.version); const index = this.integrations.findIndex(value => value.integration_id === integrationID); this.integrations[index] = { ...item, active: false, secret_configured: false, version: item.version + 1, updated_at: BENCHMARK_NOW }; return copy(this.integrations[index]) }
 
   async updateBranding (input: BrandingWrite, options: C311RequestOptions = {}): Promise<Branding> {
     this.requireCapability('admin_branding_update'); this.requireVersion(options, this.branding.version); this.failIfNeeded(['validation', 'version-conflict'])
@@ -1653,6 +1691,37 @@ export class MockC311Provider implements C311Provider {
       throw new C311ApiError({ error: 'ADDRESS_NOT_FOUND', message: 'The address could not be found.', retryable: false }, 404)
     }
     return copy(result)
+  }
+
+  async searchStaffConstituents (query: ListQuery = {}): Promise<PageResponse<Constituent>> {
+    this.requireCapability('staff_constituent_search')
+    const candidates = [this.profile, ...this.fixtures.requests.map(request => request.primary_requester)]
+    const constituents = Array.from(new Map(candidates.map(item => [item.constituent_id, item])).values())
+    const values = (value: unknown): string[] => Array.isArray(value) ? value.map(item => String(item).trim().toLowerCase()).filter(Boolean) : [String(value).trim().toLowerCase()].filter(Boolean)
+    const matches = (candidate: Constituent, filter: string, raw: unknown): boolean => {
+      const expected = values(raw)
+      if (!expected.length) return true
+      const haystack = filter === 'query'
+        ? [candidate.constituent_id, candidate.display_name, ...candidate.emails]
+        : filter === 'constituent_id' ? [candidate.constituent_id]
+          : filter === 'display_name' ? [candidate.display_name]
+            : filter === 'email' ? candidate.emails
+              : filter === 'phone' ? candidate.phone_numbers.map(phone => phone.value)
+                : filter === 'primary_category' ? [candidate.primary_category]
+                  : filter === 'preferred_language' ? [candidate.preferred_language]
+                    : filter === 'email_opt_out' ? [String(candidate.email_opt_out)] : []
+      return expected.some(value => haystack.some(item => item.toLowerCase().includes(value)))
+    }
+    const items = constituents.filter(candidate => Object.entries(query.filters || {}).every(([filter, value]) => matches(candidate, filter, value)))
+    return this.page(items, query)
+  }
+
+  async getStaffConstituent (constituentID: string): Promise<Constituent> {
+    this.requireCapability('staff_constituent_detail')
+    const candidates = [this.profile, ...this.fixtures.requests.map(request => request.primary_requester)]
+    const constituent = candidates.find(item => item.constituent_id === constituentID)
+    if (!constituent) throw new C311ApiError(this.fixtures.errors['not-found'], 404)
+    return copy(constituent)
   }
 
   async listStaffRequests (query: RequestListQuery = {}): Promise<PageResponse<RequestQueueItem>> {

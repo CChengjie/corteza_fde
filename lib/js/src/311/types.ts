@@ -173,6 +173,42 @@ export interface BrandingWrite {
 
 export interface RollbackInput { target_version: number }
 
+export interface ActorRoleMapping {
+  asserted_role: string
+  application_role: string
+}
+
+export interface IdentityConfiguration {
+  oidc_enabled: boolean
+  saml_enabled: boolean
+  oidc_issuer_url: string
+  oidc_staff_client_id: string
+  oidc_public_client_id: string
+  oidc_client_secret_configured: boolean
+  saml_metadata_url: string
+  saml_sp_entity_id: string
+  actor_role_mappings: ActorRoleMapping[]
+  version: number
+  updated_at: ISODateTime
+}
+
+export interface IdentityConfigurationWrite { oidc_enabled?: boolean, saml_enabled?: boolean }
+
+export interface IntegrationConnection {
+  integration_id: string
+  kind: 'CIVICWORKS' | 'MAPPING' | 'WORKFLOW_OAUTH' | 'MAIL' | 'IDENTITY'
+  active: boolean
+  secret_configured: boolean
+  version: number
+  updated_at: ISODateTime
+}
+
+export interface IntegrationConnectionWrite {
+  active: boolean
+  configuration?: Record<string, unknown>
+  secret?: string
+}
+
 export interface Category {
   code: string
   active: boolean
@@ -447,17 +483,31 @@ export interface RequestNote {
   created_at?: ISODateTime
 }
 
-/** Frontend mock-only account disposition until a backend operation is published. */
-export type AccountDispositionMode = 'DELETE' | 'ANONYMIZE'
-
 export interface AccountDispositionRequest {
-  mode: AccountDispositionMode
+  mode: 'DELETE' | 'ANONYMIZE'
   confirmation: string
 }
 
 export interface AccountDispositionResult {
   status: 'DELETED' | 'ANONYMIZED'
   message: string
+}
+
+export interface EmailReplacementRequest {
+  email: string
+}
+
+export interface EmailReplacementAcknowledgement {
+  accepted: boolean
+  message?: string
+}
+
+export interface EmailReplacementConfirm {
+  token: string
+}
+
+export interface EmailReplacementResult {
+  verified_email: string
 }
 
 export interface PublicServiceRequestDetail {

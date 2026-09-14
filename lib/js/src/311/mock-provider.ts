@@ -1243,7 +1243,7 @@ export class MockC311Provider implements C311Provider {
 
   async requestEmailReplacement (input: EmailReplacementRequest): Promise<EmailReplacementAcknowledgement> {
     this.requireCapability('email_replacement_request')
-    if (!/^\S+@\S+\.\S+$/.test(input?.email || '')) this.failScenario('validation')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input?.email || '')) this.failScenario('validation')
     this.activeEmailReplacementToken = `email-replacement-${input.email}`
     return { accepted: true, message: 'Verification instructions have been sent.' }
   }

@@ -901,7 +901,7 @@ export default {
       return this.runBusy('emailReplacement', async () => {
         this.formErrors = []
         const email = String(this.forms.account.replacement_email || '').trim()
-        if (!/^\S+@\S+\.\S+$/.test(email)) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           this.formErrors = [{ field: 'email', code: 'INVALID_FORMAT', message: this.t('error.email', 'Enter a valid email address.') }]
           return
         }

@@ -29,9 +29,12 @@ FROM nginx:1.27-alpine
 
 ARG WEBAPP=compose
 
-COPY --from=build /src/client/web/${WEBAPP}/dist /usr/share/nginx/html
-COPY docker/frontend-nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build --chown=nginx:nginx /src/client/web/${WEBAPP}/dist /usr/share/nginx/html
+COPY --chown=nginx:nginx docker/frontend-nginx.conf /etc/nginx/conf.d/default.conf
 
-RUN printf "%s\n" "window.CortezaAPI = '/api';" > /usr/share/nginx/html/config.js
+RUN printf "%s\n" "window.CortezaAPI = '/api';" > /usr/share/nginx/html/config.js \
+    && chown nginx:nginx /usr/share/nginx/html/config.js /var/cache/nginx /var/run
 
-EXPOSE 80
+USER nginx
+
+EXPOSE 8080

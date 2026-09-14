@@ -403,14 +403,14 @@ func federationCookieSameSite() http.SameSite {
 func (h *handler) setIdentityCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: token, Path: "/",
-		HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteLaxMode, // NOSONAR: loopback HTTP is explicitly restricted by secureCookie.
 	})
 }
 
 func (h *handler) expireIdentityCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.IdentitySessionCookie, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secureCookie(), SameSite: http.SameSiteLaxMode, // NOSONAR: must match the narrowly-scoped loopback cookie policy.
 	})
 }
 

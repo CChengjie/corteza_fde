@@ -574,7 +574,7 @@ describe('C311 shared components', () => {
       stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
     })
     await wrapper.vm.federated('oidc')
-    expect(provider.startFederatedSignIn).toHaveBeenCalledWith('oidc')
+    expect(provider.startFederatedSignIn).toHaveBeenCalledWith('oidc', { linkConfirmed: false })
     expect(wrapper.vm.federatedMessage).toContain('Redirecting')
     window.C311Mode = undefined
   })

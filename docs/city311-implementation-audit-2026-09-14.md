@@ -18,6 +18,12 @@ Evidence collected on 2026-09-14:
 
 Legend: `[x]` verified by executed evidence; `[-]` implemented but only static/unit evidence or incomplete surface coverage; `[ ]` missing, broken, or unverified.
 
+## Latest CI failure verification
+
+- [x] SonarQube run `34810105322`, job `103869575254`, failed in `Generate JavaScript and TypeScript coverage reports` because `client/web/c311-tests/c311-components.spec.js` expected `startFederatedSignIn('oidc')` after the provider was changed to require an explicit `linkConfirmed` option.
+- [x] Fixed the stale anonymous-login expectation to require `startFederatedSignIn('oidc', { linkConfirmed: false })`. The authenticated confirmation case already verifies `linkConfirmed: true`.
+- [-] The local workstation does not have the CI's Corepack/Yarn dependency setup, so the matching Jest command must be confirmed by the next GitHub Actions run.
+
 ## Requirement checklist
 
 ### Baseline, roles, and platform requirements

@@ -169,6 +169,16 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
       },
 
       proxy: {
+        '^/api': {
+          target: fetchBaseUrl(),
+          changeOrigin: false,
+        },
+
+        '^/auth': {
+          target: fetchBaseUrl(),
+          changeOrigin: false,
+        },
+
         '^/custom.css': {
           target: fetchBaseUrl(),
         },
@@ -232,7 +242,7 @@ function fetchBaseUrl () {
     // eslint-disable-next-line no-eval
     eval(fileContents)
 
-    const u = window.CortezaAPI || ''
+    const u = window.CortezaProxyURL || window.CortezaAPI || ''
     const ur = new URL(u.startsWith('//') ? `http:${u}` : u)
 
     return `${ur.protocol}//${ur.host}/`

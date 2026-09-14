@@ -26,6 +26,7 @@ const (
 	WorkflowTriggerCreated       = "SERVICE_REQUEST_CREATED"
 	WorkflowTriggerStatusChanged = "SERVICE_REQUEST_STATUS_CHANGED"
 	workflowTestOperationKind    = "WORKFLOW_TEST"
+	workflowActionOperationName  = "workflow_action_execute"
 	workflowListSort             = "-updated_at"
 )
 
@@ -483,6 +484,118 @@ func (svc *Service) TestWorkflow(ctx context.Context, actor contract.Actor, work
 		return nil, updateErr
 	}
 	return pending, nil
+}
+
+// ExecuteWorkflowAction runs an administrator-requested authenticated HTTP
+// action through the server-side OAuth connection. Browser callers never see
+// the configured client credentials.
+func (svc *Service) ExecuteWorkflowAction(ctx context.Context, actor contract.Actor, input contract.WorkflowActionRequest, idempotencyKey string) (*contract.WorkflowActionAccepted, error) {
+	if err := requireWorkflowDesigner(actor); err != nil {
+		return nil, err
+	}
+	if err := validateIdempotencyKey(strings.TrimSpace(idempotencyKey), true); err != nil {
+		return nil, err
+	}
+	requestID, err := strconv.ParseUint(strings.TrimSpace(input.RequestID), 10, 64)
+	if err != nil || requestID == 0 {
+		return nil, validationError(contract.FieldError{Field: "/request_id", Code: contract.ValidationInvalidFormat})
+	}
+	if strings.TrimSpace(input.Action) == "" || input.Payload == nil {
+		return nil, validationError(contract.FieldError{Field: "/action", Code: contract.ValidationRequired})
+	}
+	request, err := store.LookupCity311ServiceRequestByID(ctx, svc.store, requestID)
+	if errors.IsNotFound(err) {
+		return nil, apiError(http.StatusNotFound, contract.ErrorNotFound, "The service request was not found.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !canRead(actor, request) {
+		return nil, apiError(http.StatusForbidden, contract.ErrorForbidden, requestScopeDeniedMessage)
+	}
+	requestHash, err := hashJSON(input)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.workflowMu.Lock()
+	defer svc.workflowMu.Unlock()
+	replayed, err := svc.replayWorkflowAction(ctx, idempotencyKey, requestHash)
+	if err != nil || replayed != nil {
+		return replayed, err
+	}
+	return svc.executeManualWorkflowHTTPAction(ctx, actor, request, input, idempotencyKey, requestHash)
+}
+
+func (svc *Service) executeManualWorkflowHTTPAction(ctx context.Context, actor contract.Actor, request *composeTypes.City311ServiceRequest, input contract.WorkflowActionRequest, idempotencyKey, requestHash string) (*contract.WorkflowActionAccepted, error) {
+	svc.runtimeMu.RLock()
+	workflowHTTP, configurationError := svc.workflowHTTP, svc.workflowConfig
+	svc.runtimeMu.RUnlock()
+	if configurationError != nil || workflowHTTP == nil {
+		return nil, &workflowHTTPError{status: http.StatusServiceUnavailable, body: contract.MockWorkflowFailure(contract.ErrorTemporarilyUnavailable, true)}
+	}
+	status, err := workflowHTTP.Execute(ctx, input, idempotencyKey)
+	now := svc.now()
+	executionID := "wfx-" + strconv.FormatUint(svc.nextID(), 10)
+	stored := &composeTypes.City311WorkflowExecution{
+		ID: svc.nextID(), ExecutionID: executionID, WorkflowID: "manual-oauth-action", WorkflowVersion: 1,
+		RequestID: request.ID, Trigger: "MANUAL_AUTHENTICATED_HTTP", Outcome: "ACTIONS_SUCCEEDED",
+		ActionsAttempted: composeTypes.City311JSON{"items": []string{"AUTHENTICATED_HTTP"}}, Succeeded: err == nil,
+		ResponseStatus: status, Error: composeTypes.City311JSON{}, OccurredAt: now,
+	}
+	if err != nil {
+		stored.Outcome = "ACTION_FAILED"
+		stored.Error = workflowErrorPayload(err)
+	}
+	if err != nil {
+		if persistErr := store.CreateCity311WorkflowExecution(ctx, svc.store, stored); persistErr != nil {
+			return nil, persistErr
+		}
+		return nil, err
+	}
+	accepted := &contract.WorkflowActionAccepted{ExecutionID: executionID, AcceptedAt: now}
+	body, err := mapFrom(accepted)
+	if err != nil {
+		return nil, err
+	}
+	if err = store.Tx(ctx, svc.store, func(ctx context.Context, tx store.Storer) error {
+		if err = store.CreateCity311WorkflowExecution(ctx, tx, stored); err != nil {
+			return err
+		}
+		return store.CreateCity311IdempotencyRecord(ctx, tx, &composeTypes.City311IdempotencyRecord{
+			ID: svc.nextID(), Operation: workflowActionOperationName, KeyHash: hashKey(idempotencyKey), RequestHash: requestHash,
+			ResponseStatus: http.StatusAccepted, ResponseBody: body, RequestID: request.ID,
+			CreatedAt: now, ExpiresAt: now.Add(idempotencyLifetime),
+		})
+	}); err != nil {
+		return nil, err
+	}
+	return accepted, nil
+}
+
+func (svc *Service) replayWorkflowAction(ctx context.Context, key, requestHash string) (*contract.WorkflowActionAccepted, error) {
+	record, err := store.LookupCity311IdempotencyRecordByOperationKeyHash(ctx, svc.store, workflowActionOperationName, hashKey(key))
+	if errors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !record.ExpiresAt.After(svc.now()) {
+		return nil, store.DeleteCity311IdempotencyRecord(ctx, svc.store, record)
+	}
+	if record.RequestHash != requestHash {
+		return nil, apiError(http.StatusConflict, contract.ErrorIdempotencyConflict, "The idempotency key was already used with a different workflow action.")
+	}
+	encoded, err := json.Marshal(record.ResponseBody)
+	if err != nil {
+		return nil, err
+	}
+	result := &contract.WorkflowActionAccepted{}
+	if err = json.Unmarshal(encoded, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (svc *Service) GetWorkflowExecution(ctx context.Context, actor contract.Actor, executionID string) (*contract.WorkflowExecution, error) {

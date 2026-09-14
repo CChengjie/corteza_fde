@@ -140,6 +140,23 @@ func TestFederatedSignInHTTPContractAndSecureCookies(t *testing.T) {
 	require.Contains(t, current.Body.String(), `"display_name":"REST Federated Resident"`)
 }
 
+func TestAccountLinkConfirmationReturnsAuthenticatedSession(t *testing.T) {
+	router, _, _ := testFederationRouter(t)
+	registration := identityRegistrationBody("link.confirm", "link-confirm@example.invalid")
+	require.Equal(t, http.StatusAccepted, executeJSON(t, router, http.MethodPost, "/api/v1/accounts", registration, nil, 0).Code)
+	signedIn := executeJSON(t, router, http.MethodPost, "/api/v1/session", map[string]any{
+		"login_identifier": registration["login_identifier"], "password": registration["password"],
+	}, nil, 0)
+	require.Equal(t, http.StatusOK, signedIn.Code, signedIn.Body.String())
+	cookie := signedIn.Result().Cookies()[0]
+	confirmed := executeJSON(t, router, http.MethodPost, "/api/v1/account/link/confirm", map[string]any{}, map[string]string{"Cookie": cookie.Name + "=" + cookie.Value}, 0)
+	require.Equal(t, http.StatusOK, confirmed.Code, confirmed.Body.String())
+	require.Contains(t, confirmed.Body.String(), `"authenticated":true`)
+
+	unauthenticated := executeJSON(t, router, http.MethodPost, "/api/v1/account/link/confirm", map[string]any{}, nil, 0)
+	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
+}
+
 func TestFederatedSAMLHTTPPostCallback(t *testing.T) {
 	router, _, provider := testFederationRouter(t)
 	provider.claims = city311Service.FederatedClaims{

@@ -127,6 +127,20 @@ func (h *handler) workflowTest(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, http.StatusAccepted, result, err)
 }
 
+func (h *handler) workflowActionExecute(w http.ResponseWriter, r *http.Request) {
+	input := contract.WorkflowActionRequest{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	actor, err := h.workflowActor(r)
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	result, err := h.service.ExecuteWorkflowAction(r.Context(), actor, input, r.Header.Get(contract.IdempotencyHeader))
+	writeResult(w, http.StatusAccepted, result, err)
+}
+
 func (h *handler) workflowExecutionGet(w http.ResponseWriter, r *http.Request) {
 	actor, err := h.workflowActor(r)
 	if err != nil {

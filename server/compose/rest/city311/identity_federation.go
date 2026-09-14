@@ -93,6 +93,15 @@ func (h *handler) federatedSignInCallback(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, h.identity.Session(resolved))
 }
 
+// accountLinkConfirm completes the browser-facing confirmation step. The
+// federated callback already binds only to the authenticated local account;
+// this endpoint deliberately returns that resolved session rather than
+// accepting an account identifier from the client.
+func (h *handler) accountLinkConfirm(w http.ResponseWriter, r *http.Request) {
+	resolved := identitySessionFromContext(r.Context())
+	writeJSON(w, http.StatusOK, h.identity.Session(resolved))
+}
+
 func (h *handler) setFederationCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: city311Service.FederationFlowCookie, Value: value, Path: "/api/v1/auth",

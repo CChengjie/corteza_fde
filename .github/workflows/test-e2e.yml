@@ -105,9 +105,12 @@ jobs:
           const marker = '  cy.get(`[data-test-id="${buttonLoginID}"]`).click()\n})'
           const replacement = `  cy.get(\`[data-test-id="\${buttonLoginID}"]\`).click()
 
-          // Wait until the callback, token exchange, and Admin bootstrap all
-          // complete before callers navigate to the application root.
-          cy.get('.nav-sidebar', { timeout: 60000 }).should('be.visible')
+          // The login form completes on the server-auth page first. The
+          // caller then visits the Admin root, which starts the OAuth callback
+          // flow and bootstraps the authenticated application. Waiting for the
+          // form redirect here prevents that follow-up visit from racing the
+          // login POST without assuming Admin DOM is already mounted.
+          cy.location('pathname', { timeout: 60000 }).should('not.match', /\\/auth\\/login$/)
           })`
           if (!source.includes(marker)) throw new Error('login command marker not found')
           fs.writeFileSync(file, source.replace(marker, replacement))

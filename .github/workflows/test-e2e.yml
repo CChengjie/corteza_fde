@@ -206,6 +206,10 @@ jobs:
                   yarn install && \
                   yarn serve --port ${CLIENT_PORT}"
 
+      - name: Inspect admin build logs
+        if: always()
+        run: docker logs admin 2>&1 | tail -n 250 || true
+
       # github actions do not support docker-compose --wait
       - name: Wait for postgres healthcheck
         run: timeout 180s sh -c 'until docker ps | grep postgres | grep -q healthy; do echo "Waiting for container to be healthy..."; sleep 1; done'

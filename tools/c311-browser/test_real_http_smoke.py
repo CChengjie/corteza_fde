@@ -76,6 +76,7 @@ class RealHttpSmokeContractTests(unittest.TestCase):
             "OIDC_ISSUER_URL=http://integration-fixture:8080",
             "SAML_METADATA_URL=http://integration-fixture:8080/saml/metadata",
             "MAIL_API_BASE_URL=http://integration-fixture:8080",
+            "MAIL_TRANSPORT=http",
         ):
             self.assertIn(value, self.env_example)
         self.assertNotIn("example.invalid", self.env_example)

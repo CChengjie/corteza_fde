@@ -125,6 +125,7 @@ static_checks() {
     .services.app.environment.WORKFLOW_API_BASE_URL == "http://integration-fixture:8080" and
     .services.app.environment.OIDC_ISSUER_URL == "http://integration-fixture:8080" and
     .services.app.environment.SAML_METADATA_URL == "http://integration-fixture:8080/saml/metadata" and
+    .services.app.environment.MAIL_TRANSPORT == "http" and
     .services.app.environment.MAIL_API_BASE_URL == "http://integration-fixture:8080" and
     .services.app.environment.CIVICWORKS_CONTROL_TOKEN == null and
     .services.civicworks.environment.CIVICWORKS_API_TOKEN == .services.app.environment.CIVICWORKS_API_TOKEN and

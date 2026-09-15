@@ -65,23 +65,28 @@ def main() -> int:
         }""")
         if current != {'status': 200, 'authenticated': True}:
             raise AssertionError(f'identity cookie was not retained by the browser: {current}')
-        submission = page.evaluate("""async () => {
-          const response = await fetch('/api/v1/portal/service-requests', {
-            method: 'POST', credentials: 'include',
-            headers: {'Content-Type': 'application/json', 'Idempotency-Key': 'real-http-smoke-request'},
-            body: JSON.stringify({
-              summary: 'Live HTTP smoke request',
-              description: 'Created by the real browser provider gate.',
-              service_type: 'POTHOLE',
-              requester: {display_name: 'Live HTTP Smoke', email: 'smoke@example.invalid'},
-              location: {address: '100 Example Street, Buffalo, NY 14201', latitude: 42.88645, longitude: -78.87837}
-            })
-          })
-          const body = await response.json()
-          return {status: response.status, request_id: body.request_id || body.request?.request_id || null}
-        }""")
-        if submission['status'] != 201 or not submission['request_id']:
-            raise AssertionError(f'live service request submission failed: {submission}')
+        page.reload(wait_until='domcontentloaded')
+        page.locator('[data-c311-main]').first.wait_for(state='visible', timeout=60000)
+        page.locator('#c311-summary').fill('Live HTTP click request')
+        page.locator('#c311-description').fill('Created by clicking the real browser form.')
+        page.locator('#c311-requester-name').fill('Live HTTP Smoke')
+        page.locator('#c311-requester-email').fill('smoke@example.invalid')
+        page.locator('#c311-consent').check()
+        submit_button = page.locator('[data-c311-action="submit-request"]')
+        submit_button.wait_for(state='visible', timeout=10000)
+        submit_button.click()
+        result = page.locator('[data-c311-submission-result]')
+        result.wait_for(state='visible', timeout=60000)
+        result_text = result.inner_text().strip()
+        if not result_text:
+            raise AssertionError('real browser submit returned an empty result')
+        submission_responses = [
+            item for item in diagnostics['api_responses']
+            if item['method'] == 'POST' and item['url'].endswith('/api/v1/portal/service-requests')
+        ]
+        if not any(item['status'] == 201 for item in submission_responses):
+            raise AssertionError(f'click submit did not produce HTTP 201: {submission_responses}')
+        submission = {'status': 201, 'result_text': result_text}
         diagnostics['live_write'] = submission
         if diagnostics['errors']:
             raise AssertionError(f"browser page errors: {diagnostics['errors']}")

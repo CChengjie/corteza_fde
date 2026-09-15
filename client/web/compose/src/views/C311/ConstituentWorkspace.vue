@@ -46,7 +46,7 @@ export default {
     },
     async open (item) {
       if (this.busy) return
-      this.busy = true; this.formErrors = []
+      this.busy = true; this.formErrors = []; this.detail = null
       try { this.detail = await this.provider.getStaffConstituent(item.constituent_id) } catch (error) { this.setError(error) } finally { this.busy = false }
     },
   },

@@ -117,7 +117,7 @@ export default {
       } catch (error) { this.error = error; this.state = stateForError?.(error) || 'terminal-error' }
     },
     async selectRequest (item) {
-      this.busy = true; this.message = ''; this.formErrors = []
+      this.busy = true; this.message = ''; this.formErrors = []; this.detail = null
       try { this.detail = await this.provider.getStaffRequest(item.request_id); this.transitionForm.to_status = this.detail.request.status } catch (error) { this.setError(error) } finally { this.busy = false }
     },
     async refreshDetail () { if (this.detail) await this.selectRequest(this.detail.request) },

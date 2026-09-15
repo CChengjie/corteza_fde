@@ -459,6 +459,7 @@ type (
 		Version          uint64                  `json:"version"`
 		CreatedAt        time.Time               `json:"created_at"`
 		UpdatedAt        time.Time               `json:"updated_at"`
+		RetentionUntil   time.Time               `json:"retention_until"`
 		Attachments      []AttachmentMetadata    `json:"attachments,omitempty"`
 	}
 

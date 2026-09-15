@@ -9,6 +9,15 @@ import (
 	"github.com/cortezaproject/corteza/server/pkg/filter"
 )
 
+const City311RetentionYears = 7
+
+func City311RetentionUntil(createdAt time.Time) time.Time {
+	if createdAt.IsZero() {
+		return time.Time{}
+	}
+	return createdAt.AddDate(City311RetentionYears, 0, 0)
+}
+
 type (
 	ServiceType          = city311Types.ServiceType
 	DepartmentCode       = city311Types.DepartmentCode
@@ -47,6 +56,7 @@ type (
 		Version           int                               `json:"version"`
 		CreatedAt         time.Time                         `json:"createdAt"`
 		UpdatedAt         time.Time                         `json:"updatedAt"`
+		RetentionUntil    time.Time                         `json:"retentionUntil,omitempty"`
 	}
 
 	City311ServiceRequestFilter struct {
@@ -116,17 +126,18 @@ type (
 	City311IdempotencyRecordSet []*City311IdempotencyRecord
 
 	City311AuditEvent struct {
-		ID            uint64                      `json:"id,string"`
-		RequestID     uint64                      `json:"requestID,string"`
-		EntityType    string                      `json:"entityType"`
-		EntityID      string                      `json:"entityID"`
-		EventType     string                      `json:"eventType"`
-		ActorType     city311Types.AuditActorType `json:"actorType"`
-		ActorID       uint64                      `json:"actorID,string"`
-		SourceChannel city311Types.SourceChannel  `json:"sourceChannel"`
-		Before        City311JSON                 `json:"before"`
-		After         City311JSON                 `json:"after"`
-		CreatedAt     time.Time                   `json:"createdAt"`
+		ID             uint64                      `json:"id,string"`
+		RequestID      uint64                      `json:"requestID,string"`
+		EntityType     string                      `json:"entityType"`
+		EntityID       string                      `json:"entityID"`
+		EventType      string                      `json:"eventType"`
+		ActorType      city311Types.AuditActorType `json:"actorType"`
+		ActorID        uint64                      `json:"actorID,string"`
+		SourceChannel  city311Types.SourceChannel  `json:"sourceChannel"`
+		Before         City311JSON                 `json:"before"`
+		After          City311JSON                 `json:"after"`
+		CreatedAt      time.Time                   `json:"createdAt"`
+		RetentionUntil time.Time                   `json:"retentionUntil,omitempty"`
 	}
 	City311AuditEventFilter struct {
 		RequestID  uint64

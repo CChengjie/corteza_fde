@@ -137,7 +137,15 @@ func toContract(request *composeTypes.City311ServiceRequest) contract.ServiceReq
 		OriginClass: request.OriginClass, Status: request.Status, PrimaryRequester: requester, Location: location,
 		CustomFields: cloneMap(request.CustomFields), DuplicateGroupID: request.DuplicateGroupID,
 		Version: uint64(request.Version), CreatedAt: request.CreatedAt, UpdatedAt: request.UpdatedAt,
+		RetentionUntil: retentionUntil(request.CreatedAt, request.RetentionUntil),
 	}
+}
+
+func retentionUntil(createdAt, value time.Time) time.Time {
+	if !value.IsZero() {
+		return value
+	}
+	return composeTypes.City311RetentionUntil(createdAt)
 }
 
 func optionalID(value uint64) *string {

@@ -393,6 +393,7 @@ func toAuditEvent(event *composeTypes.City311AuditEvent) contract.AuditEvent {
 		EntityType: event.EntityType, EntityID: event.EntityID, EventType: event.EventType,
 		ActorType: event.ActorType, ActorID: strconv.FormatUint(event.ActorID, 10), OccurredAt: event.CreatedAt,
 		SourceChannel: event.SourceChannel, Before: cloneMap(event.Before), After: cloneMap(event.After),
+		RetentionUntil: retentionUntil(event.CreatedAt, event.RetentionUntil),
 	}
 }
 

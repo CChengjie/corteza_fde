@@ -515,15 +515,16 @@ type PortalRequestList struct {
 }
 
 type AuditEvent struct {
-	EntityType    string         `json:"entity_type"`
-	EntityID      string         `json:"entity_id"`
-	EventType     string         `json:"event_type"`
-	ActorType     AuditActorType `json:"actor_type"`
-	ActorID       string         `json:"actor_id"`
-	OccurredAt    time.Time      `json:"occurred_at"`
-	SourceChannel SourceChannel  `json:"source_channel"`
-	Before        map[string]any `json:"before"`
-	After         map[string]any `json:"after"`
+	EntityType     string         `json:"entity_type"`
+	EntityID       string         `json:"entity_id"`
+	EventType      string         `json:"event_type"`
+	ActorType      AuditActorType `json:"actor_type"`
+	ActorID        string         `json:"actor_id"`
+	OccurredAt     time.Time      `json:"occurred_at"`
+	SourceChannel  SourceChannel  `json:"source_channel"`
+	Before         map[string]any `json:"before"`
+	After          map[string]any `json:"after"`
+	RetentionUntil time.Time      `json:"retention_until"`
 }
 
 type StaffServiceRequestDetail struct {

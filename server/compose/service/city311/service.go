@@ -647,6 +647,7 @@ func newStoredRequest(prepared *preparedSubmission, profile map[string]any, requ
 		OriginClass: originClass, Status: contract.ServiceRequestStatusSubmitted, PrimaryRequester: profile,
 		Location: locationMap(prepared.input.Location), CustomFields: cloneMap(prepared.input.CustomFields),
 		CollaboratorIDs: composeTypes.City311Uint64Set{}, Version: 1, CreatedAt: now, UpdatedAt: now,
+		RetentionUntil: composeTypes.City311RetentionUntil(now),
 	}
 }
 

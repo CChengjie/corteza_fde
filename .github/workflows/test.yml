@@ -24,6 +24,30 @@ env:
   NODE_VERSION: 22
 
 jobs:
+  c311-real-http:
+    name: "C311 live HTTP browser smoke"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install browser test dependencies
+        run: |
+          python3 -m pip install --require-hashes --only-binary=:all: -r tools/c311-browser/requirements.txt
+          python3 -m playwright install --with-deps chromium
+      - name: Verify browser to Corteza HTTP connectivity
+        run: tools/c311-browser/run-real-http.sh
+        env:
+          C311_ARTIFACT_DIR: ${{ runner.temp }}/c311-real-http
+      - name: Upload live HTTP evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c311-real-http
+          path: ${{ runner.temp }}/c311-real-http
+          if-no-files-found: ignore
+
   c311-fe01:
     name: "C311 FE-00/FE-01 release gates"
     runs-on: ubuntu-22.04

@@ -781,7 +781,37 @@ export default {
         }
       })
     },
-    async confirmAccountLink () { await this.cancelAccountLink() },
+    async confirmAccountLink () {
+      return this.runBusy('link', async () => {
+        this.formErrors = []
+        this.dataError = null
+        try {
+          // The server confirms an account link by restarting the federated
+          // authorization with link_confirmed=true. Mock providers expose a
+          // local helper, but real HTTP providers must follow the redirect.
+          if (typeof window !== 'undefined' && window.C311Mode !== 'mock') {
+            const provider = String(this.$C311?.pendingFederated?.provider_label || this.$route?.query?.provider || 'oidc').toLowerCase()
+            const redirect = await this.provider?.startFederatedSignIn?.(provider, { linkConfirmed: true })
+            if (!redirect?.authorization_url) throw new Error(this.t('identity.linkUnavailable', 'Account linking is unavailable.'))
+            if (typeof window.location?.assign === 'function') window.location.assign(redirect.authorization_url)
+            return
+          }
+          const result = await this.provider?.confirmAccountLink?.(this.$C311?.pendingFederated)
+          if (!result) throw new Error(this.t('identity.linkUnavailable', 'Account linking is unavailable.'))
+          this.$C311.pendingFederated = null
+          this.$C311.session = result?.session || result
+          this.sessionRevision++
+          this.linkState = 'success'
+          this.federatedMessage = this.t('identity.success', 'Sign-in completed.')
+        } catch (error) {
+          const normalized = displayError(error)
+          this.dataError = normalized
+          this.formErrors = normalized.errors || []
+          this.linkState = 'error'
+          this.setError(normalized)
+        }
+      })
+    },
     async cancelAccountLink () {
       if (this.$C311) this.$C311.pendingFederated = null
       this.federatedMessage = this.t('identity.linkCancelled', 'Account linking was cancelled.')

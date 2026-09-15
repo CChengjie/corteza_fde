@@ -5,8 +5,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"net/smtp"
 	"net/textproto"
 	"strings"
@@ -53,6 +56,35 @@ func (client *smtpTestClient) Data() (io.WriteCloser, error) {
 type smtpTestWriter struct {
 	client *smtpTestClient
 	failAt string
+}
+
+func TestHTTPMailSenderSendsAuthenticatedJSONAndAttachments(t *testing.T) {
+	var received struct {
+		From        string   `json:"from"`
+		To          []string `json:"to"`
+		DeliveryKey string   `json:"delivery_key"`
+		Attachments []struct {
+			Filename string `json:"filename"`
+			Body     string `json:"body"`
+		} `json:"attachments"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "Bearer token", r.Header.Get("Authorization"))
+		require.Equal(t, "key", r.Header.Get("X-Delivery-Key"))
+		require.Equal(t, "/api/v1/mail/send", r.URL.Path)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+	sender := httpMailSender{baseURL: server.URL, token: "token", client: server.Client()}
+	code, err := sender.Send(context.Background(), MailMessage{From: "from@example.test", To: []string{"to@example.test"}, Attachments: []validatedAttachment{{Filename: "a.txt", Content: []byte("body")}}}, "key")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusAccepted, code)
+	require.Equal(t, "from@example.test", received.From)
+	require.Equal(t, []string{"to@example.test"}, received.To)
+	require.Equal(t, "key", received.DeliveryKey)
+	require.Len(t, received.Attachments, 1)
+	require.Equal(t, base64.StdEncoding.EncodeToString([]byte("body")), received.Attachments[0].Body)
 }
 
 func (writer *smtpTestWriter) Write(value []byte) (int, error) {

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"mime"
+	"net/http"
 	"path"
 	"strconv"
 	"strings"
@@ -57,6 +58,28 @@ func (svc *Service) StageAttachment(ctx context.Context, ownerID uint64, filenam
 		return nil, err
 	}
 	return &contract.PortalAttachment{AttachmentToken: token, Filename: filename, MediaType: mediaType, Size: uint64(len(content)), ExpiresAt: staged.ExpiresAt}, nil
+}
+
+// DeleteStagedAttachment removes an upload that has not yet been submitted.
+// The opaque token is a capability, but authenticated uploads are additionally
+// bound to their owner so another account cannot consume or delete them.
+func (svc *Service) DeleteStagedAttachment(ctx context.Context, ownerID uint64, token string) error {
+	if len(token) != 43 {
+		return validationError(contract.FieldError{Field: "/attachment_token", Code: contract.ValidationInvalidValue})
+	}
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	item, err := store.LookupCity311StagedAttachmentByTokenHash(ctx, svc.store, hashKey(token))
+	if errors.IsNotFound(err) {
+		return apiError(http.StatusNotFound, contract.ErrorNotFound, "The attachment was not found.")
+	}
+	if err != nil {
+		return err
+	}
+	if item.OwnerID != 0 && item.OwnerID != ownerID {
+		return apiError(http.StatusForbidden, contract.ErrorForbidden, "The attachment is owned by another account.")
+	}
+	return store.DeleteCity311StagedAttachmentByID(ctx, svc.store, item.ID)
 }
 
 func attachmentField(options SubmissionOptions) string {

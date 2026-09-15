@@ -142,7 +142,7 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
         .loader('sass-loader')
         .tap(options => ({
           ...options,
-          sourceMap: !isCI,
+          sourceMap: true,
           sassOptions: {
             outputStyle: isDevelopment ? 'expanded' : 'compressed',
           },
@@ -210,7 +210,7 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
     },
 
     css: {
-      sourceMap: isDevelopment && !isCI,
+      sourceMap: isDevelopment,
       extract: !isTest,
       loaderOptions: {
         sass: {

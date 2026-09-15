@@ -205,12 +205,13 @@ jobs:
             client \
             sh -c "set -eu; exec > /corteza/.e2e-${CLIENT_NAME}.log 2>&1; \
                   echo 'Installing and linking client dependencies'; \
+                  cd /corteza/client/web/${CLIENT_NAME} && \
+                  yarn install --network-timeout 120000 && \
                   cd /corteza/lib/js && yarn link && \
                   cd /corteza/lib/vue && yarn link && \
                   cd /corteza/client/web/${CLIENT_NAME} && \
                   yarn link @cortezaproject/corteza-vue && \
                   yarn link @cortezaproject/corteza-js && \
-                  yarn install --network-timeout 120000 && \
                   touch /corteza/.e2e-${CLIENT_NAME}-ready && \
                   exec yarn serve --host 127.0.0.1 --port ${CLIENT_PORT}"
 

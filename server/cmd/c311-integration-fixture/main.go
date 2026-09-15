@@ -47,7 +47,20 @@ func main() {
 	mux.HandleFunc("POST /api/v1/actions", func(w http.ResponseWriter, r *http.Request) {
 		write(w, 202, map[string]any{"execution_id": "fixture-execution-001", "accepted_at": "2026-01-15T12:00:00Z"})
 	})
-	mux.HandleFunc("POST /api/v1/mail/send", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("POST /api/v1/mail/send", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer local-only-mail-api-token" {
+			write(w, http.StatusUnauthorized, map[string]any{"error": "UNAUTHORIZED"})
+			return
+		}
+		var input struct {
+			From        string   `json:"from"`
+			To          []string `json:"to"`
+			DeliveryKey string   `json:"delivery_key"`
+		}
+		if json.NewDecoder(r.Body).Decode(&input) != nil || strings.TrimSpace(input.From) == "" || len(input.To) == 0 || strings.TrimSpace(input.DeliveryKey) == "" {
+			write(w, http.StatusUnprocessableEntity, map[string]any{"error": "VALIDATION_ERROR"})
+			return
+		}
 		write(w, 202, map[string]any{"status": "DELIVERED", "message_id": "fixture-mail-001"})
 	})
 	_ = http.ListenAndServe(":8080", mux)

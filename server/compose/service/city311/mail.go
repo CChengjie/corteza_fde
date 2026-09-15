@@ -71,6 +71,53 @@ type smtpMailSender struct {
 	password string
 }
 
+// httpMailSender is used by deterministic local fixtures and providers that
+// expose a mail delivery API instead of an SMTP endpoint.
+type httpMailSender struct {
+	baseURL string
+	token   string
+	client  *http.Client
+}
+
+func (sender httpMailSender) Send(ctx context.Context, message MailMessage, deliveryKey string) (int, error) {
+	attachments := make([]map[string]any, 0, len(message.Attachments))
+	for _, attachment := range message.Attachments {
+		attachments = append(attachments, map[string]any{
+			"filename": attachment.Filename, "media_type": attachment.MediaType,
+			"body": base64.StdEncoding.EncodeToString(attachment.Content),
+		})
+	}
+	body, err := json.Marshal(map[string]any{
+		"from": message.From, "to": message.To, "subject": message.Subject,
+		"text": message.Text, "html": message.HTML, "attachments": attachments,
+		"delivery_key": deliveryKey,
+	})
+	if err != nil {
+		return 0, err
+	}
+	base := strings.TrimRight(strings.TrimSpace(sender.baseURL), "/")
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/mail/send", bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+sender.token)
+	request.Header.Set("X-Delivery-Key", deliveryKey)
+	client := sender.client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return 0, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		return response.StatusCode, nil
+	}
+	return response.StatusCode, fmt.Errorf("mail API returned HTTP %d", response.StatusCode)
+}
+
 type mailTemplate struct {
 	From          string
 	SubjectPrefix string

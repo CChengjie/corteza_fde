@@ -18,6 +18,7 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         cls.runner = (ROOT / "tools/c311-browser/run-real-http.sh").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
         cls.compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        cls.env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
     def test_browser_is_forced_into_http_mode_and_rejects_mock_provider(self) -> None:
         self.assertIn("context.add_init_script(\"window.C311Mode = 'http';\")", self.smoke)
@@ -66,6 +67,18 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         """The normal compose path must be usable without CI-only overrides."""
         self.assertIn("BENCHMARK_NOW: ${BENCHMARK_NOW:-2099-01-01T00:00:00Z}", self.compose)
         self.assertNotIn("BENCHMARK_NOW: ${BENCHMARK_NOW:-2026-02-03T15:04:05Z}", self.compose)
+
+    def test_env_example_matches_the_real_local_fixture_defaults(self) -> None:
+        for value in (
+            "BENCHMARK_NOW=2099-01-01T00:00:00Z",
+            "MAP_BASE_URL=http://integration-fixture:8080",
+            "WORKFLOW_API_BASE_URL=http://integration-fixture:8080",
+            "OIDC_ISSUER_URL=http://integration-fixture:8080",
+            "SAML_METADATA_URL=http://integration-fixture:8080/saml/metadata",
+            "MAIL_API_BASE_URL=http://integration-fixture:8080",
+        ):
+            self.assertIn(value, self.env_example)
+        self.assertNotIn("example.invalid", self.env_example)
 
     def test_runner_uses_compose_health_gate_and_collects_failure_state(self) -> None:
         self.assertIn("--wait --wait-timeout 180", self.runner)

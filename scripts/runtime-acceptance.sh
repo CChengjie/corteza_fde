@@ -138,8 +138,8 @@ static_checks() {
     .services.postgres.volumes[0].source == "postgres_data" and
     .services.app.depends_on.postgres.condition == "service_healthy" and
     .services.app.depends_on.civicworks.condition == "service_healthy" and
-    .services.app.depends_on.integration-fixture.condition == "service_healthy" and
-    .services.integration-fixture.entrypoint[0] == "/usr/local/bin/c311-integration-fixture" and
+    .services.app.depends_on["integration-fixture"].condition == "service_healthy" and
+    .services["integration-fixture"].entrypoint[0] == "/usr/local/bin/c311-integration-fixture" and
     .services.frontend.build.args.WEBAPP == "compose" and
     .services.admin.build.args.WEBAPP == "admin" and
     .services.admin.depends_on.app.condition == "service_healthy"

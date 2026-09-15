@@ -247,7 +247,12 @@ jobs:
                 printf '%s' "$html" | grep -Eq '<script[^>]+src="[^"]*(app|chunk-vendors|runtime)[^"]*\.js'; do
             if [ "$SECONDS" -ge "$deadline" ]; then
               echo "Timed out waiting for Vue dev server compilation"
-              sed -n '1,240p' "corteza/.e2e-${{ matrix.client.name }}.log" || true
+              echo "Client container state:"
+              docker inspect -f 'status={{.State.Status}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}}' "${{ matrix.client.name }}" || true
+              echo "Client processes:"
+              docker top "${{ matrix.client.name }}" -eo pid,ppid,%cpu,%mem,stat,etime,args || true
+              echo "Recent webpack output:"
+              tail -n 240 "corteza/.e2e-${{ matrix.client.name }}.log" || true
               exit 124
             fi
             echo "Waiting for Vue dev server compilation..."

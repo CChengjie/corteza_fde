@@ -6,6 +6,7 @@ const Vue = require('vue')
 module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, theme, packageAlias, root = path.resolve('.'), env = process.env.NODE_ENV }) => {
   const isDevelopment = (env === 'development')
   const isTest = (env === 'test')
+  const isCI = process.env.CI === 'true' || process.env.CI === '1'
 
   if (isTest) {
     Vue.config.devtools = false
@@ -13,8 +14,8 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
   }
 
   if (isDevelopment) {
-    Vue.config.devtools = true
-    Vue.config.performance = true
+    Vue.config.devtools = !isCI
+    Vue.config.performance = !isCI
   }
 
   const optimization = isTest
@@ -44,7 +45,8 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
 
   return {
     publicPath: isDevelopment ? '/' : './',
-    lintOnSave: true,
+    lintOnSave: !isCI,
+    parallel: !isCI,
     runtimeCompiler: true,
 
     configureWebpack: {
@@ -140,7 +142,7 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
         .loader('sass-loader')
         .tap(options => ({
           ...options,
-          sourceMap: true,
+          sourceMap: !isCI,
           sassOptions: {
             outputStyle: isDevelopment ? 'expanded' : 'compressed',
           },
@@ -189,7 +191,7 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
       },
 
       // Webpack 5 DevServer configuration
-      watchFiles: {
+      ...(!isCI && { watchFiles: {
         paths: [
           '**/*',
           '!**/node_modules/!(@cortezaproject)/**',
@@ -199,16 +201,16 @@ module.exports = ({ appFlavour, appLabel, version = process.env.BUILD_VERSION, t
           aggregateTimeout: 200,
           poll: 1000,
         },
-      },
+      } }),
 
       client: {
         overlay: false,
-        progress: true,
+        progress: !isCI,
       },
     },
 
     css: {
-      sourceMap: isDevelopment,
+      sourceMap: isDevelopment && !isCI,
       extract: !isTest,
       loaderOptions: {
         sass: {

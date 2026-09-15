@@ -2221,7 +2221,7 @@ describe('C311 shared components', () => {
     await flushPromises()
     await wrapper.find('tbody button').trigger('click')
     expect(wrapper.find('#category-code').attributes('readonly')).toBe('readonly')
-    await wrapper.setData({ category: { ...wrapper.vm.category, label: 'General enquiries' } })
+    await wrapper.setData({ category: { ...wrapper.vm.category, labels: { ...wrapper.vm.category.labels, EN: 'General enquiries' } } })
     await wrapper.vm.saveCategory()
     expect(provider.updateAdminCategory).toHaveBeenCalledWith('GENERAL', { code: 'GENERAL', active: true, labels: { EN: 'General enquiries' } }, { expectedVersion: 3 })
     expect(wrapper.vm.category.originalCode).toBe('')

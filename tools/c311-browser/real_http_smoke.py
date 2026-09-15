@@ -129,5 +129,8 @@ if __name__ == '__main__':
     try:
         raise SystemExit(main())
     except Exception as error:
+        ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+        (ARTIFACT_DIR / 'real-http-failure.txt').write_text(
+            f'{type(error).__name__}: {error}\n', encoding='utf-8')
         print(f'real HTTP smoke failed: {error}', file=sys.stderr)
         raise

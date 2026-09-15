@@ -41,6 +41,9 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.smoke)
 
+    def test_smoke_persists_browser_failure_reason(self) -> None:
+        self.assertIn("real-http-failure.txt", self.smoke)
+
     def test_runner_waits_for_database_and_frontend_before_browser(self) -> None:
         self.assertIn("/healthz", self.runner)
         self.assertIn('"database":"ok"', self.runner)

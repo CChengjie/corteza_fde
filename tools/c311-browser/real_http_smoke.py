@@ -90,6 +90,36 @@ def main() -> int:
         diagnostics['live_write'] = submission
         if diagnostics['errors']:
             raise AssertionError(f"browser page errors: {diagnostics['errors']}")
+
+        admin_login = page.evaluate("""async () => {
+          const response = await fetch('/api/v1/session', {
+            method: 'POST', credentials: 'include',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({login_identifier: 'city311-platform-administrator', password: 'City311-Local-Admin-1!'})
+          })
+          const body = await response.json()
+          return {status: response.status, authenticated: body.authenticated === true, capabilities: body.actor?.capabilities || []}
+        }""")
+        if admin_login['status'] != 200 or not admin_login['authenticated']:
+            raise AssertionError(f'platform administrator sign-in failed: {admin_login}')
+        page.goto(f'{FRONTEND_URL}/c311/admin', wait_until='domcontentloaded')
+        page.locator('[data-c311-main]').first.wait_for(state='visible', timeout=60000)
+        admin_heading_locator = page.get_by_role('heading', name='City 311 administration').first
+        admin_heading_locator.wait_for(state='visible', timeout=60000)
+        admin_heading = admin_heading_locator.inner_text()
+        if admin_heading != 'City 311 administration':
+            raise AssertionError(f'admin workspace did not render: {admin_heading}')
+        admin_api = [
+            item for item in diagnostics['api_responses']
+            if item['method'] == 'GET' and item['url'].endswith('/api/v1/admin/identity')
+        ]
+        if not any(item['status'] == 200 for item in admin_api):
+            raise AssertionError(f'admin workspace did not load identity configuration: {admin_api}')
+        page.reload(wait_until='domcontentloaded')
+        page.get_by_role('heading', name='City 311 administration').first.wait_for(state='visible', timeout=60000)
+        diagnostics['admin_workspace'] = {'status': 'rendered-after-login-and-refresh', 'identity_api': admin_api}
+        if diagnostics['errors']:
+            raise AssertionError(f"browser page errors: {diagnostics['errors']}")
         browser.close()
     (ARTIFACT_DIR / 'real-http-smoke.json').write_text(json.dumps(diagnostics, indent=2), encoding='utf-8')
     print(json.dumps(diagnostics, indent=2))

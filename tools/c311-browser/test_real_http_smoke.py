@@ -29,11 +29,25 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         self.assertIn("/api/v1/public/branding", self.smoke)
         self.assertIn("credentials:'include'", self.smoke)
 
+    def test_gate_clicks_real_submit_and_checks_admin_refresh(self) -> None:
+        for marker in (
+            "submit_button.click()",
+            "data-c311-submission-result",
+            "city311-platform-administrator",
+            "/c311/admin",
+            "City 311 administration",
+            "/api/v1/admin/identity",
+            "rendered-after-login-and-refresh",
+        ):
+            self.assertIn(marker, self.smoke)
+
     def test_runner_waits_for_database_and_frontend_before_browser(self) -> None:
         self.assertIn("/healthz", self.runner)
         self.assertIn('"database":"ok"', self.runner)
         self.assertIn("/config.js", self.runner)
         self.assertIn("real_http_smoke.py", self.runner)
+        self.assertIn("BENCHMARK_NOW", self.runner)
+        self.assertIn("2099-01-01T00:00:00Z", self.runner)
         self.assertIn("c311-real-http:", self.workflow)
         self.assertIn("run: tools/c311-browser/run-real-http.sh", self.workflow)
 

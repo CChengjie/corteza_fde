@@ -14,7 +14,10 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 143' INT TERM
-APP_PORT="$app_port" FRONTEND_PORT="$frontend_port" ADMIN_PORT="${C311_REAL_ADMIN_PORT:-18093}" BENCHMARK_RUN_ID="$project_name" "${compose[@]}" up --detach --build --wait --wait-timeout 180
+# The fixture clock must be ahead of the host clock so a freshly issued
+# City311 session is not reported as expired by the browser during CI.
+benchmark_now="${C311_BENCHMARK_NOW:-2099-01-01T00:00:00Z}"
+APP_PORT="$app_port" FRONTEND_PORT="$frontend_port" ADMIN_PORT="${C311_REAL_ADMIN_PORT:-18093}" BENCHMARK_NOW="$benchmark_now" BENCHMARK_RUN_ID="$project_name" "${compose[@]}" up --detach --build --wait --wait-timeout 180
 for attempt in $(seq 1 90); do
   if curl --fail --silent "http://127.0.0.1:${app_port}/healthz" | grep --quiet '"database":"ok"'; then break; fi
   if [[ "$attempt" == 90 ]]; then "${compose[@]}" ps; exit 1; fi

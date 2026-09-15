@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -305,10 +306,21 @@ func TestFederatedVerifiedEmailRequiresExplicitAuthenticatedLink(t *testing.T) {
 	require.NoError(t, err)
 	start = provider.starts[len(provider.starts)-1]
 	require.Equal(t, federatedClientPublic, start.Client)
+	pendingAudits, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{
+		EventType: "FEDERATED_ACCOUNT_LINK_PENDING", EntityID: strconv.FormatUint(localSession.User.ID, 10),
+	})
+	require.NoError(t, err)
+	require.Len(t, pendingAudits, 1)
+	require.Equal(t, "pending", pendingAudits[0].After["status"])
 	_, linked, err := identity.CompleteFederatedSignIn(ctx, federatedProviderOIDC, start.State, "code", "", cookie)
 	require.NoError(t, err)
 	require.Equal(t, localSession.User.ID, linked.User.ID)
 	require.Equal(t, before, localAccountCount(t, st))
+	linkedAudits, _, err := store.SearchCity311AuditEvents(ctx, st, composeTypes.City311AuditEventFilter{
+		EventType: "FEDERATED_ACCOUNT_LINKED", EntityID: strconv.FormatUint(localSession.User.ID, 10),
+	})
+	require.NoError(t, err)
+	require.Len(t, linkedAudits, 1)
 }
 
 func TestFederatedStaffClaimsMapRolesAndRecordScope(t *testing.T) {

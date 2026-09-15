@@ -33,10 +33,13 @@ func main() {
 			return
 		}
 		if strings.EqualFold(strings.TrimSpace(in.Address), "Unknown fixture address") {
-			write(w, 404, map[string]any{"error": "NOT_FOUND", "message": "address not found"})
+			write(w, 404, map[string]any{"error": "ADDRESS_NOT_FOUND", "message": "The address was not found.", "retryable": false})
 			return
 		}
-		write(w, 200, map[string]any{"latitude": 40.7128, "longitude": -74.0060, "formatted_address": strings.TrimSpace(in.Address)})
+		write(w, 200, map[string]any{
+			"address": strings.TrimSpace(in.Address), "latitude": 40.7128, "longitude": -74.0060,
+			"precision_digits": 4, "provider": "BENCHMARK_MAP",
+		})
 	})
 	mux.HandleFunc("POST /oauth/token", func(w http.ResponseWriter, _ *http.Request) {
 		write(w, 200, map[string]any{"access_token": "fixture-workflow-token", "token_type": "Bearer", "expires_in": 3600, "scope": "workflow.execute"})

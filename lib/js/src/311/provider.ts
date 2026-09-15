@@ -302,6 +302,7 @@ export interface C311Provider {
   getOperation (operationID: string): Promise<Operation>
 
   uploadPortalAttachment (input: PortalAttachmentUpload): Promise<PortalAttachment>
+  removePortalAttachment (attachmentToken: string): Promise<void>
   downloadAttachment (attachmentID: string): Promise<BinaryAttachment>
   createServiceRequest (input: ServiceRequestCreate, options?: C311RequestOptions): Promise<ServiceRequestResponse>
   submitPortalRequest (input: PortalServiceRequestCreate, options?: C311RequestOptions): Promise<ServiceRequestResponse>
@@ -554,6 +555,10 @@ export class C311HttpProvider implements C311Provider {
     body.append('filename', input.filename)
     body.append('media_type', input.media_type)
     return this.request({ method: 'POST', path: '/api/v1/portal/attachments', body })
+  }
+
+  removePortalAttachment (attachmentToken: string): Promise<void> {
+    return this.request({ method: 'DELETE', path: `/api/v1/portal/attachments/${encodeURIComponent(attachmentToken)}`, acceptedStatuses: [204] })
   }
 
   downloadAttachment (attachmentID: string): Promise<BinaryAttachment> {

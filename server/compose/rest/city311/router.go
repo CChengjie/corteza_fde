@@ -185,6 +185,7 @@ func MountRoutesWithServices(service *city311Service.Service, identity *city311S
 		r.With(requireIdentity).Post("/actions", h.workflowActionExecute)
 		r.Post("/portal/service-requests", h.portalSubmit)
 		r.Post("/portal/attachments", h.attachmentUpload)
+		r.Delete("/portal/attachments/{attachment_token}", h.attachmentDelete)
 		r.With(requireIdentity).Get("/attachments/{attachment_id}", h.attachmentDownload)
 		r.With(requireConstituentIdentitySession).Post("/portal/service-request-drafts", h.draftCreate)
 		r.With(requireConstituentIdentitySession).Get("/portal/service-request-drafts/{request_id}", h.draftGet)

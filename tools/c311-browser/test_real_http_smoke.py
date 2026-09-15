@@ -17,6 +17,7 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         cls.smoke = (ROOT / "tools/c311-browser/real_http_smoke.py").read_text(encoding="utf-8")
         cls.runner = (ROOT / "tools/c311-browser/run-real-http.sh").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
+        cls.compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
     def test_browser_is_forced_into_http_mode_and_rejects_mock_provider(self) -> None:
         self.assertIn("context.add_init_script(\"window.C311Mode = 'http';\")", self.smoke)
@@ -60,6 +61,11 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         self.assertIn("2099-01-01T00:00:00Z", self.runner)
         self.assertIn("c311-real-http:", self.workflow)
         self.assertIn("run: tools/c311-browser/run-real-http.sh", self.workflow)
+
+    def test_compose_default_fixture_clock_cannot_expire_new_sessions(self) -> None:
+        """The normal compose path must be usable without CI-only overrides."""
+        self.assertIn("BENCHMARK_NOW: ${BENCHMARK_NOW:-2099-01-01T00:00:00Z}", self.compose)
+        self.assertNotIn("BENCHMARK_NOW: ${BENCHMARK_NOW:-2026-02-03T15:04:05Z}", self.compose)
 
     def test_runner_uses_compose_health_gate_and_collects_failure_state(self) -> None:
         self.assertIn("--wait --wait-timeout 180", self.runner)

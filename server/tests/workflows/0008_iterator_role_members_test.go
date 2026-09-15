@@ -4,13 +4,30 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	autTypes "github.com/cortezaproject/corteza/server/automation/types"
 	"github.com/cortezaproject/corteza/server/pkg/expr"
+	"github.com/cortezaproject/corteza/server/pkg/id"
 	"github.com/cortezaproject/corteza/server/pkg/wfexec"
 	"github.com/cortezaproject/corteza/server/system/automation"
+	sysTypes "github.com/cortezaproject/corteza/server/system/types"
 	"github.com/stretchr/testify/require"
 )
+
+func loadIteratorRoleMemberScenario(ctx context.Context, t *testing.T) {
+	t.Helper()
+	req := require.New(t)
+	loadScenario(ctx, t)
+
+	// Recreate the role after importing the workflow so role membership lookup
+	// cannot observe a stale or empty role row from a previous scenario import.
+	req.NoError(defStore.TruncateRoleMembers(ctx))
+	req.NoError(defStore.TruncateRoles(ctx))
+	req.NoError(defStore.CreateRole(ctx, &sysTypes.Role{
+		ID: id.Next(), Handle: "r1", Name: "r1 name", CreatedAt: time.Now(),
+	}))
+}
 
 func Test0008_iterator_role_members(t *testing.T) {
 	wfexec.MaxIteratorBufferSize = wfexec.DefaultMaxIteratorBufferSize
@@ -27,7 +44,7 @@ func Test0008_iterator_role_members(t *testing.T) {
 	req.NoError(defStore.TruncateRoles(ctx))
 	req.NoError(defStore.TruncateUsers(ctx))
 
-	loadScenario(ctx, t)
+	loadIteratorRoleMemberScenario(ctx, t)
 	addRoleMember(ctx, req, "r1", "u1", "u2", "u3", "u4", "u5")
 
 	var (

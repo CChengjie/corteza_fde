@@ -1300,6 +1300,61 @@ describe('C311 shared components', () => {
     expect(router.push).toHaveBeenCalledWith({ name: 'c311.sign-in' })
   })
 
+  it('confirms pending account linking through the provider and stores the session', async () => {
+    const session = { authenticated: true, actor: { actor_id: 'actor-linked' } }
+    const provider = { confirmAccountLink: jest.fn().mockResolvedValue(session) }
+    const pendingFederated = { provider_label: 'OIDC' }
+    const runtime = { provider, session: { authenticated: false }, pendingFederated }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.auth.link.confirm', query: {} }, $C311: runtime },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    window.C311Mode = 'mock'
+    await wrapper.vm.confirmAccountLink()
+    window.C311Mode = undefined
+    expect(provider.confirmAccountLink).toHaveBeenCalledWith(pendingFederated)
+    expect(runtime.pendingFederated).toBe(null)
+    expect(runtime.session).toEqual(session)
+    expect(wrapper.vm.linkState).toBe('success')
+  })
+
+  it('does not restart a real account-link flow without the local session required by the API', async () => {
+    const provider = { startFederatedSignIn: jest.fn() }
+    const runtime = {
+      provider,
+      session: { authenticated: false },
+      pendingFederated: { provider_label: 'OIDC', expires_at: '2099-01-15T16:00:00.000Z' },
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.auth.link.confirm', query: {} }, $C311: runtime },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await flushPromises()
+    window.C311Mode = undefined
+    await wrapper.vm.confirmAccountLink()
+    expect(provider.startFederatedSignIn).not.toHaveBeenCalled()
+    expect(wrapper.vm.linkState).toBe('error')
+    expect(wrapper.vm.dataError.message).toContain('Sign in locally')
+  })
+
+  it('rejects an unknown provider label before starting a real account-link flow', async () => {
+    const provider = { startFederatedSignIn: jest.fn() }
+    const runtime = {
+      provider,
+      session: { authenticated: true },
+      pendingFederated: { provider_label: 'LDAP', expires_at: '2099-01-15T16:00:00.000Z' },
+    }
+    const wrapper = mount(PublicPortal, {
+      mocks: { ...mocks, $route: { name: 'c311.auth.link.confirm', query: {} }, $C311: runtime },
+      stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
+    })
+    await flushPromises()
+    window.C311Mode = undefined
+    await wrapper.vm.confirmAccountLink()
+    expect(provider.startFederatedSignIn).not.toHaveBeenCalled()
+    expect(wrapper.vm.linkState).toBe('error')
+  })
+
   it('validates registration and reset forms, binds provider errors, and keeps token out of the URL', async () => {
     const provider = {
       registerAccount: jest.fn().mockRejectedValue({ status: 422, errors: [{ field: '/email', code: 'INVALID_FORMAT', message: 'Invalid email' }] }),

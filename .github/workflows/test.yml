@@ -27,6 +27,7 @@ jobs:
   c311-real-http:
     name: "C311 live HTTP browser smoke"
     runs-on: ubuntu-22.04
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v5
@@ -36,6 +37,11 @@ jobs:
         run: |
           python3 -m pip install --require-hashes --only-binary=:all: -r tools/c311-browser/requirements.txt
           python3 -m playwright install --with-deps chromium
+      - name: Validate live HTTP harness
+        run: |
+          bash -n tools/c311-browser/run-real-http.sh
+          python3 -m py_compile tools/c311-browser/real_http_smoke.py
+          python3 -m unittest tools/c311-browser/test_real_http_smoke.py
       - name: Verify browser to Corteza HTTP connectivity
         run: tools/c311-browser/run-real-http.sh
         env:

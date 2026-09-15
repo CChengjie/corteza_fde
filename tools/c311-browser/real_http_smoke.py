@@ -9,19 +9,35 @@ ARTIFACT_DIR = Path(os.environ.get('C311_ARTIFACT_DIR', '.c311-real-http'))
 
 def main() -> int:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-    diagnostics = {'frontend_url': FRONTEND_URL, 'api_responses': [], 'errors': []}
+    diagnostics = {'frontend_url': FRONTEND_URL, 'api_responses': [], 'api_requests': [], 'errors': []}
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         context = browser.new_context()
         context.add_init_script("window.C311Mode = 'http';")
         page = context.new_page()
         page.on('pageerror', lambda error: diagnostics['errors'].append(str(error)))
+        page.on('requestfailed', lambda request: diagnostics['errors'].append(
+            f"request failed: {request.method} {request.url} ({request.failure})"
+        ) if '/api/v1/' in request.url else None)
+        def record_request(request):
+            if '/api/v1/' in request.url:
+                diagnostics['api_requests'].append({'method': request.method, 'url': request.url})
+                if request.url.startswith('http') and not request.url.startswith(FRONTEND_URL + '/'):
+                    diagnostics['errors'].append(f'cross-origin API request: {request.url}')
+        page.on('request', record_request)
         def record(response):
             if '/api/v1/' in response.url:
-                diagnostics['api_responses'].append({'method': response.request.method, 'url': response.url, 'status': response.status})
+                diagnostics['api_responses'].append({
+                    'method': response.request.method,
+                    'url': response.url,
+                    'status': response.status,
+                    'from_service_worker': response.from_service_worker,
+                })
         page.on('response', record)
         page.goto(f'{FRONTEND_URL}/c311/submit', wait_until='domcontentloaded')
         page.locator('[data-c311-main]').wait_for(state='visible', timeout=60000)
+        if page.evaluate('window.C311Mode') != 'http':
+            raise AssertionError('C311 browser mode was changed from http')
         if page.evaluate("Boolean(window.__C311MockProvider)"):
             raise AssertionError('frontend instantiated the Mock C311 provider')
         branding = page.evaluate("""async () => { const r = await fetch('/api/v1/public/branding', {credentials:'include'}); return {status:r.status, contentType:r.headers.get('content-type')} }""")
@@ -29,6 +45,44 @@ def main() -> int:
             raise AssertionError(f'live branding endpoint failed: {branding}')
         if not any(item['url'].endswith('/api/v1/public/branding') and item['status'] < 400 for item in diagnostics['api_responses']):
             raise AssertionError('no successful browser API response was observed')
+        if any(item['from_service_worker'] for item in diagnostics['api_responses']):
+            raise AssertionError('browser API response was served by a service worker instead of the backend')
+        session = page.evaluate("""async () => {
+          const signIn = await fetch('/api/v1/session', {
+            method: 'POST', credentials: 'include',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({login_identifier: 'city311-constituent', password: 'City311-Local-Constituent-1!'})
+          })
+          const body = await signIn.json()
+          return {status: signIn.status, authenticated: body.authenticated === true}
+        }""")
+        if session['status'] != 200 or not session['authenticated']:
+            raise AssertionError(f'live session sign-in failed: {session}')
+        current = page.evaluate("""async () => {
+          const response = await fetch('/api/v1/session', {credentials: 'include'})
+          const body = await response.json()
+          return {status: response.status, authenticated: body.authenticated === true}
+        }""")
+        if current != {'status': 200, 'authenticated': True}:
+            raise AssertionError(f'identity cookie was not retained by the browser: {current}')
+        submission = page.evaluate("""async () => {
+          const response = await fetch('/api/v1/portal/service-requests', {
+            method: 'POST', credentials: 'include',
+            headers: {'Content-Type': 'application/json', 'Idempotency-Key': 'real-http-smoke-request'},
+            body: JSON.stringify({
+              summary: 'Live HTTP smoke request',
+              description: 'Created by the real browser provider gate.',
+              service_type: 'POTHOLE',
+              requester: {display_name: 'Live HTTP Smoke', email: 'smoke@example.invalid'},
+              location: {address: '100 Example Street, Buffalo, NY 14201', latitude: 42.88645, longitude: -78.87837}
+            })
+          })
+          const body = await response.json()
+          return {status: response.status, request_id: body.request_id || body.request?.request_id || null}
+        }""")
+        if submission['status'] != 201 or not submission['request_id']:
+            raise AssertionError(f'live service request submission failed: {submission}')
+        diagnostics['live_write'] = submission
         if diagnostics['errors']:
             raise AssertionError(f"browser page errors: {diagnostics['errors']}")
         browser.close()

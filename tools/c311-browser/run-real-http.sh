@@ -9,10 +9,12 @@ artifact_dir="${C311_ARTIFACT_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/c311-real-http.X
 mkdir -p "$artifact_dir"
 cleanup() {
   "${compose[@]}" logs --no-color >"$artifact_dir/compose.log" 2>&1 || true
+  "${compose[@]}" ps --all >"$artifact_dir/compose-ps.txt" 2>&1 || true
   "${compose[@]}" down --volumes --remove-orphans || true
 }
-trap cleanup EXIT INT TERM
-APP_PORT="$app_port" FRONTEND_PORT="$frontend_port" ADMIN_PORT="${C311_REAL_ADMIN_PORT:-18093}" BENCHMARK_RUN_ID="$project_name" "${compose[@]}" up --detach --build
+trap cleanup EXIT
+trap 'exit 143' INT TERM
+APP_PORT="$app_port" FRONTEND_PORT="$frontend_port" ADMIN_PORT="${C311_REAL_ADMIN_PORT:-18093}" BENCHMARK_RUN_ID="$project_name" "${compose[@]}" up --detach --build --wait --wait-timeout 180
 for attempt in $(seq 1 90); do
   if curl --fail --silent "http://127.0.0.1:${app_port}/healthz" | grep --quiet '"database":"ok"'; then break; fi
   if [[ "$attempt" == 90 ]]; then "${compose[@]}" ps; exit 1; fi

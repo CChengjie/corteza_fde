@@ -123,6 +123,7 @@ func (svc *Service) StartAuditExport(ctx context.Context, actor contract.Actor, 
 		if err = store.UpdateCity311Operation(ctx, tx, operation); err != nil {
 			return err
 		}
+		*pending = *toOperation(operation)
 		return store.CreateCity311AuditEvent(ctx, tx, &composeTypes.City311AuditEvent{
 			ID: svc.nextID(), EntityType: "audit_export", EntityID: publicOperationID(operation.ID), EventType: "AUDIT_EXPORTED",
 			ActorType: contract.AuditActorStaff, ActorID: actor.ID, SourceChannel: contract.SourceChannelStaffInPerson,

@@ -81,6 +81,7 @@ func (svc *Service) StartContactEmailExport(ctx context.Context, actor contract.
 		if updateErr := store.UpdateCity311Operation(ctx, tx, operation); updateErr != nil {
 			return updateErr
 		}
+		*pending = *toOperation(operation)
 		return store.CreateCity311AuditEvent(ctx, tx, &composeTypes.City311AuditEvent{
 			ID: svc.nextID(), EntityType: "contact_email_export", EntityID: publicOperationID(operation.ID), EventType: contactEmailExportAuditEvent,
 			ActorType: contract.AuditActorStaff, ActorID: actor.ID, SourceChannel: contract.SourceChannelStaffInPerson,

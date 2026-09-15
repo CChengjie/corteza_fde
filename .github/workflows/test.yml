@@ -271,7 +271,7 @@ jobs:
     if: failure()
     name: "Send matrix testing notification"
     runs-on: ubuntu-22.04
-    needs: [ server-test, city311-runtime, client-web-test, lib-test ]
+    needs: [ c311-fe01, server-test, city311-runtime, client-web-test, lib-test ]
     steps:
       - name: "Send message via Matrix on failed tests"
         if: ${{ !env.ACT && failure() }}

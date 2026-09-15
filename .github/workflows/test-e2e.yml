@@ -68,8 +68,12 @@ jobs:
           RELEASE_CRUST_SFTP_KEY: ${{ secrets.RELEASE_CRUST_SFTP_KEY }}
           RELEASE_CRUST_KEY_FILE: ${{ env.TMP_KEY }}
         run: |
-          echo ${RELEASE_CRUST_SFTP_KEY} | base64 -d > ${RELEASE_CRUST_KEY_FILE} && \
-          echo ${RELEASE_CRUST_SFTP_KEY} > /tmp/foo
+          if [[ -z "${RELEASE_CRUST_SFTP_KEY:-}" ]]; then
+            echo "RELEASE_CRUST_SFTP_KEY is not configured; skipping optional report key setup."
+            exit 0
+          fi
+          printf '%s' "$RELEASE_CRUST_SFTP_KEY" | base64 --decode > "$RELEASE_CRUST_KEY_FILE"
+          chmod 600 "$RELEASE_CRUST_KEY_FILE"
 
       - uses: actions/setup-node@v3
         with: { node-version: '${{ env.NODE_VERSION }}' }

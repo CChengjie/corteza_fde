@@ -148,7 +148,7 @@ export default {
     async downloadAttachment (attachment) { const value = await this.provider.downloadAttachment(attachment.attachment_id); const blob = new Blob([value.body], { type: value.content_type || attachment.media_type }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = attachment.filename; link.click(); URL.revokeObjectURL(link.href) },
     closeSelected () {
       const input = { action: 'CLOSE', changes: { status: 'CLOSED' }, request_items: [{ request_id: this.detail.request.request_id, expected_version: this.detail.request.version }] }
-      return this.run(() => this.provider.bulkStaffRequests(input), 'Request closed.')
+      return this.run(() => this.provider.bulkStaffRequests(input, { idempotencyKey: `close-${this.detail.request.request_id}-${this.detail.request.version}` }), 'Request closed.')
     },
   },
 }

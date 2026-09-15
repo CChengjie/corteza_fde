@@ -19,6 +19,7 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         cls.workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
         cls.compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         cls.env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+        cls.sonar = (ROOT / "sonar-project.properties").read_text(encoding="utf-8")
 
     def test_browser_is_forced_into_http_mode_and_rejects_mock_provider(self) -> None:
         self.assertIn("context.add_init_script(\"window.C311Mode = 'http';\")", self.smoke)
@@ -80,6 +81,9 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         ):
             self.assertIn(value, self.env_example)
         self.assertNotIn("example.invalid", self.env_example)
+
+    def test_local_fixture_entrypoint_is_covered_by_live_http_not_go_instrumentation(self) -> None:
+        self.assertIn("server/cmd/c311-integration-fixture/**", self.sonar)
 
     def test_runner_uses_compose_health_gate_and_collects_failure_state(self) -> None:
         self.assertIn("--wait --wait-timeout 180", self.runner)

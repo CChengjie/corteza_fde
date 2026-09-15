@@ -1329,6 +1329,7 @@ describe('C311 shared components', () => {
       mocks: { ...mocks, $route: { name: 'c311.auth.link.confirm', query: {} }, $C311: runtime },
       stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
     })
+    await flushPromises()
     window.C311Mode = undefined
     await wrapper.vm.confirmAccountLink()
     expect(provider.startFederatedSignIn).not.toHaveBeenCalled()
@@ -1347,6 +1348,7 @@ describe('C311 shared components', () => {
       mocks: { ...mocks, $route: { name: 'c311.auth.link.confirm', query: {} }, $C311: runtime },
       stubs: { 'c311-app-shell': AppShellStub, 'c311-error-summary': ChildStub, 'c311-help-drawer': ChildStub, 'c311-language-selector': ChildStub, 'c311-main-nav': ChildStub, 'c311-data-state': DataStateStub, 'c311-responsive-data': ChildStub, 'router-link': RouterLinkStub },
     })
+    await flushPromises()
     window.C311Mode = undefined
     await wrapper.vm.confirmAccountLink()
     expect(provider.startFederatedSignIn).not.toHaveBeenCalled()

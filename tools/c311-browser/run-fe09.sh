@@ -16,5 +16,19 @@ cleanup () {
   cleanup_packages
 }
 trap cleanup EXIT INT TERM
-for _ in $(seq 1 180); do curl --fail --silent "http://127.0.0.1:$admin_port" >/dev/null && break; sleep 1; done
+admin_ready=false
+for _ in $(seq 1 180); do
+  if curl --fail --silent "http://127.0.0.1:$admin_port" >/dev/null; then
+    admin_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$admin_ready" != true ]]; then
+  echo "Admin dev server did not become ready on port $admin_port within 180 seconds." >&2
+  if [[ -f "$artifact_dir/admin-fe09.log" ]]; then
+    tail -n 80 "$artifact_dir/admin-fe09.log" >&2
+  fi
+  exit 1
+fi
 C311_ADMIN_URL="http://127.0.0.1:$admin_port" C311_ARTIFACT_DIR="$artifact_dir" PYTHONPATH="$repo_root/tools/c311-browser" python3 "$repo_root/tools/c311-browser/fe09_matrix.py"

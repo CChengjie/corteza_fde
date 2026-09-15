@@ -67,7 +67,7 @@ configure_acceptance_environment() {
   export SESSION_SECRET="runtime-acceptance-session-secret"
   export CITY311_SEED_CONSTITUENT_PASSWORD="RuntimeSeedConstituent1!"
   export CITY311_SEED_CONSTITUENT_TWO_PASSWORD="RuntimeSeedConstituent2!"
-  export MAP_BASE_URL="https://mapping.example.invalid"
+  export MAP_BASE_URL="http://integration-fixture:8080"
   export MAP_API_TOKEN="runtime-acceptance-mapping-token"
   export CIVICWORKS_FIXTURE_PORT="${civicworks_port}"
   export CIVICWORKS_BASE_URL="http://civicworks:8080"
@@ -76,23 +76,23 @@ configure_acceptance_environment() {
   export CIVICWORKS_CONTROL_TOKEN="runtime-acceptance-civicworks-control-token"
   export CIVICWORKS_WEBHOOK_SECRET="runtime-acceptance-civicworks-webhook-secret"
   export BENCHMARK_RUN_ID="runtime-acceptance"
-  export WORKFLOW_OAUTH_TOKEN_URL="https://workflow.example.invalid/oauth/token"
-  export WORKFLOW_API_BASE_URL="https://workflow.example.invalid"
+  export WORKFLOW_OAUTH_TOKEN_URL="http://integration-fixture:8080/oauth/token"
+  export WORKFLOW_API_BASE_URL="http://integration-fixture:8080"
   export WORKFLOW_CLIENT_ID="runtime-acceptance"
   export WORKFLOW_CLIENT_SECRET="runtime-acceptance-workflow-secret"
-  export OIDC_ISSUER_URL="https://identity.example.invalid"
+  export OIDC_ISSUER_URL="http://integration-fixture:8080"
   export OIDC_STAFF_CLIENT_ID="runtime-acceptance-staff"
   export OIDC_PUBLIC_CLIENT_ID="runtime-acceptance-public"
   export OIDC_CLIENT_SECRET="runtime-acceptance-oidc-secret"
-  export SAML_METADATA_URL="https://identity.example.invalid/saml/metadata"
+  export SAML_METADATA_URL="http://integration-fixture:8080/saml/metadata"
   export SAML_SP_ENTITY_ID="${base_url}/saml"
   export CRM_API_CLIENT_ID="runtime-acceptance-api-client"
   export CRM_API_CLIENT_SECRET="runtime-acceptance-api-secret"
-  export MAIL_SMTP_HOST="mail.example.invalid"
+  export MAIL_SMTP_HOST="integration-fixture"
   export MAIL_SMTP_PORT="587"
   export MAIL_SMTP_USERNAME="runtime-acceptance"
   export MAIL_SMTP_PASSWORD="${project_name}-${BENCHMARK_SEED}"
-  export MAIL_API_BASE_URL="https://mail.example.invalid"
+  export MAIL_API_BASE_URL="http://integration-fixture:8080"
   export MAIL_API_TOKEN="runtime-acceptance-mail-api-token"
   export MAIL_FROM="noreply@city.example"
 }
@@ -120,6 +120,12 @@ static_checks() {
     .services.app.environment.MAIL_API_TOKEN != "" and
     .services.app.environment.CIVICWORKS_BASE_URL == "http://civicworks:8080" and
     .services.app.environment.CIVICWORKS_CALLBACK_BASE_URL == "http://app:80" and
+    .services.app.environment.MAP_BASE_URL == "http://integration-fixture:8080" and
+    .services.app.environment.WORKFLOW_OAUTH_TOKEN_URL == "http://integration-fixture:8080/oauth/token" and
+    .services.app.environment.WORKFLOW_API_BASE_URL == "http://integration-fixture:8080" and
+    .services.app.environment.OIDC_ISSUER_URL == "http://integration-fixture:8080" and
+    .services.app.environment.SAML_METADATA_URL == "http://integration-fixture:8080/saml/metadata" and
+    .services.app.environment.MAIL_API_BASE_URL == "http://integration-fixture:8080" and
     .services.app.environment.CIVICWORKS_CONTROL_TOKEN == null and
     .services.civicworks.environment.CIVICWORKS_API_TOKEN == .services.app.environment.CIVICWORKS_API_TOKEN and
     .services.civicworks.environment.CIVICWORKS_WEBHOOK_SECRET == .services.app.environment.CIVICWORKS_WEBHOOK_SECRET and
@@ -132,6 +138,8 @@ static_checks() {
     .services.postgres.volumes[0].source == "postgres_data" and
     .services.app.depends_on.postgres.condition == "service_healthy" and
     .services.app.depends_on.civicworks.condition == "service_healthy" and
+    .services.app.depends_on.integration-fixture.condition == "service_healthy" and
+    .services.integration-fixture.entrypoint[0] == "/usr/local/bin/c311-integration-fixture" and
     .services.frontend.build.args.WEBAPP == "compose" and
     .services.admin.build.args.WEBAPP == "admin" and
     .services.admin.depends_on.app.condition == "service_healthy"

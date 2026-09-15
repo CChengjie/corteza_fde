@@ -183,11 +183,13 @@ jobs:
         run: |
           yarn install
           yarn build
+          yarn link
 
       - name: Build vue
         working-directory: corteza/lib/vue
         run: |
           yarn install
+          yarn link @cortezaproject/corteza-js
           yarn build
 
       - name: Run ${{ matrix.client.name }}
@@ -246,6 +248,11 @@ jobs:
           deadline=$((SECONDS + 1800))
           until html=$(curl --silent --fail "http://127.0.0.1:${{ matrix.client.port }}/") && \
                 printf '%s' "$html" | grep -Eq '<script[^>]+src="[^"]*(app|chunk-vendors|runtime)[^"]*\.js'; do
+            if grep -Eq 'Failed to compile|webpack compiled with [1-9][0-9]* errors|ERROR in ' "corteza/.e2e-${{ matrix.client.name }}.log"; then
+              echo "Vue dev server reported a webpack compile error"
+              tail -n 240 "corteza/.e2e-${{ matrix.client.name }}.log" || true
+              exit 1
+            fi
             if [ "$SECONDS" -ge "$deadline" ]; then
               echo "Timed out waiting for Vue dev server compilation"
               echo "Client container state:"

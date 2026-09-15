@@ -29,6 +29,13 @@ class RealHttpSmokeContractTests(unittest.TestCase):
         self.assertIn("/api/v1/public/branding", self.smoke)
         self.assertIn("credentials:'include'", self.smoke)
 
+    def test_gate_covers_cookie_refresh_authorization_and_persistence(self) -> None:
+        self.assertIn("identity cookie was lost after browser refresh", self.smoke)
+        self.assertIn("/api/v1/staff/service-requests", self.smoke)
+        self.assertIn("constituent unexpectedly accessed staff queue", self.smoke)
+        self.assertIn("created request was not persisted in portal list", self.smoke)
+        self.assertIn("Live HTTP click request", self.smoke)
+
     def test_gate_clicks_real_submit_and_checks_admin_refresh(self) -> None:
         for marker in (
             "submit_button.click()",

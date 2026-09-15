@@ -18,7 +18,7 @@ def main() -> int:
         page.on('pageerror', lambda error: diagnostics['errors'].append(str(error)))
         page.on('requestfailed', lambda request: diagnostics['errors'].append(
             f"request failed: {request.method} {request.url} ({request.failure})"
-        ) if '/api/v1/' in request.url else None)
+        ) if '/api/v1/' in request.url and not request.url.endswith(('/api/v1/staff/service-requests', '/api/v1/admin/identity')) else None)
         def record_request(request):
             if '/api/v1/' in request.url:
                 diagnostics['api_requests'].append({'method': request.method, 'url': request.url})
@@ -67,6 +67,21 @@ def main() -> int:
             raise AssertionError(f'identity cookie was not retained by the browser: {current}')
         page.reload(wait_until='domcontentloaded')
         page.locator('[data-c311-main]').first.wait_for(state='visible', timeout=60000)
+        refreshed = page.evaluate("""async () => {
+          const response = await fetch('/api/v1/session', {credentials: 'include'})
+          const body = await response.json()
+          return {status: response.status, authenticated: body.authenticated === true}
+        }""")
+        if refreshed != {'status': 200, 'authenticated': True}:
+            raise AssertionError(f'identity cookie was lost after browser refresh: {refreshed}')
+        forbidden = page.evaluate("""async () => {
+          const response = await fetch('/api/v1/staff/service-requests', {credentials: 'include'})
+          return {status: response.status}
+        }""")
+        if forbidden['status'] != 403:
+            raise AssertionError(f'constituent unexpectedly accessed staff queue: {forbidden}')
+        page.reload(wait_until='domcontentloaded')
+        page.locator('[data-c311-main]').first.wait_for(state='visible', timeout=60000)
         page.locator('#c311-summary').fill('Live HTTP click request')
         page.locator('#c311-description').fill('Created by clicking the real browser form.')
         page.locator('#c311-requester-name').fill('Live HTTP Smoke')
@@ -80,14 +95,40 @@ def main() -> int:
         result_text = result.inner_text().strip()
         if not result_text:
             raise AssertionError('real browser submit returned an empty result')
+        request_number = next((line.split(':', 1)[1].strip() for line in result_text.splitlines() if line.startswith('Request number:')), '')
+        if not request_number:
+            raise AssertionError(f'real browser submit did not render a request number: {result_text}')
         submission_responses = [
             item for item in diagnostics['api_responses']
             if item['method'] == 'POST' and item['url'].endswith('/api/v1/portal/service-requests')
         ]
         if not any(item['status'] == 201 for item in submission_responses):
             raise AssertionError(f'click submit did not produce HTTP 201: {submission_responses}')
-        submission = {'status': 201, 'result_text': result_text}
+        submission = {'status': 201, 'request_number': request_number, 'result_text': result_text}
         diagnostics['live_write'] = submission
+        persisted = page.evaluate("""async () => {
+          const response = await fetch('/api/v1/portal/service-requests', {credentials: 'include'})
+          const body = await response.json()
+          const rows = body.items || body.results || []
+          return {
+            status: response.status,
+            found: rows.some(item => (item.summary || item.title) === 'Live HTTP click request'),
+          }
+        }""")
+        if persisted != {'status': 200, 'found': True}:
+            raise AssertionError(f'created request was not persisted in portal list: {persisted}')
+        diagnostics['persistence'] = persisted
+        constituent_admin = page.evaluate("""async () => {
+          const response = await fetch('/api/v1/admin/identity', {credentials: 'include'})
+          return {status: response.status}
+        }""")
+        if constituent_admin['status'] not in (401, 403):
+            raise AssertionError(f'constituent unexpectedly reached admin API: {constituent_admin}')
+        diagnostics['authorization'] = {'constituent_admin_identity_status': constituent_admin['status']}
+        page.goto(f'{FRONTEND_URL}/c311/requests', wait_until='domcontentloaded')
+        page.get_by_text(request_number, exact=True).first.wait_for(state='visible', timeout=60000)
+        page.reload(wait_until='domcontentloaded')
+        page.get_by_text(request_number, exact=True).first.wait_for(state='visible', timeout=60000)
         if diagnostics['errors']:
             raise AssertionError(f"browser page errors: {diagnostics['errors']}")
 

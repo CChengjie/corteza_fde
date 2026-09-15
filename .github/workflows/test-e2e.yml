@@ -95,7 +95,7 @@ jobs:
           ref: 2024.9.x
           path: corteza-e2e-cypress
 
-      - name: Patch E2E login bootstrap
+      - name: Patch E2E same-origin auth bootstrap
         working-directory: corteza-e2e-cypress
         run: |
           node <<'NODE'
@@ -138,6 +138,15 @@ jobs:
             cy.get('.nav-sidebar', { timeout: 60000 }).should('be.visible')
           })
           `)
+
+          const avatarFile = 'cypress/e2e/basic-functionalities/admin/topbar/Avatar.cy.js'
+          const avatarSource = fs.readFileSync(avatarFile, 'utf8')
+          const backendLogoutAssertion = "cy.url().should('include', baseURL + '/auth/logout')"
+          if (!avatarSource.includes(backendLogoutAssertion)) throw new Error('logout URL assertion marker not found')
+          fs.writeFileSync(avatarFile, avatarSource.replace(
+            backendLogoutAssertion,
+            "cy.url().should('include', adminURL + '/auth/logout')",
+          ))
           NODE
 
       - name: Cache lib dependencies

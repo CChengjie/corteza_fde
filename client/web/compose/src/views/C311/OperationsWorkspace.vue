@@ -1,7 +1,7 @@
 <template>
   <c311-app-shell title="City 311 operations" main-id="c311-operations-main">
     <template #nav><c311-main-nav :items="navItems" aria-label="Operations navigation" /></template>
-    <main>
+    <div>
       <h1 class="h3 mb-3">Operations</h1>
       <c311-error-summary :errors="formErrors" title="Review this operation" />
       <div v-if="message" class="alert alert-success" role="status">{{ message }}</div>
@@ -14,7 +14,7 @@
 
       <section class="mb-4" aria-labelledby="mail-heading"><h2 id="mail-heading" class="h4">Rich email</h2><form @submit.prevent="sendMail"><div class="form-row"><div class="form-group col-md-5"><label for="mail-recipient">Recipient</label><input id="mail-recipient" v-model.trim="mail.to" class="form-control" type="email" required></div><div class="form-group col-md-7"><label for="mail-subject">Subject</label><input id="mail-subject" v-model.trim="mail.subject" class="form-control" required></div></div><label for="mail-html">HTML body</label><textarea id="mail-html" v-model="mail.html" class="form-control" rows="6" /><button class="btn btn-outline-primary mt-2" type="button" :disabled="busy" @click="previewMail">Preview</button><button class="btn btn-primary mt-2 ml-2" type="submit" :disabled="busy">Send email</button></form></section>
       <pre v-if="result" class="border p-3 bg-light" aria-live="polite">{{ result }}</pre>
-    </main>
+    </div>
   </c311-app-shell>
 </template>
 

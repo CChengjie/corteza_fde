@@ -11,6 +11,12 @@
           <h1 id="c311-queue-heading" class="h3 mb-0">{{ t('Request queue') }}</h1>
           <router-link class="btn btn-primary" to="/c311/staff/submit">{{ t('Create request') }}</router-link>
         </div>
+        <form class="form-row mb-3" @submit.prevent="loadQueue">
+          <div class="col-md-2"><label for="c311-filter-status">Status</label><select id="c311-filter-status" v-model="filters.status" class="form-control"><option value="">All</option><option v-for="status in statuses" :key="status" :value="status">{{ status }}</option></select></div>
+          <div class="col-md-3"><label for="c311-filter-service">Service type</label><input id="c311-filter-service" v-model.trim="filters.service_type" class="form-control"></div>
+          <div class="col-md-3"><label for="c311-filter-department">Department</label><input id="c311-filter-department" v-model.trim="filters.department" class="form-control"></div>
+          <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-primary" type="submit" :disabled="busy">Apply filters</button></div>
+        </form>
         <p v-if="!items.length" class="text-muted" role="status">{{ t('No matching requests.') }}</p>
         <div v-else class="table-responsive">
           <table class="table table-hover" data-c311-staff-queue>
@@ -21,8 +27,10 @@
             </tr></tbody>
           </table>
         </div>
+        <button v-if="nextPageToken" class="btn btn-outline-secondary mt-2" type="button" :disabled="busy" @click="loadQueue(true)">Load more</button>
       </section>
 
+      <c311-error-summary v-if="formErrors.length && !detail" :errors="formErrors" title="Could not open request" />
       <section v-if="detail" class="mt-4" aria-labelledby="c311-request-heading">
         <h2 id="c311-request-heading" class="h4">{{ detail.request.request_number }} {{ detail.request.summary }}</h2>
         <p><strong>Status:</strong> {{ detail.request.status }} <strong class="ml-3">Department:</strong> {{ detail.request.owning_department }}</p>
@@ -84,7 +92,8 @@ export default {
   name: 'C311StaffWorkspace',
   components: { C311AppShell, C311DataState, C311ErrorSummary, C311MainNav },
   data: () => ({
-    state: 'loading', error: null, items: [], detail: null, busy: false, message: '', formErrors: [], statuses,
+    state: 'loading', error: null, items: [], nextPageToken: null, detail: null, busy: false, message: '', formErrors: [], statuses,
+    filters: { status: '', service_type: '', department: '' },
     transitionForm: { to_status: 'TRIAGED', reason: '' }, assignmentForm: { assignee_id: '', reason: '' },
     noteForm: { body: '', portal_visible: false }, reminderForm: { title: '', due_at: '', recipient_staff_id: '', timezone: 'America/New_York', channel: 'IN_APP' }, reminderSnoozeAt: '', collaboratorForm: { staff_id: '', reason: '' }, relationshipTypes: ['AFFECTED_RESIDENT', 'PROPERTY_OWNER', 'REPORTER', 'ORGANISATION_CONTACT'], relationshipForm: { constituent_id: '', relationship_type: 'AFFECTED_RESIDENT', portal_visible: true, notify_status: true }, originForm: { origin_class: 'EXTERNAL', reason: '' }, duplicateForm: { duplicate_group_id: '', reason: '' },
   }),
@@ -97,9 +106,15 @@ export default {
   methods: {
     t (value) { return value },
     setError (error) { this.error = error; this.formErrors = [{ field: 'form', code: error?.code || error?.error || 'OPERATION_FAILED', message: error?.message || 'The operation could not be completed.' }] },
-    async loadQueue () {
+    async loadQueue (append = false) {
       this.state = 'loading'; this.error = null
-      try { const page = await this.provider.listStaffRequests({ page_size: 100 }); this.items = page.items || []; this.state = 'populated' } catch (error) { this.error = error; this.state = stateForError?.(error) || 'terminal-error' }
+      try {
+        const query = { page_size: 100, filters: Object.fromEntries(Object.entries(this.filters).filter(([, value]) => value)), ...(append && this.nextPageToken ? { page_token: this.nextPageToken } : {}) }
+        const page = await this.provider.listStaffRequests(query)
+        this.items = append ? this.items.concat(page.items || []) : (page.items || [])
+        this.nextPageToken = page.next_page_token || null
+        this.state = 'populated'
+      } catch (error) { this.error = error; this.state = stateForError?.(error) || 'terminal-error' }
     },
     async selectRequest (item) {
       this.busy = true; this.message = ''; this.formErrors = []

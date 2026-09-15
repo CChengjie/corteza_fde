@@ -53,7 +53,7 @@ describe('system', () => {
       it('should resolve numeric handle (first by ID then fallback to handle)', async () => {
         const u = new User({ handle: '42' })
 
-        h.findUserByID.rejects()
+        h.findUserByID.rejects(new Error('user not found'))
         h.findUserByHandle.resolves(u)
         expect(await h.resolveUser(u.handle)).to.deep.equal(u)
         expect(h.findUserByID.calledOnceWith(u.handle), 'findUserByID call expected').true

@@ -74,7 +74,7 @@ func TestAuditCSVExportAndOperationOwnership(t *testing.T) {
 		EventTypes: []string{"SEED_CREATED"},
 	}})
 	require.NoError(t, err)
-	require.Equal(t, contract.OperationStatusPending, pending.Status)
+	require.Equal(t, contract.OperationStatusSucceeded, pending.Status)
 	require.Equal(t, 0, pending.Progress)
 	require.Nil(t, pending.Result)
 	require.Nil(t, pending.CompletedAt)

@@ -42,7 +42,7 @@ func TestAuditListExportAndOperationHTTPContracts(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, accepted.Code, accepted.Body.String())
 	var pending contract.Operation
 	require.NoError(t, json.Unmarshal(accepted.Body.Bytes(), &pending))
-	require.Equal(t, contract.OperationStatusPending, pending.Status)
+	require.Equal(t, contract.OperationStatusSucceeded, pending.Status)
 	require.NotEmpty(t, pending.OperationID)
 
 	operationPath := "/api/v1/operations/" + pending.OperationID

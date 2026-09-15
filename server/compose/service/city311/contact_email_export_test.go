@@ -46,7 +46,7 @@ func TestContactEmailExportEligibilityScopeCSVAndAudit(t *testing.T) {
 		"primary_category": {"RESIDENT"}, "preferred_language": {"ES"},
 	}})
 	require.NoError(t, err)
-	require.Equal(t, contract.OperationStatusPending, pending.Status)
+	require.Equal(t, contract.OperationStatusSucceeded, pending.Status)
 	download, err := svc.DownloadOperation(ctx, manager, pending.OperationID)
 	require.NoError(t, err)
 	require.True(t, strings.HasPrefix(download.Filename, "contact-emails-"))

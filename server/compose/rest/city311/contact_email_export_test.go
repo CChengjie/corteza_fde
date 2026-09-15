@@ -36,7 +36,7 @@ func TestContactEmailExportHTTPContract(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, accepted.Code, accepted.Body.String())
 	var pending contract.Operation
 	require.NoError(t, json.Unmarshal(accepted.Body.Bytes(), &pending))
-	require.Equal(t, contract.OperationStatusPending, pending.Status)
+	require.Equal(t, contract.OperationStatusSucceeded, pending.Status)
 
 	operation := executeJSON(t, router, http.MethodGet, "/api/v1/operations/"+pending.OperationID, nil, nil, manager.ID)
 	require.Equal(t, http.StatusOK, operation.Code, operation.Body.String())

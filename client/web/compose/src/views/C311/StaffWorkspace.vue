@@ -87,6 +87,14 @@ import { components, c311 } from '@cortezaproject/corteza-vue'
 const { C311AppShell, C311DataState, C311ErrorSummary, C311MainNav } = components
 const stateForError = c311?.c311StateForError
 const statuses = ['TRIAGED', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'REOPENED']
+const parseBenchmarkDateTime = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value || '')
+  if (!match) return new Date('invalid')
+  const guess = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]))
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(guess)).reduce((out, part) => { out[part.type] = part.value; return out }, {})
+  const displayed = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute))
+  return new Date(guess - (displayed - guess))
+}
 
 export default {
   name: 'C311StaffWorkspace',
@@ -130,7 +138,7 @@ export default {
     reassign () { return this.run(() => this.provider.reassignStaffRequest(this.detail.request.request_id, this.assignmentForm, { expectedVersion: this.detail.request.version }), 'Request reassigned.') },
     addNote () { return this.run(() => this.provider.createStaffNote(this.detail.request.request_id, this.noteForm), 'Note added.') },
     createReminder () {
-      const dueAt = new Date(this.reminderForm.due_at)
+      const dueAt = parseBenchmarkDateTime(this.reminderForm.due_at)
       if (!this.reminderForm.due_at || Number.isNaN(dueAt.getTime())) {
         this.setError({ code: 'INVALID_VALUE', message: 'Choose a valid reminder due date and time.' })
         return
@@ -144,7 +152,7 @@ export default {
     overrideOrigin () { return this.run(() => this.provider.overrideStaffOrigin(this.detail.request.request_id, this.originForm, { expectedVersion: this.detail.request.version }), 'Origin classification updated.') },
     setDuplicateGroup () { return this.run(() => this.provider.confirmStaffDuplicateGroup(this.detail.request.request_id, this.duplicateForm, { expectedVersion: this.detail.request.version }), 'Same-issue group confirmed.') },
     removeDuplicateGroup () { return this.run(() => this.provider.removeStaffDuplicateGroup(this.detail.request.request_id, { reason: this.duplicateForm.reason || 'Removed from group' }, { expectedVersion: this.detail.request.version }), 'Same-issue group removed.') },
-    reminderAction (reminder, action) { const dueAt = new Date(this.reminderSnoozeAt); if (action === 'SNOOZE' && !this.reminderSnoozeAt) { this.setError({ code: 'REQUIRED', message: 'Choose a snooze time before snoozing a reminder.' }); return } if (action === 'SNOOZE' && Number.isNaN(dueAt.getTime())) { this.setError({ code: 'INVALID_VALUE', message: 'Choose a valid snooze date and time.' }); return } const input = action === 'SNOOZE' ? { due_at: dueAt.toISOString() } : {}; return this.run(() => this.provider.actionStaffReminder(reminder.reminder_id, action, input), `Reminder ${action.toLowerCase()}d.`) },
+    reminderAction (reminder, action) { const dueAt = parseBenchmarkDateTime(this.reminderSnoozeAt); if (action === 'SNOOZE' && !this.reminderSnoozeAt) { this.setError({ code: 'REQUIRED', message: 'Choose a snooze time before snoozing a reminder.' }); return } if (action === 'SNOOZE' && Number.isNaN(dueAt.getTime())) { this.setError({ code: 'INVALID_VALUE', message: 'Choose a valid snooze date and time.' }); return } const input = action === 'SNOOZE' ? { due_at: dueAt.toISOString() } : {}; return this.run(() => this.provider.actionStaffReminder(reminder.reminder_id, action, input), `Reminder ${action.toLowerCase()}d.`) },
     async downloadAttachment (attachment) { this.formErrors = []; try { const value = await this.provider.downloadAttachment(attachment.attachment_id); const blob = new Blob([value.body], { type: value.content_type || attachment.media_type }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = attachment.filename; link.click(); URL.revokeObjectURL(link.href) } catch (error) { this.setError(error) } },
     closeSelected () {
       const input = { action: 'CLOSE', changes: { status: 'CLOSED' }, request_items: [{ request_id: this.detail.request.request_id, expected_version: this.detail.request.version }] }

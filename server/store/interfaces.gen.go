@@ -1839,6 +1839,11 @@ func SearchCity311AuditEvents(ctx context.Context, s City311AuditEvents, f compo
 //
 // This function is auto-generated
 func CreateCity311AuditEvent(ctx context.Context, s City311AuditEvents, rr ...*composeType.City311AuditEvent) error {
+	for _, event := range rr {
+		if event != nil && event.RetentionUntil.IsZero() {
+			event.RetentionUntil = composeType.City311RetentionUntil(event.CreatedAt)
+		}
+	}
 	return s.CreateCity311AuditEvent(ctx, rr...)
 }
 

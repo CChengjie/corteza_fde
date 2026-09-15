@@ -75,9 +75,9 @@ func TestAuditCSVExportAndOperationOwnership(t *testing.T) {
 	}})
 	require.NoError(t, err)
 	require.Equal(t, contract.OperationStatusSucceeded, pending.Status)
-	require.Equal(t, 0, pending.Progress)
-	require.Nil(t, pending.Result)
-	require.Nil(t, pending.CompletedAt)
+	require.Equal(t, 100, pending.Progress)
+	require.NotNil(t, pending.Result)
+	require.NotNil(t, pending.CompletedAt)
 
 	completed, err := svc.GetOperation(ctx, manager, pending.OperationID)
 	require.NoError(t, err)

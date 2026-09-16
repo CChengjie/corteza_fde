@@ -60,7 +60,8 @@ export default (options = {}) => {
       // already-authenticated City311 administrator through the generic
       // Corteza OAuth flow prevents the independently deployed Admin client
       // from reaching its City311 routes.
-      if (this.isC311Route || this.$route?.meta?.c311?.public || ['c311.unauthorized', 'c311.forbidden', 'c311.not-found', 'c311.not-found-wildcard'].includes(this.$route?.name)) {
+      const isC311Path = window.location?.pathname?.startsWith('/c311')
+      if (this.isC311Route || isC311Path || this.$route?.meta?.c311?.public || ['c311.unauthorized', 'c311.forbidden', 'c311.not-found', 'c311.not-found-wildcard'].includes(this.$route?.name)) {
         this.loaded = true
         return
       }

@@ -5,11 +5,12 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 FRONTEND_URL = os.environ.get('C311_REAL_FRONTEND_URL', 'http://127.0.0.1:18092').rstrip('/')
+ADMIN_URL = os.environ.get('C311_REAL_ADMIN_URL', 'http://127.0.0.1:18093').rstrip('/')
 ARTIFACT_DIR = Path(os.environ.get('C311_ARTIFACT_DIR', '.c311-real-http'))
 
 def main() -> int:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-    diagnostics = {'frontend_url': FRONTEND_URL, 'api_responses': [], 'api_requests': [], 'errors': []}
+    diagnostics = {'frontend_url': FRONTEND_URL, 'admin_url': ADMIN_URL, 'api_responses': [], 'api_requests': [], 'errors': []}
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         context = browser.new_context()
@@ -161,6 +162,34 @@ def main() -> int:
         diagnostics['admin_workspace'] = {'status': 'rendered-after-login-and-refresh', 'identity_api': admin_api}
         if diagnostics['errors']:
             raise AssertionError(f"browser page errors: {diagnostics['errors']}")
+
+        # The independently deployed Admin client must use the City311 session
+        # cookie and render its route without initializing generic Corteza RBAC.
+        admin_page = context.new_page()
+        admin_page.on('pageerror', lambda error: diagnostics['errors'].append(f'admin: {error}'))
+        admin_responses = []
+        admin_page.on('response', lambda response: admin_responses.append({
+            'method': response.request.method, 'url': response.url, 'status': response.status,
+        }) if '/api/v1/' in response.url else None)
+        admin_page.goto(f'{ADMIN_URL}/c311/admin', wait_until='domcontentloaded')
+        admin_page.locator('[data-c311-app-shell]').wait_for(state='visible', timeout=60000)
+        admin_page.get_by_text('City 311 configuration', exact=True).first.wait_for(state='visible', timeout=60000)
+        if admin_page.url != f'{ADMIN_URL}/c311/admin':
+            raise AssertionError(f'independent Admin route redirected unexpectedly: {admin_page.url}')
+        identity = admin_page.evaluate("""async () => {
+          const response = await fetch('/api/v1/admin/identity', {credentials: 'include'})
+          return {status: response.status, body: await response.json()}
+        }""")
+        if identity['status'] != 200:
+            raise AssertionError(f'independent Admin identity API failed: {identity}')
+        admin_page.reload(wait_until='domcontentloaded')
+        admin_page.locator('[data-c311-app-shell]').wait_for(state='visible', timeout=60000)
+        admin_page.get_by_text('City 311 configuration', exact=True).first.wait_for(state='visible', timeout=60000)
+        diagnostics['independent_admin_workspace'] = {
+            'status': 'rendered-after-login-and-refresh', 'identity_status': identity['status'],
+            'api_responses': admin_responses,
+        }
+        admin_page.close()
         browser.close()
     (ARTIFACT_DIR / 'real-http-smoke.json').write_text(json.dumps(diagnostics, indent=2), encoding='utf-8')
     print(json.dumps(diagnostics, indent=2))

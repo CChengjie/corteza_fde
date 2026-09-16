@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -11,6 +12,10 @@ import (
 // public internet or requiring operator configuration.
 func main() {
 	mux := http.NewServeMux()
+	mailToken := os.Getenv("MAIL_API_TOKEN")
+	if strings.TrimSpace(mailToken) == "" {
+		mailToken = "local-only-mail-api-token"
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		issuer := "http://integration-fixture:8080"
@@ -48,7 +53,7 @@ func main() {
 		write(w, 202, map[string]any{"execution_id": "fixture-execution-001", "accepted_at": "2026-01-15T12:00:00Z"})
 	})
 	mux.HandleFunc("POST /api/v1/mail/send", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer local-only-mail-api-token" {
+		if r.Header.Get("Authorization") != "Bearer "+mailToken {
 			write(w, http.StatusUnauthorized, map[string]any{"error": "UNAUTHORIZED"})
 			return
 		}

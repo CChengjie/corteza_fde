@@ -53,6 +53,8 @@ services:
     init: true
     entrypoint: ["/usr/local/bin/c311-integration-fixture"]
     command: []
+    environment:
+      MAIL_API_TOKEN: ${MAIL_API_TOKEN:-local-only-mail-api-token}
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8080/healthz | grep --quiet '\"status\":\"ok\"'"]
       interval: 5s

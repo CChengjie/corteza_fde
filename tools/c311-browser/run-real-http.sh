@@ -28,4 +28,6 @@ for attempt in $(seq 1 60); do
   if [[ "$attempt" == 60 ]]; then "${compose[@]}" ps; exit 1; fi
   sleep 2
 done
-C311_REAL_FRONTEND_URL="http://127.0.0.1:${frontend_port}" C311_ARTIFACT_DIR="$artifact_dir" python3 "$repo_root/tools/c311-browser/real_http_smoke.py"
+C311_REAL_FRONTEND_URL="http://127.0.0.1:${frontend_port}" \
+C311_REAL_ADMIN_URL="http://127.0.0.1:${C311_REAL_ADMIN_PORT:-18093}" \
+C311_ARTIFACT_DIR="$artifact_dir" python3 "$repo_root/tools/c311-browser/real_http_smoke.py"

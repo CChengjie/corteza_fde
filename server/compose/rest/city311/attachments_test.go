@@ -122,6 +122,26 @@ func TestAttachmentHTTPMultipartRejectionAndAnonymousStaging(t *testing.T) {
 	require.Equal(t, 201, w.Code, w.Body.String())
 }
 
+func TestAttachmentHTTPStagedDeleteHonoursOwner(t *testing.T) {
+	router, st, _ := testRouter(t)
+	owner, err := store.LookupUserByHandle(context.Background(), st, "city311-constituent")
+	require.NoError(t, err)
+	stranger, err := store.LookupUserByHandle(context.Background(), st, "city311-constituent-two")
+	require.NoError(t, err)
+	w := uploadRequest(t, router, "remove.txt", "text/plain", []byte("remove me"), owner.ID)
+	require.Equal(t, http.StatusCreated, w.Code)
+	var receipt contract.PortalAttachment
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &receipt))
+	path := "/api/v1/portal/attachments/" + receipt.AttachmentToken
+	w = executeJSON(t, router, http.MethodDelete, path, nil, nil, stranger.ID)
+	require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	w = executeJSON(t, router, http.MethodDelete, path, nil, nil, owner.ID)
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	items, _, err := store.SearchCity311StagedAttachments(context.Background(), st, composeTypes.City311StagedAttachmentFilter{})
+	require.NoError(t, err)
+	require.Empty(t, items)
+}
+
 func TestAttachmentHTTPStaffSubmission(t *testing.T) {
 	router, st, _ := testRouter(t)
 	user, err := store.LookupUserByHandle(context.Background(), st, "city311-service-agent")

@@ -24,6 +24,14 @@ env:
   NODE_VERSION: 22
 
 jobs:
+  c311-runtime-contract:
+    name: "C311 Compose runtime contract"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Validate clean-runtime Compose contract
+        run: bash scripts/runtime-acceptance.sh --static
+
   c311-real-http:
     name: "C311 live HTTP browser smoke"
     runs-on: ubuntu-22.04

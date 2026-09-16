@@ -24,7 +24,7 @@ export default (options = {}) => {
   options = {
     el: '#app',
     name: 'admin',
-    template: '<router-view v-if="loaded && i18nLoaded && (isRbacLoaded || isC311MockRoute)" />',
+    template: '<router-view v-if="loaded && i18nLoaded && (isRbacLoaded || isC311Route)" />',
 
     mixins: [
       mixins.corredor,
@@ -42,6 +42,9 @@ export default (options = {}) => {
       isC311MockRoute () {
         return window.C311Mode === 'mock'
       },
+      isC311Route () {
+        return window.C311Mode === 'mock' || window.location?.pathname?.startsWith('/c311')
+      },
     },
 
     async created () {
@@ -58,7 +61,7 @@ export default (options = {}) => {
       // Corteza OAuth flow prevents the independently deployed Admin client
       // from reaching its City311 routes.
       const isC311Path = window.location?.pathname?.startsWith('/c311')
-      if (this.isC311MockRoute || isC311Path || this.$route?.meta?.c311?.public || ['c311.unauthorized', 'c311.forbidden', 'c311.not-found', 'c311.not-found-wildcard'].includes(this.$route?.name)) {
+      if (this.isC311Route || isC311Path || this.$route?.meta?.c311?.public || ['c311.unauthorized', 'c311.forbidden', 'c311.not-found', 'c311.not-found-wildcard'].includes(this.$route?.name)) {
         this.loaded = true
         return
       }

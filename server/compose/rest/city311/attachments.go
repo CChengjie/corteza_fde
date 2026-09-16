@@ -47,6 +47,20 @@ func (h *handler) attachmentUpload(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, http.StatusCreated, result, err)
 }
 
+func (h *handler) attachmentDelete(w http.ResponseWriter, r *http.Request) {
+	ownerID := uint64(0)
+	identity := auth.GetIdentityFromContext(r.Context())
+	if identity.Valid() {
+		ownerID = identity.Identity()
+	}
+	err := h.service.DeleteStagedAttachment(r.Context(), ownerID, chi.URLParam(r, "attachment_token"))
+	if err != nil {
+		writeResult(w, 0, nil, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *handler) attachmentDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

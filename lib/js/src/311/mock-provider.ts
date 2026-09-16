@@ -1446,7 +1446,7 @@ export class MockC311Provider implements C311Provider {
 
   // Mock-only lifecycle helper used by the attachment picker when a staged file is removed.
   // The real API has no client-side delete operation for an upload token.
-  removePortalAttachment (attachmentToken: string): void {
+  async removePortalAttachment (attachmentToken: string): Promise<void> {
     this.uploadedAttachmentTokens.delete(attachmentToken)
   }
 

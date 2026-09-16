@@ -149,6 +149,7 @@ func integrationEnvironment(kind contract.IntegrationKind) (map[string]any, inte
 		setConfiguration("client_id", "WORKFLOW_CLIENT_ID")
 		setSecret("client_secret", "WORKFLOW_CLIENT_SECRET")
 	case contract.IntegrationKindMail:
+		setConfiguration("transport", "MAIL_TRANSPORT")
 		setConfiguration("smtp_host", "MAIL_SMTP_HOST")
 		setConfiguration("smtp_port", "MAIL_SMTP_PORT")
 		setConfiguration("smtp_username", "MAIL_SMTP_USERNAME")
@@ -516,7 +517,7 @@ func integrationConfigurationKeys(kind contract.IntegrationKind) map[string]bool
 	case contract.IntegrationKindWorkflowOAuth:
 		return map[string]bool{"oauth_token_url": true, "api_base_url": true, "client_id": true}
 	case contract.IntegrationKindMail:
-		return map[string]bool{"smtp_host": true, "smtp_port": true, "smtp_username": true, "api_base_url": true}
+		return map[string]bool{"transport": true, "smtp_host": true, "smtp_port": true, "smtp_username": true, "api_base_url": true}
 	case contract.IntegrationKindIdentity:
 		return map[string]bool{
 			"app_base_url": true, "oidc_issuer_url": true, "oidc_staff_client_id": true, "oidc_public_client_id": true,
@@ -559,12 +560,18 @@ func prepareIntegrationRuntime(kind contract.IntegrationKind, active bool, confi
 		})
 		return preparedIntegrationRuntime{workflow: client}, err
 	case contract.IntegrationKindMail:
-		port, err := strconv.ParseUint(value("smtp_port"), 10, 16)
-		if err != nil || port == 0 || value("smtp_host") == "" || value("smtp_username") == "" || secrets["smtp_password"] == "" || secrets["api_token"] == "" {
-			return preparedIntegrationRuntime{}, fmt.Errorf("mail runtime configuration is incomplete")
-		}
-		if _, err = validatedIntegrationURL(value("api_base_url")); err != nil {
+		if _, err := validatedIntegrationURL(value("api_base_url")); err != nil {
 			return preparedIntegrationRuntime{}, err
+		}
+		if secrets["api_token"] == "" {
+			return preparedIntegrationRuntime{}, fmt.Errorf("mail API token is required")
+		}
+		if strings.EqualFold(value("transport"), "http") {
+			return preparedIntegrationRuntime{mail: httpMailSender{baseURL: value("api_base_url"), token: secrets["api_token"]}}, nil
+		}
+		port, err := strconv.ParseUint(value("smtp_port"), 10, 16)
+		if err != nil || port == 0 || value("smtp_host") == "" || value("smtp_username") == "" || secrets["smtp_password"] == "" {
+			return preparedIntegrationRuntime{}, fmt.Errorf("mail runtime configuration is incomplete")
 		}
 		return preparedIntegrationRuntime{mail: smtpMailSender{
 			dial: dialSMTP, host: value("smtp_host"), port: value("smtp_port"), username: value("smtp_username"), password: secrets["smtp_password"],

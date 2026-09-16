@@ -299,6 +299,30 @@ func (svc *IdentityService) StartFederatedSignIn(ctx context.Context, provider, 
 	if err != nil {
 		return nil, "", err
 	}
+	// Keep a durable audit record for the explicit linking step. The sealed
+	// browser flow is intentionally short-lived, while the audit trail must
+	// survive cookie expiry, restarts, and later investigations. The matching
+	// FEDERATED_ACCOUNT_LINKED event is written only after the provider callback
+	// has validated claims and committed the mapping.
+	if linkUserID != "" {
+		pendingID, parseErr := strconv.ParseUint(linkUserID, 10, 64)
+		if parseErr != nil || pendingID == 0 {
+			return nil, "", federatedAuthenticationFailed(federationAuthenticationFailedMsg)
+		}
+		actorType := contract.AuditActorStaff
+		if resolved != nil && resolved.Actor != nil && identityHasRole(resolved.Actor.ApplicationRoles, contract.ApplicationRoleConstituent) {
+			actorType = contract.AuditActorConstituent
+		}
+		if err = store.CreateCity311AuditEvent(ctx, svc.store, &composeTypes.City311AuditEvent{
+			ID: svc.nextID(), EntityType: "account", EntityID: linkUserID,
+			EventType: "FEDERATED_ACCOUNT_LINK_PENDING", ActorType: actorType,
+			ActorID: pendingID, SourceChannel: contract.SourceChannelPortalAuthenticated,
+			After:     map[string]any{"provider": provider, "status": "pending", "expires_at": svc.now().UTC().Add(federationFlowLifetime)},
+			CreatedAt: svc.now().UTC(),
+		}); err != nil {
+			return nil, "", err
+		}
+	}
 	return &contract.FederatedRedirect{AuthorizationURL: authorization.URL}, sealed, nil
 }
 
